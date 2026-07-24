@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import type { Knex } from 'knex';
 import bcrypt from 'bcryptjs';
 
@@ -167,7 +168,7 @@ export async function seed(knex: Knex): Promise<void> {
   const patientRecords: any[] = [];
   for (const p of patients) {
     const year = new Date().getFullYear();
-    const random = Math.random().toString(16).substring(2, 8).toUpperCase();
+    const random = crypto.randomBytes(3).toString("hex").toUpperCase();
     const mrn = `MRN-${year}-${random}`;
 
     const [patient] = await knex('patients').insert({

@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { getEnv } from '@healthcare/shared/config';
 import { db } from '../core/database.js';
 import { logAudit } from './audit.js';
@@ -42,7 +43,7 @@ export function generateFawryPayment(invoiceId: string, amount: number, customer
 
   // In production, this would call Fawry API
   // For now, generate the payment reference that would be sent to Fawry
-  const paymentRef = `FR-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  const paymentRef = `FR-${Date.now()}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
 
   return {
     success: true,
@@ -65,7 +66,7 @@ export function generateInstaPayPayment(amount: number, merchantWallet: string):
     success: true,
     reference: `IP-${Date.now()}`,
     redirectUrl: `instapay://send?wallet=${env.INSTAPAY_WALLET}&amount=${amount}`,
-    paymentId: `IPAY-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+    paymentId: `IPAY-${Date.now()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`,
   };
 }
 
