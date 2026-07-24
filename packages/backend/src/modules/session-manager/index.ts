@@ -3,6 +3,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import type { UserSessionRow } from "../types.js";
 import { authenticate } from '../auth-guard.js';
 
 export async function registerSessionManagerModule(app: FastifyInstance) {
@@ -31,9 +32,9 @@ export async function registerSessionManagerModule(app: FastifyInstance) {
     const sessions = await db('user_sessions').where({ tenant_id: tenantId, user_id: ctx.userId, is_active: true })
       .where('expires_at', '>', new Date())
       .orderBy('last_activity_at', 'desc');
-    return sendSuccess(reply, sessions.map((s: UserSessionRow) => ({
+    return sendSuccess(reply, sessions.map((s: Record<string, unknown>) => ({
       id: s.id, device: s.device, ipAddress: s.ip_address,
-      userAgent: s.user_agent?.substring(0, 100),
+      userAgent: String(s.user_agent || "").substring(0, 100),
       location: s.location, lastActivityAt: s.last_activity_at,
       createdAt: s.created_at, expiresAt: s.expires_at,
       isCurrent: s.token_hash === crypto.createHash('sha256').update((request.headers.authorization || '').slice(7)).digest('hex')

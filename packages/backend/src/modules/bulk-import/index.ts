@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import type { ImportJobRow } from "../types.js";
 
 const IMPORT_MODULES: Record<string, { table: string; columns: string[] }> = {
   patients: {
@@ -40,7 +41,7 @@ export async function registerBulkImportModule(app: FastifyInstance) {
       return reply.status(400).send({ success: false, error: 'Module and rows array required' });
     }
 
-    const modConfig = IMPORT_MODULES[module];
+    const modConfig = IMPORT_MODULES[module as keyof typeof IMPORT_MODULES];
     if (!modConfig) return reply.status(400).send({ success: false, error: `Unknown module: ${module}` });
 
     const [job] = await db('import_jobs').insert({
@@ -72,7 +73,7 @@ export async function registerBulkImportModule(app: FastifyInstance) {
         successful++;
       } catch (err: unknown) {
         failed++;
-        errors.push({ row: i + 1, error: err.message });
+        errors.push({ row: i + 1, error: err instanceof Error ? err.message : String(err) });
       }
     }
 
@@ -96,10 +97,10 @@ export async function registerBulkImportModule(app: FastifyInstance) {
     if (status) q = q.andWhere('status', status);
     if (module) q = q.andWhere('module', module);
     const jobs = await q.orderBy('created_at', 'desc').limit(50);
-    return sendSuccess(reply, jobs.map((j: ImportJobRow) => ({
+    return sendSuccess(reply, jobs.map((j: Record<string, unknown>) => ({
       id: j.id, module: j.module, fileName: j.file_name, format: j.format,
       status: j.status, totalRows: j.total_rows, successfulRows: j.successful_rows,
-      failedRows: j.failed_rows, errors: j.errors?.slice(0, 5),
+      failedRows: j.failed_rows, errors: (j.errors as unknown[] | undefined)?.slice(0, 5),
       startedAt: j.started_at, completedAt: j.completed_at, createdAt: j.created_at
     })));
   });
@@ -107,7 +108,7 @@ export async function registerBulkImportModule(app: FastifyInstance) {
   // ── Import template (column list for each module) ──
   app.get('/api/v1/import/template/:module', async (request, reply) => {
     const { module } = request.params as { module: string };
-    const config = IMPORT_MODULES[module];
+    const config = IMPORT_MODULES[module as keyof typeof IMPORT_MODULES];
     if (!config) return reply.status(404).send({ success: false, error: `Unknown module: ${module}` });
     return sendSuccess(reply, {
       module, table: config.table, columns: config.columns,

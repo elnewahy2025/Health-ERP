@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../../core/database.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { sendSuccess, sendPaginated } from '../../utils/response.js';
+import type { AuditLogRow } from "../types.js";
 import { authenticate } from '../auth-guard.js';
 
 export async function registerAuditModule(app: FastifyInstance) {

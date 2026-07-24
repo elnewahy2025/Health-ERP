@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import type { SubscriptionPlanRow, UsageRecordRow } from "../types.js";
 
 export async function registerSaasBillingModule(app: FastifyInstance) {
   // ── Subscription Plans (system-wide) ──
@@ -82,7 +83,7 @@ export async function registerSaasBillingModule(app: FastifyInstance) {
     const records = await q.orderBy('record_date', 'desc').limit(100);
     const totals = await db('usage_records').where({ tenant_id: tenantId }).where('record_date', '>=', since)
       .select('metric').sum('quantity as total').groupBy('metric');
-    return sendSuccess(reply, { records: records.map((r: UsageRecordRow) => ({ id: r.id, metric: r.metric, quantity: r.quantity, recordDate: r.record_date })), totals });
+    return sendSuccess(reply, { records: records.map((r: Record<string, unknown>) => ({ id: r.id, metric: r.metric, quantity: r.quantity, recordDate: r.record_date })), totals });
   });
 
   app.post('/api/v1/saas/usage/track', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
@@ -98,7 +99,7 @@ export async function registerSaasBillingModule(app: FastifyInstance) {
   app.get('/api/v1/saas/invoices', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const invoices = await db('subscription_invoices').where({ tenant_id: tenantId }).orderBy('created_at', 'desc').limit(50);
-    return sendSuccess(reply, invoices.map((i: UsageRecordRow) => ({
+    return sendSuccess(reply, invoices.map((i: Record<string, unknown>) => ({
       id: i.id, invoiceNumber: i.invoice_number, amount: Number(i.amount),
       tax: Number(i.tax), total: Number(i.total), status: i.status,
       paymentMethod: i.payment_method, paidAt: i.paid_at,

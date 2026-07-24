@@ -4,6 +4,7 @@ import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
 
+
 export async function registerNursingModule(app: FastifyInstance) {
   app.get('/api/v1/nursing/tasks', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { status, assignedTo } = request.query as { assignedTo?: string; status?: string };
@@ -13,10 +14,10 @@ export async function registerNursingModule(app: FastifyInstance) {
     const tasks = await q.join('patients', 'nursing_tasks.patient_id', 'patients.id')
       .select('nursing_tasks.*', 'patients.first_name as p_first', 'patients.last_name as p_last')
       .orderBy('created_at', 'desc').limit(50);
-    return sendSuccess(reply, tasks.map((t: PatientRow) => ({
+    return sendSuccess(reply, tasks.map((t: Record<string, unknown>) => ({
       id: t.id, title: t.title, description: t.description, category: t.category,
       priority: t.priority, status: t.status, patientId: t.patient_id,
-      patientName: t.p_first + ' ' + t.p_last, assignedTo: t.assigned_to,
+      patientName: String(t.p_first) + ' ' + String(t.p_last), assignedTo: t.assigned_to,
       dueAt: t.due_at, completedAt: t.completed_at, completionNotes: t.completion_notes,
       createdAt: t.created_at,
     })));

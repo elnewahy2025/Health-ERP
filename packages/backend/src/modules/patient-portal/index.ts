@@ -97,13 +97,13 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
     const session = await db('portal_sessions').where({ token }).where('expires_at', '>', new Date()).first();
     if (!session) return reply.status(401).send({ success: false, error: 'Session expired' });
     await db('portal_sessions').where({ id: session.id }).update({ last_activity_at: new Date() });
-    (request as Record<string, unknown>).patientId = session.patient_id;
-    (request as Record<string, unknown>).portalSession = session;
+    (request as unknown as Record<string, unknown>).patientId = session.patient_id;
+    (request as unknown as Record<string, unknown>).portalSession = session;
   }
 
   // ── Patient Dashboard ──
   app.get('/api/v1/portal/dashboard', { preHandler: portalAuth }, async (request, reply) => {
-    const patientId = (request as Record<string, unknown>).patientId as string;
+    const patientId = (request as unknown as Record<string, unknown>).patientId as string;
     const tenantId = await getPatientTenantId(patientId);
     if (!tenantId) return sendError(reply, 'Patient not found', 404);
 
@@ -155,7 +155,7 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
 
   // ── My Appointments ──
   app.get('/api/v1/portal/appointments', { preHandler: portalAuth }, async (request, reply) => {
-    const patientId = (request as Record<string, unknown>).patientId as string;
+    const patientId = (request as unknown as Record<string, unknown>).patientId as string;
     const tenantId = await getPatientTenantId(patientId);
     if (!tenantId) return sendError(reply, 'Patient not found', 404);
 
@@ -172,7 +172,7 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
 
   // ── My Medical Records ──
   app.get('/api/v1/portal/records', { preHandler: portalAuth }, async (request, reply) => {
-    const patientId = (request as Record<string, unknown>).patientId as string;
+    const patientId = (request as unknown as Record<string, unknown>).patientId as string;
     const tenantId = await getPatientTenantId(patientId);
     if (!tenantId) return sendError(reply, 'Patient not found', 404);
 
@@ -188,7 +188,7 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
 
   // ── My Bills ──
   app.get('/api/v1/portal/bills', { preHandler: portalAuth }, async (request, reply) => {
-    const patientId = (request as Record<string, unknown>).patientId as string;
+    const patientId = (request as unknown as Record<string, unknown>).patientId as string;
     const tenantId = await getPatientTenantId(patientId);
     if (!tenantId) return sendError(reply, 'Patient not found', 404);
 
@@ -206,7 +206,7 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
 
   // ── Shared Documents ──
   app.get('/api/v1/portal/documents', { preHandler: portalAuth }, async (request, reply) => {
-    const patientId = (request as Record<string, unknown>).patientId as string;
+    const patientId = (request as unknown as Record<string, unknown>).patientId as string;
     const tenantId = await getPatientTenantId(patientId);
     if (!tenantId) return sendError(reply, 'Patient not found', 404);
 
@@ -223,7 +223,7 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
 
   // ── My Messages ──
   app.get('/api/v1/portal/messages', { preHandler: portalAuth }, async (request, reply) => {
-    const patientId = (request as Record<string, unknown>).patientId as string;
+    const patientId = (request as unknown as Record<string, unknown>).patientId as string;
     const tenantId = await getPatientTenantId(patientId);
     if (!tenantId) return sendError(reply, 'Patient not found', 404);
 
@@ -238,7 +238,7 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
   });
 
   app.post('/api/v1/portal/messages', { preHandler: portalAuth }, async (request, reply) => {
-    const patientId = (request as Record<string, unknown>).patientId as string;
+    const patientId = (request as unknown as Record<string, unknown>).patientId as string;
     const tenantId = await getPatientTenantId(patientId);
     if (!tenantId) return sendError(reply, 'Patient not found', 404);
 
@@ -265,9 +265,9 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
 
   // ── Portal Logout ──
   app.post('/api/v1/portal/logout', { preHandler: portalAuth }, async (request, reply) => {
-    const patientId = (request as Record<string, unknown>).patientId as string;
+    const patientId = (request as unknown as Record<string, unknown>).patientId as string;
     const tenantId = await getPatientTenantId(patientId);
-    const session = (request as Record<string, unknown>).portalSession as { id: string };
+    const session = (request as unknown as Record<string, unknown>).portalSession as { id: string };
 
     await db('portal_sessions').where({ id: session.id }).update({ expires_at: new Date() });
 

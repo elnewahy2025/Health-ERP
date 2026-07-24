@@ -52,7 +52,7 @@ export async function registerDmsModule(app: FastifyInstance) {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
 
-    const file = await (request as Record<string, unknown>).file();
+    const file = await ((request as unknown as Record<string, unknown>)['file'] as (...args: unknown[]) => Promise<unknown>)() as { fields: Record<string, unknown>; filename: string; mimetype: string; toBuffer: () => Buffer };
     if (!file) return reply.code(400).send({ error: 'No file uploaded' });
 
     const fields = file.fields as Record<string, unknown>;
@@ -232,7 +232,7 @@ export async function registerDmsModule(app: FastifyInstance) {
     return sendSuccess(reply, docs.map((d: DmsDocumentRow) => ({
       id: d.id, title: d.title, category: d.category, fileName: d.file_name,
       fileType: d.file_type, fileSize: d.file_size, mimeType: d.mime_type,
-      isImage: isImage(d.mime_type), createdAt: d.created_at,
+      isImage: isImage(d.mime_type || ''), createdAt: d.created_at,
     })));
   });
 }

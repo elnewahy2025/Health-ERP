@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import type { DashboardWidgetRow } from "../types.js";
 
 export async function registerBiModule(app: FastifyInstance) {
   // ── Dashboard Definitions ──
@@ -21,7 +22,7 @@ export async function registerBiModule(app: FastifyInstance) {
 
   app.post('/api/v1/bi/dashboards', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
-    const slug = body.slug || body.name.toLowerCase().replace(/\s+/g, '_');
+    const slug = body.slug || (body.name as string).toLowerCase().replace(/\s+/g, '_');
     const [d] = await db('dashboard_definitions').insert({
       tenant_id: tenantId, name: body.name, slug, category: body.category || 'executive',
       description: body.description || null, layout: JSON.stringify(body.layout || []),
@@ -52,7 +53,7 @@ export async function registerBiModule(app: FastifyInstance) {
   app.get('/api/v1/bi/dashboards/:id/widgets', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string };
     const widgets = await db('dashboard_widgets').where({ tenant_id: tenantId, dashboard_id: id }).orderBy('position_y').orderBy('position_x');
-    return sendSuccess(reply, widgets.map((w: DashboardWidgetRow) => ({
+    return sendSuccess(reply, widgets.map((w: Record<string, unknown>) => ({
       id: w.id, title: w.title, widgetType: w.widget_type,
       dataSource: w.data_source, config: w.config, query: w.query,
       width: w.width, height: w.height, positionX: w.position_x, positionY: w.position_y

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../../core/database.js';
 import { sendSuccess, sendPaginated } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import type { InsuranceCompanyRow, InsuranceClaimRow } from "../types.js";
 import { logAudit } from '../../services/audit.js';
 import { authenticate } from '../auth-guard.js';
 
@@ -40,7 +41,7 @@ export async function registerInsuranceClaimsModule(app: FastifyInstance) {
     if (query.patientId) qb.andWhere('insurance_claims.patient_id', query.patientId);
     const total = await qb.clone().count('insurance_claims.id as count').first();
     const claims = await qb.select('insurance_claims.*', 'patients.first_name as pf', 'patients.last_name as pl', 'patients.medical_record_number as mrn', 'insurance_companies.name as cname', 'invoices.invoice_number', 'invoices.total as inv_total').orderBy('insurance_claims.created_at', 'desc').limit(query.limit).offset((query.page - 1) * query.limit);
-    return sendPaginated(reply, claims.map((c: InsuranceClaimRow) => ({ id: c.id, claimNumber: c.claim_number, status: c.status, patientName: c.pf ? `${c.pf} ${c.pl}` : null, patientMrn: c.mrn, companyName: c.cname, invoiceNumber: c.invoice_number, claimedAmount: Number(c.claimed_amount), approvedAmount: Number(c.approved_amount), paidAmount: Number(c.paid_amount), submissionDate: c.submission_date, responseDate: c.response_date, denialReason: c.denial_reason, notes: c.notes, createdAt: c.created_at })), Number((total as Record<string, unknown>)?.count || 0), query.page, query.limit);
+    return sendPaginated(reply, claims.map((c: Record<string, unknown>) => ({ id: c.id, claimNumber: c.claim_number, status: c.status, patientName: c.pf ? `${c.pf} ${c.pl}` : null, patientMrn: c.mrn, companyName: c.cname, invoiceNumber: c.invoice_number, claimedAmount: Number(c.claimed_amount), approvedAmount: Number(c.approved_amount), paidAmount: Number(c.paid_amount), submissionDate: c.submission_date, responseDate: c.response_date, denialReason: c.denial_reason, notes: c.notes, createdAt: c.created_at })), Number((total as Record<string, unknown>)?.count || 0), query.page, query.limit);
   });
 
   app.post('/api/v1/insurance-claims', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {

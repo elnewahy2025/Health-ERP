@@ -97,5 +97,5 @@ export async function apiVersioningHook(
   }
 
   // Store resolved version on request for downstream handlers
-  (request as Record<string, unknown>).apiVersion = version;
+  (request as unknown as Record<string, unknown>).apiVersion = version;
 }

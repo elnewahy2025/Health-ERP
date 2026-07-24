@@ -72,31 +72,37 @@ interface WsClient {
   send: (data: Record<string, unknown>) => void;
 }
 
+interface WsSocket {
+  close(code: number, reason: string): void;
+  on(event: string, handler: (...args: unknown[]) => void): void;
+  send(data: string): void;
+}
+
 const conversationRooms = new Map<string, Map<string, WsClient>>();
 
 export function registerChatWsHandlers(app: FastifyInstance): void {
   const env = getEnv();
 
   if ((app as unknown as Record<string, unknown>).websocket) {
-    (app as unknown as Record<string, unknown>).websocket('/api/v1/chat/ws', { options: { maxPayload: 131072 } }, async (socket: Record<string, unknown>, req: Record<string, unknown>) => {
-      const url = new URL(req.url as string, 'http://localhost');
+    ((app as unknown as Record<string, unknown>).websocket as (...args: unknown[]) => void)('/api/v1/chat/ws', { options: { maxPayload: 131072 } }, async (socket: WsSocket, req: { url: string }) => {
+      const url = new URL(req.url, 'http://localhost');
       const token = url.searchParams.get('token');
       const conversationId = url.searchParams.get('conversationId');
 
       if (!token || !conversationId) {
-        (socket as Record<string, unknown>).close(4001, 'Missing token or conversationId');
+        socket.close(4001, 'Missing token or conversationId');
         return;
       }
 
       try {
-        const jwt = (app as unknown as Record<string, unknown>).jwt as { verify: (t: string) => Record<string, unknown> };
+        const jwt = (app as unknown as Record<string, unknown>)['jwt'] as { verify: (t: string) => Record<string, unknown> };
         const payload = jwt.verify(token);
         const client: WsClient = {
           userId: String(payload.userId || ''),
           tenantId: String(payload.tenantId || (payload.ctx as Record<string, unknown>)?.tenantId || ''),
           role: String(payload.role || 'staff'),
           send: (data: Record<string, unknown>) => {
-            try { (socket as WebSocket).send(JSON.stringify(data)); } catch { /* ignore */ }
+            try { socket.send(JSON.stringify(data)); } catch { /* ignore */ }
           },
         };
 
@@ -113,7 +119,7 @@ export function registerChatWsHandlers(app: FastifyInstance): void {
           timestamp: new Date().toISOString(),
         }, client.userId);
 
-        (socket as Record<string, unknown>).on('message', async (raw: string) => {
+        socket.on('message', async (...args: unknown[]) => { const raw = String(args[0]);
           try {
             const msg = JSON.parse(raw) as Record<string, unknown>;
             if (msg.type === 'message' && msg.content) {
@@ -138,7 +144,7 @@ export function registerChatWsHandlers(app: FastifyInstance): void {
           }
         });
 
-        (socket as Record<string, unknown>).on('close', () => {
+        socket.on('close', (..._args: unknown[]) => {
           const room = conversationRooms.get(conversationId);
           if (room) {
             room.delete(client.userId);
@@ -152,9 +158,9 @@ export function registerChatWsHandlers(app: FastifyInstance): void {
         });
 
         const messages = await getConversationMessages(conversationId, 1, 50);
-        (socket as WebSocket).send(JSON.stringify({ type: 'history', messages: messages.data }));
+        socket.send(JSON.stringify({ type: 'history', messages: messages.data }));
 
-        (socket as Record<string, unknown>).on('typing', (isTyping: boolean) => {
+        socket.on('typing', (...args: unknown[]) => { const isTyping = Boolean(args[0]);
           broadcastToConversation(conversationId, {
             type: 'typing',
             userId: client.userId,
@@ -162,7 +168,7 @@ export function registerChatWsHandlers(app: FastifyInstance): void {
           }, client.userId);
         });
       } catch {
-        (socket as Record<string, unknown>).close(4001, 'Invalid token');
+        socket.close(4001, 'Invalid token');
       }
     });
   }

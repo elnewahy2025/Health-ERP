@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import type { PaginationQuery } from "../types.js";
 
 export async function registerPatientMessagingModule(app: FastifyInstance) {
   // ── Staff: Send message to patient ──
@@ -51,8 +52,8 @@ export async function registerPatientMessagingModule(app: FastifyInstance) {
       .groupBy('patient_messages.patient_id', 'patients.first_name', 'patients.last_name', 'patients.phone')
       .orderByRaw('max(patient_messages.created_at) desc')
       .limit(50);
-    return sendSuccess(reply, conversations.map((c: PatientRow) => ({
-      patientId: c.patient_id, patientName: c.first_name + ' ' + c.last_name,
+    return sendSuccess(reply, conversations.map((c: Record<string, unknown>) => ({
+      patientId: c.patient_id, patientName: String(c.first_name) + ' ' + String(c.last_name),
       patientPhone: c.phone, lastMessageAt: c.last_message_at,
       totalMessages: Number(c.total_messages), unread: Number(c.unread || 0),
     })));
@@ -67,8 +68,8 @@ export async function registerPatientMessagingModule(app: FastifyInstance) {
       .leftJoin('patients', 'appointments.patient_id', 'patients.id')
       .select('appointment_reminders.*', 'patients.first_name as pf', 'patients.last_name as pl', 'appointments.appointment_date')
       .orderBy('scheduled_at', 'desc').limit(50);
-    return sendSuccess(reply, reminders.map((r: PatientRow) => ({
-      id: r.id, appointmentId: r.appointment_id, patientName: r.pf + ' ' + r.pl,
+    return sendSuccess(reply, reminders.map((r: Record<string, unknown>) => ({
+      id: r.id, appointmentId: r.appointment_id, patientName: String(r.pf) + ' ' + String(r.pl),
       appointmentDate: r.appointment_date, channel: r.channel,
       status: r.status, scheduledAt: r.scheduled_at, sentAt: r.sent_at
     })));

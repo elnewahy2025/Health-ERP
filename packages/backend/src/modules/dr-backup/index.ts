@@ -4,6 +4,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import type { BackupConfigRow, BackupExecutionRow, PaginationQuery } from "../types.js";
 
 export async function registerDrBackupModule(app: FastifyInstance) {
   // ── Backup Configs ──
@@ -49,7 +50,7 @@ export async function registerDrBackupModule(app: FastifyInstance) {
     const backups = await q.leftJoin('backup_configs', 'backup_executions.config_id', 'backup_configs.id')
       .select('backup_executions.*', 'backup_configs.name as config_name')
       .orderBy('created_at', 'desc').limit(50);
-    return sendSuccess(reply, backups.map((b: BackupExecutionRow) => ({
+    return sendSuccess(reply, backups.map((b: Record<string, unknown>) => ({
       id: b.id, configId: b.config_id, configName: b.config_name,
       status: b.status, type: b.type, sizeBytes: b.size_bytes,
       filePath: b.file_path, checksum: b.checksum, error: b.error,

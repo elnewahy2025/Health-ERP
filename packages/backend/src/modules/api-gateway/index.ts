@@ -3,6 +3,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import type { ApiKeyRow } from "../types.js";
 import { authenticate } from '../auth-guard.js';
 
 export async function registerApiGatewayModule(app: FastifyInstance) {
@@ -84,7 +85,7 @@ export async function registerApiGatewayModule(app: FastifyInstance) {
   app.get('/api/v1/cache-configs', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const configs = await db('cache_configs').where({ tenant_id: tenantId }).orderBy('endpoint_pattern');
-    return sendSuccess(reply, configs.map((c: ApiKeyRow) => ({
+    return sendSuccess(reply, configs.map((c: Record<string, unknown>) => ({
       id: c.id, endpointPattern: c.endpoint_pattern,
       ttlSeconds: c.ttl_seconds, isActive: c.is_active
     })));

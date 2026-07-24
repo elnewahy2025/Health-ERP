@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import type { WorkflowDefinitionRow, WorkflowInstanceRow } from "../types.js";
 
 export async function registerWorkflowModule(app: FastifyInstance) {
   // Workflow Definitions
@@ -20,7 +21,7 @@ export async function registerWorkflowModule(app: FastifyInstance) {
 
   app.post('/api/v1/workflow/definitions', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
-    const slug = body.slug || body.name.toLowerCase().replace(/\s+/g, '_');
+    const slug = body.slug || (body.name as string).toLowerCase().replace(/\s+/g, '_');
     const [def] = await db('workflow_definitions').insert({
       tenant_id: tenantId, name: body.name, slug, category: body.category || 'general',
       steps: JSON.stringify(body.steps || []), description: body.description || null,
@@ -50,7 +51,7 @@ export async function registerWorkflowModule(app: FastifyInstance) {
     const instances = await q.leftJoin('workflow_definitions', 'workflow_instances.definition_id', 'workflow_definitions.id')
       .select('workflow_instances.*', 'workflow_definitions.name as def_name')
       .orderBy('created_at', 'desc').limit(50);
-    return sendSuccess(reply, instances.map((i: WorkflowInstanceRow) => ({
+    return sendSuccess(reply, instances.map((i: Record<string, unknown>) => ({
       id: i.id, definitionId: i.definition_id, definitionName: i.def_name,
       referenceType: i.reference_type, referenceId: i.reference_id,
       status: i.status, currentStep: i.current_step,

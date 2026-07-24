@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import type { HomeVisitRow } from "../types.js";
 
 export async function registerHomeVisitsModule(app: FastifyInstance) {
   app.get('/api/v1/home-visits', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
@@ -14,12 +15,12 @@ export async function registerHomeVisitsModule(app: FastifyInstance) {
       .join('users', 'home_visits.assigned_to', 'users.id')
       .select('home_visits.*', 'patients.first_name as p_first', 'patients.last_name as p_last', 'users.first_name as n_first', 'users.last_name as n_last')
       .orderBy('scheduled_date', 'asc').limit(50);
-    return sendSuccess(reply, visits.map((v: UserRow) => ({
+    return sendSuccess(reply, visits.map((v: Record<string, unknown>) => ({
       id: v.id, visitNumber: v.visit_number, patientId: v.patient_id,
-      patientName: v.p_first + ' ' + v.p_last, status: v.status,
+      patientName: String(v.p_first) + ' ' + String(v.p_last), status: v.status,
       visitType: v.visit_type, scheduledDate: v.scheduled_date, scheduledTime: v.scheduled_time,
       address: v.address, notes: v.notes, clinicalNotes: v.clinical_notes,
-      assignedTo: v.assigned_to, assignedToName: v.n_first + ' ' + v.n_last,
+      assignedTo: v.assigned_to, assignedToName: String(v.n_first) + ' ' + String(v.n_last),
       startedAt: v.started_at, completedAt: v.completed_at, createdAt: v.created_at,
     })));
   });

@@ -89,7 +89,7 @@ export async function deactivateOldestSessions(userId: string, tenantId: string,
     .orderBy('last_activity_at', 'asc')
     .limit(keepCount);
   if (oldest.length > 0) {
-    const ids = oldest.map((s: Record<string, unknown>) => s.id);
+    const ids = oldest.map((s: Record<string, unknown>) => String(s.id));
     await db('user_sessions').whereIn('id', ids).update({ is_active: false });
   }
 }

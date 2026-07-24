@@ -59,7 +59,7 @@ export async function registerPrintTemplatesModule(app: FastifyInstance) {
     if (!template) return reply.status(404).send({ success: false, error: 'No default template for this document type' });
 
     // Fetch reference data based on type
-    const data: Record<string, unknown> = {};
+    let data: Record<string, unknown> = {};
     if (documentType === 'invoice') data = await db('invoices').where({ id: referenceId, tenant_id: tenantId }).first() || {};
     else if (documentType === 'prescription') data = await db('pharmacy_prescriptions').where({ id: referenceId, tenant_id: tenantId }).first() || {};
     else if (documentType === 'lab_report') data = await db('lab_orders').where({ id: referenceId, tenant_id: tenantId }).first() || {};

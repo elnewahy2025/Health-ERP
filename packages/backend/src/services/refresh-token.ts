@@ -20,8 +20,8 @@ interface TokenPair {
 export async function generateTokenPair(
   userId: string,
   tenantId: string,
-  ipAddress?: string,
-  userAgent?: string,
+  ipAddress?: string | null,
+  userAgent?: string | null,
 ): Promise<TokenPair> {
   const refreshToken = generateToken();
   const tokenHash = hashToken(refreshToken);
@@ -42,8 +42,8 @@ export async function generateTokenPair(
 
 export async function rotateRefreshToken(
   oldToken: string,
-  ipAddress?: string,
-  userAgent?: string,
+  ipAddress?: string | null,
+  userAgent?: string | null,
 ): Promise<TokenPair | null> {
   const oldHash = hashToken(oldToken);
 

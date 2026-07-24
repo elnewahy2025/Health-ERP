@@ -149,7 +149,7 @@ export async function registerEmrModule(app: FastifyInstance) {
     if (body.notes !== undefined) updateData.notes = body.notes;
     if (body.status !== undefined) updateData.status = body.status;
     if (body.vitals) {
-      const bmi = calculateBMI(body.vitals.weight, body.vitals.height);
+      const bmi = calculateBMI(Number((body.vitals as Record<string, unknown>).weight), Number((body.vitals as Record<string, unknown>).height));
       updateData.vitals = JSON.stringify({ ...body.vitals, bmi });
     }
     if (body.diagnosis !== undefined) updateData.diagnosis = JSON.stringify(body.diagnosis);
@@ -326,8 +326,8 @@ function mapEmr(r: EmrRecordRow) {
     status: r.status,
     patientName: r.patient_first_name && r.patient_last_name ? `${r.patient_first_name} ${r.patient_last_name}` : undefined,
     patientMrn: r.medical_record_number,
-    patientDob: r.patient_dob,
-    patientGender: r.patient_gender,
+    patientDob: (r as unknown as Record<string, unknown>).patient_dob,
+    patientGender: (r as unknown as Record<string, unknown>).patient_gender,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

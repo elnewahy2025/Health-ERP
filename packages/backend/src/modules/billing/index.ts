@@ -277,7 +277,7 @@ export async function registerBillingModule(app: FastifyInstance) {
     preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
-    const year = parseInt((request.query as Record<string, unknown>)["year"]) || new Date().getFullYear();
+    const year = parseInt(String((request.query as Record<string, unknown>)["year"])) || new Date().getFullYear();
     const monthly = await db('invoices').where('tenant_id', tenantId).whereNull('deleted_at')
       .whereRaw('EXTRACT(YEAR FROM issued_at) = ?', [year])
       .select(db.raw("TO_CHAR(issued_at, 'Mon') as month"), db.raw('EXTRACT(MONTH FROM issued_at) as m'), db.raw('COALESCE(SUM(total),0) as revenue'), db.raw('COALESCE(SUM(paid),0) as collected'))
@@ -340,8 +340,8 @@ function mapInvoice(i: InvoiceRow) {
     paidAt: i.paid_at,
     patientName: i.patient_first_name && i.patient_last_name ? `${i.patient_first_name} ${i.patient_last_name}` : undefined,
     patientMrn: i.medical_record_number,
-    patientPhone: i.patient_phone,
-    patientEmail: i.patient_email,
+    patientPhone: (i as unknown as Record<string, unknown>).patient_phone,
+    patientEmail: (i as unknown as Record<string, unknown>).patient_email,
     createdAt: i.created_at,
     updatedAt: i.updated_at,
   };

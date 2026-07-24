@@ -547,7 +547,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
 
     const tenant = await db('tenants').where({ id: tenantId }).first();
     const sellerName = tenant?.name || 'Vision Healthcare';
-    const taxRegNo = env.TAX_REGISTRATION_NUMBER || '000000000000000';
+    const taxRegNo = (env as unknown as Record<string, unknown>).TAX_REGISTRATION_NUMBER as string || '000000000000000';
     const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
     const total = Number(invoice.total);
     const vatTotal = Number(invoice.tax);

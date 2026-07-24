@@ -4,6 +4,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { authenticate } from '../auth-guard.js';
 
+import type { RoleRow, AuditLogRow } from "../types.js";
 export async function registerCommonModule(app: FastifyInstance) {
   // Dashboard stats
   app.get('/api/v1/dashboard/stats', {
@@ -91,7 +92,7 @@ export async function registerCommonModule(app: FastifyInstance) {
       )
       .orderBy('users.first_name');
 
-    return sendSuccess(reply, doctors.map((d: RoleRow) => ({
+    return sendSuccess(reply, doctors.map((d: Record<string, unknown>) => ({
       id: d.id,
       name: `${d.first_name} ${d.last_name}`,
       email: d.email,
@@ -110,7 +111,7 @@ export async function registerCommonModule(app: FastifyInstance) {
       .orderBy('timestamp', 'desc')
       .limit(20);
 
-    return sendSuccess(reply, activities.map((a: AuditLogRow) => ({
+    return sendSuccess(reply, activities.map((a: Record<string, unknown>) => ({
       id: a.id,
       action: a.action,
       entity: a.entity,

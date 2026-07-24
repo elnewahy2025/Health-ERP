@@ -67,17 +67,18 @@ export async function findPatientWithRelatedData(patientId: string, tenantId: st
 
 export async function findByNationalId(nationalId: string, tenantId: string): Promise<PatientRow | undefined> {
   const encrypted = encryptField(nationalId);
-  const patients = await db('patients')
+  const encryptedPatient = await db('patients')
     .where({ tenant_id: tenantId })
     .whereNull('deleted_at')
-    .where('national_id', encrypted);
+    .where('national_id', encrypted)
+    .first();
+  if (encryptedPatient) return encryptedPatient;
   // Also check for plaintext values (migration from pre-encryption)
   const plaintextMatch = await db('patients')
     .where({ tenant_id: tenantId, national_id: nationalId })
     .whereNull('deleted_at')
     .first();
-  if (plaintextMatch) return plaintextMatch;
-  return patients.first();
+  return plaintextMatch;
 }
 
 export async function insertPatient(data: {

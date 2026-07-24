@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { validateWebhookUrl } from '@healthcare/shared/utils';
+import type { IntegrationConnectionRow } from "../types.js";
 import { authenticate } from '../auth-guard.js';
 
 export async function registerIntegrationsModule(app: FastifyInstance) {
@@ -23,7 +24,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
       .leftJoin('integration_definitions', 'integration_connections.definition_id', 'integration_definitions.id')
       .select('integration_connections.*', 'integration_definitions.name as def_name', 'integration_definitions.provider as def_provider', 'integration_definitions.category as def_category')
       .orderBy('integration_connections.name');
-    return sendSuccess(reply, conns.map((c: IntegrationConnectionRow) => ({
+    return sendSuccess(reply, conns.map((c: Record<string, unknown>) => ({
       id: c.id, name: c.name, definitionId: c.definition_id,
       definitionName: c.def_name, provider: c.def_provider,
       category: c.def_category, config: c.config,
@@ -73,7 +74,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
       .leftJoin('integration_connections', 'webhooks.integration_id', 'integration_connections.id')
       .select('webhooks.*', 'integration_connections.name as conn_name')
       .orderBy('webhooks.name');
-    return sendSuccess(reply, webhooks.map((w: WebhookRow) => ({
+    return sendSuccess(reply, webhooks.map((w: Record<string, unknown>) => ({
       id: w.id, name: w.name, integrationId: w.integration_id,
       integrationName: w.conn_name, url: w.url, events: w.events,
       status: w.status, retryCount: w.retry_count,

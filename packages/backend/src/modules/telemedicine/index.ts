@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import type { PaginationQuery, TelemedicineSessionRow } from "../types.js";
 import { authenticate } from '../auth-guard.js';
 
 export async function registerTelemedicineModule(app: FastifyInstance) {
@@ -16,11 +17,11 @@ export async function registerTelemedicineModule(app: FastifyInstance) {
       .select('telemedicine_sessions.*', 'patients.first_name as p_first', 'patients.last_name as p_last',
         'users.first_name as d_first', 'users.last_name as d_last')
       .orderBy('created_at', 'desc').limit(50);
-    return sendSuccess(reply, sessions.map((s: PatientRow) => ({
+    return sendSuccess(reply, sessions.map((s: Record<string, unknown>) => ({
       id: s.id, sessionId: s.session_id, roomName: s.room_name, status: s.status,
       provider: s.provider, meetingLink: s.meeting_link, patientId: s.patient_id,
-      patientName: s.p_first + ' ' + s.p_last, doctorId: s.doctor_id,
-      doctorName: s.d_first ? s.d_first + ' ' + s.d_last : null,
+      patientName: String(s.p_first) + ' ' + String(s.p_last), doctorId: s.doctor_id,
+      doctorName: s.d_first ? String(s.d_first) + ' ' + String(s.d_last) : null,
       appointmentId: s.appointment_id, startedAt: s.started_at, endedAt: s.ended_at,
       durationSeconds: s.duration_seconds, recordingEnabled: s.recording_enabled,
       notes: s.notes, createdAt: s.created_at,

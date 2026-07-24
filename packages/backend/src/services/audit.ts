@@ -8,7 +8,7 @@ interface AuditEntry {
   entityId?: string;
   metadata?: any;
   ipAddress?: string;
-  userAgent?: string;
+  userAgent?: string | null;
 }
 
 export async function logAudit(entry: AuditEntry): Promise<void> {

@@ -39,7 +39,7 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
   // WhatsApp Webhook (incoming messages & status updates)
   app.post('/api/v1/whatsapp/webhook', async (request, reply) => {
     try {
-      const parsed = parseWhatsAppWebhook(request.body);
+      const parsed = parseWhatsAppWebhook(request.body as Record<string, unknown>);
 
       if (parsed.type === 'message') {
         const fromNumber = parsed.data.from;
@@ -80,7 +80,7 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
           .update(updateData);
 
         if (parsed.data.status === 'completed' || parsed.data.status === 'failed') {
-          await updateCallStatus(parsed.data.messageId, parsed.data.status);
+          await updateCallStatus(String(parsed.data.messageId), (parsed.data.status as string) || 'unknown');
         }
       }
 
@@ -412,7 +412,7 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
       senderRole: (roles?.[0] || 'staff') as "doctor" | "patient" | "staff" | "admin",
       messageType: body.messageType,
       content: body.content,
-      metadata: body.metadata || null,
+      metadata: (body.metadata as Record<string, unknown>) || null,
     });
 
     await logAudit({

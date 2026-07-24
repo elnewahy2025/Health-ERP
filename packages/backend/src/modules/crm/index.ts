@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import type { CrmCampaignRow, PaginationQuery } from "../types.js";
 
 export async function registerCrmModule(app: FastifyInstance) {
   app.get('/api/v1/crm/campaigns', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
@@ -10,7 +11,7 @@ export async function registerCrmModule(app: FastifyInstance) {
     let q = db('crm_campaigns').where('crm_campaigns.tenant_id', tenantId).whereNull('crm_campaigns.deleted_at');
     if (status) q = q.andWhere('crm_campaigns.status', status);
     const rows = await q.orderBy('created_at', 'desc').limit(50);
-    return sendSuccess(reply, rows.map((c: CrmCampaignRow) => ({ id: c.id, name: c.name, type: c.type, status: c.status, description: c.description, startDate: c.start_date, endDate: c.end_date, budget: Number(c.budget), targetCount: c.target_count, reachedCount: c.reached_count, conversionCount: c.conversion_count })));
+    return sendSuccess(reply, rows.map((c: Record<string, unknown>) => ({ id: c.id, name: c.name, type: c.type, status: c.status, description: c.description, startDate: c.start_date, endDate: c.end_date, budget: Number(c.budget), targetCount: c.target_count, reachedCount: c.reached_count, conversionCount: c.conversion_count })));
   });
 
   app.post('/api/v1/crm/campaigns', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {

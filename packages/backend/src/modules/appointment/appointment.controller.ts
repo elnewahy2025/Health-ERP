@@ -407,7 +407,7 @@ export async function bulkCreateAppointments(request: FastifyRequest, reply: Fas
     }
 
     const endTime = calculateEndTime(apt.startTime, apt.duration);
-    const [inserted] = await repo.insertAppointment({
+    const inserted = await repo.insertAppointment({
       tenant_id: tenantId,
       patient_id: apt.patientId,
       doctor_id: apt.doctorId,

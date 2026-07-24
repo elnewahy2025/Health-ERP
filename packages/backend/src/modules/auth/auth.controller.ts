@@ -51,7 +51,7 @@ export async function registerTenant(request: FastifyRequest, reply: FastifyRepl
     verificationToken,
   });
 
-  await logAudit({ tenantId: result.tenant.id, userId: result.user.id, action: 'tenant.created' });
+  await logAudit({ tenantId: String(result.tenant.id), userId: String(result.user.id), action: 'tenant.created' });
 
   try {
     const verifyUrl = `${env.APP_URL}/verify-email?token=${result.verificationToken}`;
@@ -70,7 +70,7 @@ export async function registerTenant(request: FastifyRequest, reply: FastifyRepl
 export async function login(request: FastifyRequest, reply: FastifyReply) {
   const body = loginSchema.parse(request.body);
   const ip = request.ip ?? '127.0.0.1';
-  const userAgent = request.headers['user-agent'] || null;
+  const userAgent = (request.headers['user-agent'] as string) || null;
 
   await svc.checkAccountLock(body.email);
 
@@ -121,7 +121,7 @@ export async function login(request: FastifyRequest, reply: FastifyReply) {
 export async function mfaVerify(request: FastifyRequest, reply: FastifyReply) {
   const { code, partialToken } = mfaVerifySchema.parse(request.body);
   const ip = request.ip ?? '127.0.0.1';
-  const userAgent = request.headers['user-agent'] || null;
+  const userAgent = (request.headers['user-agent'] as string) || null;
 
   let decoded: { tenantId: string; userId: string; mfaPending: boolean };
   try { decoded = svc.getJwtHelper(request.server).verify(partialToken) as { tenantId: string; userId: string; mfaPending: boolean }; }
@@ -160,7 +160,7 @@ export async function mfaVerify(request: FastifyRequest, reply: FastifyReply) {
 export async function refreshToken(request: FastifyRequest, reply: FastifyReply) {
   const { refreshToken: oldToken } = refreshSchema.parse(request.body);
   const ip = request.ip ?? '127.0.0.1';
-  const userAgent = request.headers['user-agent'] || null;
+  const userAgent = (request.headers['user-agent'] as string) || null;
 
   const oldTokenHash = crypto.createHash('sha256').update(oldToken).digest('hex');
   const oldRecord = await repo.findRefreshTokenByHash(oldTokenHash);

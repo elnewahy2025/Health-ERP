@@ -73,7 +73,7 @@ export async function registerPharmacyModule(app: FastifyInstance) {
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
     const { quantity } = request.body as Record<string, unknown>;
-    await db('pharmacy_inventory').where({ id, tenant_id: tenantId }).increment('stock_quantity', quantity).update({ updated_at: new Date() });
+    await db('pharmacy_inventory').where({ id, tenant_id: tenantId }).increment('stock_quantity', Number(quantity)).update({ updated_at: new Date() });
 
     await logAudit({ tenantId, userId: ctx.userId, action: 'pharmacy.stock_updated', entityType: 'pharmacy_inventory', entityId: id, metadata: { quantity }, ipAddress: request.ip, userAgent: request.headers['user-agent'] as string });
 
@@ -134,7 +134,7 @@ export async function registerPharmacyModule(app: FastifyInstance) {
         const item = it as Record<string, unknown>;
         await db('pharmacy_prescription_items').where({ id: item.id }).update({ quantity_dispensed: item.quantityDispensed, status: item.status || 'dispensed' });
         if (item.drugName) {
-          await db('pharmacy_inventory').where({ drug_name: item.drugName, tenant_id: tenantId }).decrement('stock_quantity', item.quantityDispensed || 0);
+          await db('pharmacy_inventory').where({ drug_name: item.drugName, tenant_id: tenantId }).decrement('stock_quantity', Number(item.quantityDispensed) || 0);
         }
       }
     }

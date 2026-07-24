@@ -7,12 +7,12 @@ import { sendSuccess, sendPaginated, sendError } from '../../utils/response.js';
 import { authenticate } from '../auth-guard.js';
 import { logAudit } from '../../services/audit.js';
 
-let queueWsClients = new Set<Record<string, unknown>>();
+let queueWsClients = new Set<{ send(data: string): void; on(event: string, handler: (...args: unknown[]) => void): void }>();
 
 function broadcastQueueUpdate(data: Record<string, unknown>): void {
   const msg = JSON.stringify(data);
   for (const client of queueWsClients) {
-    try { client.send(msg); } catch { queueWsClients.delete(client); }
+    try { (client as { send(data: string): void }).send(msg); } catch { queueWsClients.delete(client); }
   }
 }
 
@@ -174,8 +174,8 @@ export async function registerPatientExperienceModule(app: FastifyInstance) {
 
   // ==================== QUEUE WEBSOCKET ====================
 
-  if ((app as Record<string, unknown>).websocket) {
-    (app as Record<string, unknown>).websocket('/api/v1/queue/ws', { options: { maxPayload: 65536 } }, async (socket: Record<string, unknown>, req: Record<string, unknown>) => {
+  if ((app as unknown as Record<string, unknown>).websocket) {
+    ((app as unknown as Record<string, unknown>)['websocket'] as (...args: unknown[]) => void)('/api/v1/queue/ws', { options: { maxPayload: 65536 } }, async (socket: { send(data: string): void; on(event: string, handler: (...args: unknown[]) => void): void }, req: { url: string }) => {
       queueWsClients.add(socket);
       const url = new URL(req.url, 'http://localhost');
       const slug = url.searchParams.get('tenant');

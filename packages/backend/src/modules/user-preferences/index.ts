@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import type { NotificationPreferenceRow, EmployeeRow } from "../types.js";
 
 export async function registerUserPreferencesModule(app: FastifyInstance) {
   // ── User Settings ──
@@ -50,7 +51,7 @@ export async function registerUserPreferencesModule(app: FastifyInstance) {
   app.get('/api/v1/user/notification-preferences', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request);
     const prefs = await db('notification_preferences').where({ tenant_id: tenantId, user_id: ctx.userId }).orderBy('channel');
-    return sendSuccess(reply, prefs.map((p: NotificationPreferenceRow) => ({
+    return sendSuccess(reply, prefs.map((p: Record<string, unknown>) => ({
       id: p.id, channel: p.channel, events: p.events, isEnabled: p.is_enabled
     })));
   });
@@ -91,9 +92,9 @@ export async function registerUserPreferencesModule(app: FastifyInstance) {
     ]);
 
     return sendSuccess(reply, {
-      patients: patients.map((p: EmployeeRow) => ({ type: 'patient', id: p.id, label: `${p.first_name} ${p.last_name}`, subtitle: p.medical_record_number || p.phone, link: `/patients/${p.id}` })),
-      appointments: appointments.map((a: EmployeeRow) => ({ type: 'appointment', id: a.id, label: `${a.pf} ${a.pl}`, subtitle: `${a.appointment_date} ${a.start_time || ''}`, link: `/appointments` })),
-      employees: employees.map((e: EmployeeRow) => ({ type: 'employee', id: e.id, label: `${e.first_name} ${e.last_name}`, subtitle: `${e.department || ''} · ${e.position || ''}`, link: `/hr` })),
+      patients: patients.map((p: Record<string, unknown>) => ({ type: 'patient', id: p.id, label: `${p.first_name} ${p.last_name}`, subtitle: p.medical_record_number || p.phone, link: `/patients/${p.id}` })),
+      appointments: appointments.map((a: Record<string, unknown>) => ({ type: 'appointment', id: a.id, label: `${a.pf} ${a.pl}`, subtitle: `${a.appointment_date} ${a.start_time || ''}`, link: `/appointments` })),
+      employees: employees.map((e: Record<string, unknown>) => ({ type: 'employee', id: e.id, label: `${e.first_name} ${e.last_name}`, subtitle: `${e.department || ''} · ${e.position || ''}`, link: `/hr` })),
     });
   });
 

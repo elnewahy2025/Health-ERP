@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import type { AuditLogRow } from "../types.js";
 
 export async function registerComplianceReportsModule(app: FastifyInstance) {
   // ── Compliance Reports ──
@@ -73,7 +74,7 @@ export async function registerComplianceReportsModule(app: FastifyInstance) {
   app.get('/api/v1/compliance/retention-policies', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const policies = await db('data_retention_policies').where({ tenant_id: tenantId }).orderBy('entity');
-    return sendSuccess(reply, policies.map((p: AuditLogRow) => ({
+    return sendSuccess(reply, policies.map((p: Record<string, unknown>) => ({
       id: p.id, entity: p.entity, retentionDays: p.retention_days,
       action: p.action, isActive: p.is_active, lastCleanupAt: p.last_cleanup_at
     })));

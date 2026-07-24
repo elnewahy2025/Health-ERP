@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import type { FormSubmissionRow } from "../types.js";
 
 export async function registerFormsModule(app: FastifyInstance) {
   // Form Definitions
@@ -22,7 +23,7 @@ export async function registerFormsModule(app: FastifyInstance) {
 
   app.post('/api/v1/forms/definitions', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
-    const slug = body.slug || body.name.toLowerCase().replace(/\s+/g, '_');
+    const slug = body.slug || (body.name as string).toLowerCase().replace(/\s+/g, '_');
     const [def] = await db('form_definitions').insert({
       tenant_id: tenantId, name: body.name, slug, category: body.category || 'general',
       schema: JSON.stringify(body.schema || {}), ui_schema: JSON.stringify(body.uiSchema || {}),
@@ -67,7 +68,7 @@ export async function registerFormsModule(app: FastifyInstance) {
       .leftJoin('patients', 'form_submissions.patient_id', 'patients.id')
       .select('form_submissions.*', 'form_definitions.name as form_name', 'patients.first_name as pf', 'patients.last_name as pl')
       .orderBy('created_at', 'desc').limit(50);
-    return sendSuccess(reply, subs.map((s: FormSubmissionRow) => ({
+    return sendSuccess(reply, subs.map((s: Record<string, unknown>) => ({
       id: s.id, formId: s.form_id, formName: s.form_name,
       patientId: s.patient_id, patientName: s.pf ? s.pf + ' ' + s.pl : null,
       data: s.data, status: s.status, submittedBy: s.submitted_by,

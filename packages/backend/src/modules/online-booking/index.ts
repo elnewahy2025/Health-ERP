@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import type { BookingSlotRow, UserRow, PaginationQuery, BookingRequestRow } from "../types.js";
 
 export async function registerOnlineBookingModule(app: FastifyInstance) {
   // ── Public: Get available slots (no auth) ──
@@ -18,7 +19,7 @@ export async function registerOnlineBookingModule(app: FastifyInstance) {
     else q = q.andWhere('date', '>=', new Date().toISOString().split('T')[0]);
 
     const slots = await q.orderBy('date').orderBy('start_time').limit(100);
-    return sendSuccess(reply, slots.map((s: BookingSlotRow) => ({
+    return sendSuccess(reply, slots.map((s: Record<string, unknown>) => ({
       id: s.id, doctorId: s.doctor_id, branchId: s.branch_id,
       date: s.date, startTime: s.start_time, endTime: s.end_time,
       slotType: s.slot_type,
@@ -36,7 +37,7 @@ export async function registerOnlineBookingModule(app: FastifyInstance) {
       .where('users.tenant_id', tenant.id).where('users.status', 'active')
       .where('roles.slug', 'doctor')
       .select('users.id', 'users.first_name', 'users.last_name', 'users.email');
-    return sendSuccess(reply, doctors.map((d: UserRow) => ({
+    return sendSuccess(reply, doctors.map((d: Record<string, unknown>) => ({
       id: d.id, name: d.first_name + ' ' + d.last_name, email: d.email,
     })));
   });
@@ -87,11 +88,11 @@ export async function registerOnlineBookingModule(app: FastifyInstance) {
     // Bulk create slots for a date range
     const { doctorId, date, startTime, endTime, intervalMinutes, branchId } = body;
     const slots = [];
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
+    const [startH, startM] = (startTime as string).split(':').map(Number);
+    const [endH, endM] = (endTime as string).split(':').map(Number);
     let current = startH * 60 + startM;
     const end = endH * 60 + endM;
-    const interval = intervalMinutes || 30;
+    const interval = Number(intervalMinutes) || 30;
 
     while (current + interval <= end) {
       const h = Math.floor(current / 60);
@@ -120,7 +121,7 @@ export async function registerOnlineBookingModule(app: FastifyInstance) {
       .select('booking_requests.*', 'booking_slots.date as slot_date', 'booking_slots.start_time', 'booking_slots.end_time',
         'users.first_name as doc_first', 'users.last_name as doc_last')
       .orderBy('created_at', 'desc').limit(50);
-    return sendSuccess(reply, requests.map((r: BookingRequestRow) => ({
+    return sendSuccess(reply, requests.map((r: Record<string, unknown>) => ({
       id: r.id, patientName: r.patient_name, patientPhone: r.patient_phone,
       patientEmail: r.patient_email, reason: r.reason, status: r.status,
       source: r.source, slotDate: r.slot_date, slotTime: r.start_time,

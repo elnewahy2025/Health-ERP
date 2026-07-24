@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import { encryptField, decryptField, isEncrypted } from '@healthcare/shared/utils';
 
 describe('Patient Module', () => {
@@ -229,8 +229,8 @@ describe('Patient Module', () => {
   // ── Optimistic concurrency (#14) ──
   describe('Optimistic Concurrency', () => {
     it('detects stale updates', () => {
-      const serverUpdatedAt = '2026-07-22T10:00:00.000Z';
-      const clientUpdatedAt = '2026-07-22T09:00:00.000Z';
+      const serverUpdatedAt: string = '2026-07-22T10:00:00.000Z';
+      const clientUpdatedAt: string = '2026-07-22T09:00:00.000Z';
       const hasConflict = serverUpdatedAt !== clientUpdatedAt;
       expect(hasConflict).toBe(true);
     });
@@ -256,14 +256,14 @@ describe('Patient Module', () => {
   // ── Patient merge (#9) ──
   describe('Patient Merge', () => {
     it('prevents merging a patient with itself', () => {
-      const primaryId = 'patient-1';
-      const duplicateId = 'patient-1';
+      const primaryId: string = 'patient-1';
+      const duplicateId: string = 'patient-1';
       expect(primaryId === duplicateId).toBe(true);
     });
 
     it('allows merging different patients', () => {
-      const primaryId = 'patient-1';
-      const duplicateId = 'patient-2';
+      const primaryId: string = 'patient-1';
+      const duplicateId: string = 'patient-2';
       expect(primaryId !== duplicateId).toBe(true);
     });
   });

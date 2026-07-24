@@ -3,6 +3,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import type { TenantDomainRow } from "../types.js";
 import { authenticate } from '../auth-guard.js';
 
 export async function registerWhiteLabelModule(app: FastifyInstance) {
@@ -57,7 +58,7 @@ export async function registerWhiteLabelModule(app: FastifyInstance) {
   app.get('/api/v1/white-label/domains', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const domains = await db('tenant_domains').where({ tenant_id: tenantId }).orderBy('is_primary', 'desc');
-    return sendSuccess(reply, domains.map((d: TenantDomainRow) => ({
+    return sendSuccess(reply, domains.map((d: Record<string, unknown>) => ({
       id: d.id, domain: d.domain, isPrimary: d.is_primary,
       isVerified: d.is_verified, sslStatus: d.ssl_status,
       verifiedAt: d.verified_at, createdAt: d.created_at

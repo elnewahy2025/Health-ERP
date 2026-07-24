@@ -27,7 +27,8 @@ export async function registerMultiBranchModule(app: FastifyInstance) {
   // List all branches
   app.get('/api/v1/branches', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
     const ctx = getCtx(request);
-    const { page = 1, limit = 20, is_active, type, search } = request.query as { is_active?: string; limit = 20?: string; page = 1?: string; search?: string; type?: string };
+    const { page: rawPage = '1', limit: rawLimit = '20', is_active, type, search } = request.query as { is_active?: string; limit?: string; page?: string; search?: string; type?: string };
+    const page = Number(rawPage); const limit = Number(rawLimit);
     let q = db('branches').where('tenant_id', ctx.tenantId);
     if (is_active !== undefined) q = q.where('is_active', is_active === 'true');
     if (type) q = q.where('type', type);
@@ -123,7 +124,8 @@ export async function registerMultiBranchModule(app: FastifyInstance) {
   app.get('/api/v1/branches/:id/patients', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
-    const { page = 1, limit = 20 } = request.query as { limit = 20?: string; page = 1?: string };
+    const { page: rawPage = '1', limit: rawLimit = '20' } = request.query as { limit?: string; page?: string };
+    const page = Number(rawPage); const limit = Number(rawLimit);
     const q = db('patients').where({ branch_id: id, tenant_id: ctx.tenantId });
     const total = (await q.clone().count('* as count').first()) as Record<string, unknown>;
     const rows = await q.orderBy('created_at', 'desc').limit(limit).offset((page - 1) * limit);
