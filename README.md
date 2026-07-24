@@ -3,9 +3,11 @@
 **Enterprise Healthcare SaaS Platform** — A multi-tenant Electronic Medical Records (EMR) and Practice Management system designed for the **Egyptian healthcare market**. Covers the full patient lifecycle from appointment scheduling through billing, with AI-powered clinical decision support, real-time analytics, and multi-branch management.
 
 ![Version](https://img.shields.io/badge/version-2.0.0-blue)
-![Node](https://img.shields.io/badge/node-%3E%3D18-green)
+![Node](https://img.shields.io/badge/node-%3E%3D20-green)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen)
+![Tests](https://img.shields.io/badge/tests-154%20passing-brightgreen)
+![Security](https://img.shields.io/badge/security-OWASP%20Top%2010%20PASS-green)
 
 ---
 
@@ -14,18 +16,18 @@
 - [Architecture Overview](#-architecture-overview)
 - [Tech Stack](#-tech-stack)
 - [Project Structure](#-project-structure)
-- [Prerequisites](#prerequisites)
 - [Quick Start](#-quick-start)
+- [Production Deployment](#-production-deployment)
 - [Environment Variables](#-environment-variables)
+- [Docker Secrets](#-docker-secrets)
 - [Backend Modules](#backend-modules)
-- [Database Migrations](#database-migrations)
-- [API Endpoints](#api-endpoints)
-- [Frontend](#frontend)
-- [Docker Deployment](#docker-deployment)
-- [Testing](#testing)
-- [Security](#security)
+- [Security](#-security)
+- [Testing](#-testing)
+- [Production Readiness Audit](#-production-readiness-audit)
 - [Egypt Market Features](#egypt-market-features)
-- [Project Statistics](#project-statistics)
+- [Project Statistics](#-project-statistics)
+- [Contributing](#-contributing)
+- [License](#-license)
 
 ---
 
@@ -35,51 +37,22 @@
 ┌─────────────────────────────────────────────────────────────┐
 │              Frontend (React 18 + Vite + TailwindCSS)       │
 │  82 Pages | Code-Split | Lazy-Loaded | Recharts Analytics   │
-│  2,674 i18n Keys (EN + AR) | 19 Shared UI Components       │
+│  React Query | In-Memory Tokens | XSS Sanitization          │
 ├─────────────────────────────────────────────────────────────┤
 │              Nginx Reverse Proxy (SSL + Rate Limiting)      │
+│  HSTS | CSP | X-Frame-Options | Permissions-Policy          │
 ├─────────────────────────────────────────────────────────────┤
 │              Backend (Fastify 4 + TypeScript)                │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐     │
 │  │ 57 Modules   │  │ 17 Services  │  │ Shared Package│     │
-│  │ (Clean Arch  │  │ Email, SMS,  │  │ Types, Zod,   │     │
-│  │  for core    │  │ Audit, PDF,  │  │ Errors, i18n, │     │
-│  │  modules)    │  │ Reminder,    │  │ Validators    │     │
-│  │              │  │ TOTP, etc.   │  │               │     │
+│  │ Clean Arch   │  │ Email, SMS,  │  │ Types, Zod,   │     │
+│  │ (core modules│  │ Audit, PDF,  │  │ Errors, i18n, │     │
+│  │  decomposed) │  │ Crypto, TOTP │  │ Validators    │     │
 │  └──────────────┘  └──────────────┘  └───────────────┘     │
 ├─────────────────────────────────────────────────────────────┤
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐       │
-│  │PostgreSQL│ │  Redis   │ │  MinIO   │ │Playwright│       │
-│  │  15+     │ │  7       │ │ Storage  │ │  E2E     │       │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘       │
+│              PostgreSQL 15 + Redis 7 + MinIO                │
+│  Row Level Security | AES-256-GCM Encryption | pg_trgm      │
 └─────────────────────────────────────────────────────────────┘
-```
-
-### Monorepo Layout
-
-```
-vision-healthcare-erp/
-├── packages/
-│   ├── backend/           # Fastify 4 + TypeScript
-│   │   ├── src/
-│   │   │   ├── core/      # Database, Redis, error handler, versioning
-│   │   │   ├── modules/   # 57 domain modules
-│   │   │   ├── services/  # Cross-cutting services (email, SMS, audit, etc.)
-│   │   │   └── utils/     # Helpers, validation schemas, rate limiter
-│   │   └── migrations/    # 25 Knex migrations
-│   ├── frontend/          # React 18 + Vite + TypeScript
-│   │   └── src/
-│   │       ├── pages/     # 82 page components
-│   │       ├── components/# 19 shared UI components
-│   │       ├── hooks/     # React Query hooks
-│   │       ├── lib/       # API clients, query config
-│   │       └── i18n/      # EN + AR translations
-│   └── shared/            # Shared types, errors, config, utils
-├── docs/security/         # OWASP Top 10 security audit
-├── playwright.config.ts   # E2E test configuration
-├── .eslintrc.json         # ESLint config (strict rules)
-├── docker-compose.yml     # Development Docker setup
-└── docker-compose.prod.yml# Production Docker setup
 ```
 
 ---
@@ -88,425 +61,360 @@ vision-healthcare-erp/
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | React 18, TypeScript, Vite, TailwindCSS, React Router v6, React Query (TanStack) |
+| **Frontend** | React 18, TypeScript, Vite, TailwindCSS, React Query, react-router-dom, i18next |
 | **Backend** | Fastify 4, TypeScript, Knex.js (query builder), Zod (validation) |
-| **Database** | PostgreSQL 15+ (with pg_trgm, btree_gist extensions) |
-| **Cache** | Redis 7 |
-| **Object Storage** | MinIO (S3-compatible) |
-| **Auth** | JWT (access + refresh tokens), HttpOnly cookies, CSRF protection, MFA/TOTP, account lockout |
-| **Logging** | Pino (structured JSON), pino-http middleware, redaction |
-| **Testing** | Vitest (unit/integration), Playwright (E2E) |
-| **CI/CD** | Docker multi-stage builds |
-| **Monitoring** | Sentry integration, health checks |
+| **Database** | PostgreSQL 15 (Row Level Security, AES-256-GCM encryption) |
+| **Cache** | Redis 7 (session store, rate limiting) |
+| **Storage** | MinIO (S3-compatible, patient documents, prescriptions) |
+| **Proxy** | Nginx (SSL termination, rate limiting, security headers) |
+| **Container** | Docker, Docker Compose (multi-stage builds, non-root user) |
+| **CI/CD** | GitHub Actions (build, test, lint) |
+| **Monitoring** | pino + pino-http (structured logging with redaction) |
+| **Testing** | Vitest (backend), TypeScript compiler (type checking) |
 
 ---
 
-## 📦 Prerequisites
+## 📁 Project Structure
 
-- **Node.js** ≥ 18.x
-- **PostgreSQL** 15+
-- **Redis** 7+
-- **MinIO** (optional, for file storage)
-- **npm** ≥ 9.x
+```
+vision-healthcare-erp/
+├── packages/
+│   ├── backend/
+│   │   ├── src/
+│   │   │   ├── modules/          # 57 feature modules
+│   │   │   │   ├── auth/         # Clean Architecture (7 files)
+│   │   │   │   ├── patient/      # Clean Architecture (7 files)
+│   │   │   │   ├── appointment/  # Clean Architecture (7 files)
+│   │   │   │   ├── inventory/    # Clean Architecture (7 files)
+│   │   │   │   ├── billing/      # Monolith (fixed in-place)
+│   │   │   │   ├── emr/          # Monolith (fixed in-place)
+│   │   │   │   ├── financial-deepening/
+│   │   │   │   ├── patient-portal/
+│   │   │   │   └── ... (49 more)
+│   │   │   ├── services/         # 17 shared services
+│   │   │   ├── core/             # Database, Redis, config
+│   │   │   └── utils/            # Logger, validators, helpers
+│   │   ├── migrations/           # 29 Knex migrations
+│   │   └── __tests__/            # 20 test files, 154 tests
+│   ├── frontend/
+│   │   ├── src/
+│   │   │   ├── pages/            # 82 lazy-loaded pages
+│   │   │   ├── components/       # 19 shared UI components
+│   │   │   ├── hooks/            # React Query hooks
+│   │   │   ├── lib/api/          # 20+ domain API clients
+│   │   │   ├── stores/           # Auth + Theme context
+│   │   │   ├── i18n/             # EN + AR translations
+│   │   │   └── styles/           # TailwindCSS + globals
+│   │   └── index.html
+│   └── shared/
+│       └── src/
+│           ├── config/           # Environment + validation
+│           ├── errors/           # Custom error classes
+│           ├── types/            # Shared TypeScript types
+│           └── utils/            # Crypto, validators, formatters
+├── deployment/
+│   └── nginx/                    # dev.conf, prod.conf, default.conf
+├── scripts/                      # backup.sh, generate-icons.mjs
+├── secrets/                      # Docker Secrets (.example files)
+├── docs/                         # Final Audit Report
+├── Dockerfile.backend            # Non-root (appuser:1001)
+├── Dockerfile.frontend           # Non-root (appuser:1001)
+├── Dockerfile.backup             # Non-root (appuser:1001)
+├── docker-compose.yml            # Development
+├── docker-compose.prod.yml       # Production (Docker Secrets)
+└── .github/
+    ├── workflows/ci.yml          # CI/CD pipeline
+    └── dependabot.yml            # Automated dependency updates
+```
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Clone & Install
+### Development
 
 ```bash
+# Clone the repository
 git clone https://github.com/elnewahy2025/vision-healthcare-erp.git
 cd vision-healthcare-erp
+
+# Install dependencies
 npm install
-```
 
-### 2. Configure Environment
-
-```bash
+# Set up environment
 cp .env.example .env
-# Edit .env with your database, Redis, and JWT secrets
-```
+# Edit .env with your database credentials
 
-### 3. Run Migrations & Start
+# Start PostgreSQL and Redis (Docker)
+docker compose up -d postgres redis minio
 
-```bash
-# Backend
-cd packages/backend
-npx knex migrate:latest
-npm run dev
+# Run migrations
+cd packages/backend && npx knex migrate:latest
 
-# Frontend (separate terminal)
-cd packages/frontend
+# Start development servers
 npm run dev
 ```
 
-### 4. Docker (Alternative)
+### Build
 
 ```bash
-docker-compose up -d
+# Build shared package
+npm run build -w packages/shared
+
+# Build backend
+npm run build -w packages/backend
+
+# Build frontend
+cd packages/frontend && npx vite build
 ```
 
-Backend: `http://localhost:3000`
-Frontend: `http://localhost:5173`
-Swagger docs: `http://localhost:3000/docs`
+---
+
+## 🐳 Production Deployment
+
+### Windows 11 (PowerShell)
+
+```powershell
+# One-command production build and deploy
+git clone https://github.com/elnewahy2025/vision-healthcare-erp.git; cd vision-healthcare-erp; Copy-Item .env.example .env; docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+```
+
+This command will:
+1. Clone the repository
+2. Copy the environment template
+3. Build all Docker images (multi-stage, non-root)
+4. Start all services (PostgreSQL, Redis, MinIO, Backend, Frontend, Nginx, Backup)
+
+### Linux / macOS
+
+```bash
+git clone https://github.com/elnewahy2025/vision-healthcare-erp.git && \
+cd vision-healthcare-erp && \
+cp .env.example .env && \
+docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+```
+
+### Post-Deployment Setup
+
+```bash
+# Create Docker Secrets (production)
+cp secrets/*.txt.example secrets/*.txt
+# Edit each file with real secrets:
+#   openssl rand -hex 32  # Generate a secret
+
+# Run database migrations
+docker exec visionhc-backend npx knex migrate:latest
+
+# Verify health
+curl http://localhost:3000/api/v1/health
+```
 
 ---
 
 ## ⚙️ Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `NODE_ENV` | Yes | `development` | `development` / `production` / `test` |
-| `PORT` | Yes | `3000` | Backend server port |
-| `DB_HOST` | Yes | `localhost` | PostgreSQL host |
-| `DB_PORT` | Yes | `5432` | PostgreSQL port |
-| `DB_NAME` | Yes | `vision_hc` | Database name |
-| `DB_USER` | Yes | — | Database user |
-| `DB_PASSWORD` | Yes | — | Database password |
-| `DB_SSL` | No | `false` | Enable DB SSL (production) |
-| `REDIS_HOST` | Yes | `localhost` | Redis host |
-| `REDIS_PORT` | Yes | `6379` | Redis port |
-| `JWT_SECRET` | Yes | — | JWT signing secret |
-| `JWT_REFRESH_SECRET` | Yes | — | Refresh token secret |
-| `CORS_ORIGIN` | Yes | `http://localhost:5173` | Allowed CORS origins |
-| `SMTP_HOST` | Yes | — | Email server |
-| `SMTP_PORT` | Yes | `587` | SMTP port |
-| `SMTP_USER` | Yes | — | SMTP username |
-| `SMTP_PASS` | Yes | — | SMTP password |
+Copy `.env.example` to `.env` and configure:
 
-See `packages/shared/src/config/environment.ts` for the full schema.
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DB_HOST` | PostgreSQL host | ✅ |
+| `DB_PORT` | PostgreSQL port | ✅ |
+| `DB_NAME` | Database name | ✅ |
+| `DB_USER` | Database user | ✅ |
+| `DB_PASSWORD` | Database password | ✅ |
+| `REDIS_HOST` | Redis host | ✅ |
+| `REDIS_PASSWORD` | Redis password | ✅ |
+| `JWT_SECRET` | JWT signing secret (32+ hex chars) | ✅ |
+| `JWT_REFRESH_SECRET` | Refresh token secret (different from JWT_SECRET) | ✅ |
+| `CORS_ORIGIN` | Allowed CORS origins | ✅ |
+| `MINIO_ENDPOINT` | MinIO/S3 endpoint | ✅ |
+| `MINIO_ACCESS_KEY` | MinIO access key | ✅ |
+| `MINIO_SECRET_KEY` | MinIO secret key | ✅ |
+
+> **Generate secrets:** `openssl rand -hex 32`
 
 ---
 
-## 🧩 Backend Modules
+## 🔐 Docker Secrets
 
-57 registered modules, organized by domain:
-
-### Core Clinical
-`auth` · `patient` · `appointment` · `emr` · `billing` · `laboratory` · `radiology` · `pharmacy` · `clinical`
-
-### Operations
-`queue` · `referral` · `notification` · `nursing` · `home-visits` · `telemedicine` · `patient-scheduling` · `online-booking` · `patient-portal`
-
-### Financial
-`insurance` · `insurance-claims` · `saas-billing` · `financial-deepening` · `billing`
-
-### Analytics & AI
-`ai-hub` · `ai-intelligence` · `bi` · `reports` · `dashboard-widgets` · `clinical`
-
-### Compliance & Security
-`compliance` · `compliance-reports` · `audit` · `rbac` · `session-manager` · `data-export`
-
-### Infrastructure
-`api-gateway` · `data-warehouse` · `dr-backup` · `system-monitor` · `integrations` · `automation` · `barcodes` · `bulk-import`
-
-### Multi-tenancy & White-label
-`multi-branch` · `white-label` · `regions` · `workflow` · `forms` · `print-templates`
-
-### CRM & Communication
-`crm` · `dms` · `communications` · `advanced-communication` · `patient-messaging` · `patient-experience` · `medical-content`
-
-### HR & Inventory
-`hr` · `inventory`
-
-### Other
-`common` · `health` · `pdf-generator` · `user-preferences`
-
-### Clean Architecture Decomposition
-
-The following modules have been fully decomposed into Clean Architecture (types, schema, repository, controller, routes, mapper):
-
-| Module | Files | Notes |
-|--------|-------|-------|
-| **auth** | `auth.service.ts`, `auth.repository.ts`, `auth.controller.ts`, `auth.routes.ts`, `schema.ts`, `types.ts` | Account lockout, MFA, CSRF, HttpOnly cookies, email verification |
-| **patient** | `patient.repository.ts`, `patient.controller.ts`, `patient.routes.ts`, `types.ts`, `patient.mapper.ts` | Audit logging, optimistic concurrency, merge, bulk import, trigram search |
-| **appointment** | `appointment.repository.ts`, `appointment.controller.ts`, `appointment.routes.ts`, `types.ts`, `appointment.mapper.ts` | Conflict detection, status state machine, working hours, cancellation policy, timezone |
-| **inventory** | `inventory.repository.ts`, `inventory.controller.ts`, `inventory.routes.ts`, `inventory.schema.ts`, `types.ts`, `inventory.mapper.ts` | Atomic stock updates, FEFO, dispensing, transfers, suppliers, bulk receipt, valuation |
-
-All other modules use a single `index.ts` file with inline route handlers.
-
----
-
-## 🗃 Database Migrations
-
-25 Knex migrations covering:
-
-| Migration | Description |
-|-----------|------------|
-| 001 | Initial schema (tenants, users, patients, appointments, billing, EMR) |
-| 002 | Clinical modules |
-| 003 | Operations (warehouses, inventory, HR, queues) |
-| 004–010 | Intelligence, AI, analytics |
-| 011–017 | Insurance, pharmacy, telemedicine, compliance |
-| 018–021 | Refresh token rotation, auth hardening |
-| 022 | Auth hardening (lockout, MFA, email verification) |
-| 023 | Patient RLS, pg_trgm search, pagination index |
-| 024 | Appointment scheduling constraints, timezone |
-| 025 | Inventory enhancements (suppliers, barcode, controlled substances, transfers, valuation) |
-
----
-
-## 📡 API Endpoints
-
-All endpoints are prefixed with `/api/v1/` and require JWT authentication (except `/auth/login`, `/auth/register`, `/health`).
-
-### Auth
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/auth/login` | User login (JWT + HttpOnly cookie refresh token) |
-| `POST` | `/auth/register` | Register organization |
-| `POST` | `/auth/logout` | Logout (invalidate refresh token) |
-| `POST` | `/auth/refresh` | Refresh access token |
-| `POST` | `/auth/forgot-password` | Password reset request |
-| `POST` | `/auth/change-password` | Change password |
-| `POST` | `/auth/mfa/setup` | Setup TOTP 2FA |
-| `POST` | `/auth/mfa/enable` | Enable 2FA |
-| `POST` | `/auth/mfa/verify` | Verify 2FA code |
-| `GET` | `/auth/sessions` | List active sessions |
-| `GET` | `/auth/verify-email` | Email verification |
-
-### Patients
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/patients` | List patients (paginated, searchable) |
-| `GET` | `/patients/search/quick` | Quick search by name/phone/MRN |
-| `POST` | `/patients` | Create patient |
-| `GET` | `/patients/:id` | Get patient with related data |
-| `PUT` | `/patients/:id` | Update patient (optimistic concurrency) |
-| `DELETE` | `/patients/:id` | Soft delete patient |
-| `POST` | `/patients/merge` | Merge duplicate patients |
-| `POST` | `/patients/bulk-import` | Bulk import patients |
-
-### Appointments
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/appointments` | List appointments (filter by date, status, doctor) |
-| `GET` | `/appointments/today/summary` | Today's appointment summary |
-| `POST` | `/appointments` | Book appointment (with conflict detection) |
-| `GET` | `/appointments/:id` | Get appointment |
-| `PUT` | `/appointments/:id` | Update appointment (status validation) |
-| `POST` | `/appointments/:id/check-in` | Check in patient |
-| `POST` | `/appointments/:id/complete` | Complete appointment |
-| `POST` | `/appointments/:id/cancel` | Cancel (with policy: >24h free, ≤24h requires reason) |
-| `POST` | `/appointments/bulk` | Bulk create (max 50) |
-| `POST` | `/appointments/bulk/cancel` | Bulk cancel |
-
-### Inventory
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/inventory/items` | List items (filter by category, warehouse, search) |
-| `GET` | `/inventory/items/:id` | Get item |
-| `GET` | `/inventory/barcode/:barcode` | Lookup by barcode |
-| `POST` | `/inventory/items` | Create item |
-| `PUT` | `/inventory/items/:id/stock` | Update stock (atomic, race-condition safe) |
-| `POST` | `/inventory/dispense` | Dispense (FEFO, expired-item prevention) |
-| `POST` | `/inventory/adjustments` | Record adjustment (with reason codes) |
-| `POST` | `/inventory/transfers` | Inter-warehouse transfer |
-| `POST` | `/inventory/bulk-receipt` | Bulk stock receipt (max 100) |
-| `GET` | `/inventory/warehouses` | List warehouses |
-| `POST` | `/inventory/warehouses` | Create warehouse |
-| `GET` | `/inventory/suppliers` | List suppliers |
-| `POST` | `/inventory/suppliers` | Create supplier |
-| `PUT` | `/inventory/suppliers/:id` | Update supplier |
-| `GET` | `/inventory/alerts/low-stock` | Low stock alerts |
-| `GET` | `/inventory/alerts/expired` | Expired items |
-| `GET` | `/inventory/reports/controlled-substances` | Controlled substance inventory |
-| `GET` | `/inventory/reports/valuation` | Stock valuation (FIFO / weighted average) |
-| `GET` | `/inventory/transactions` | Transaction history |
-| `GET` | `/inventory/pos` | List purchase orders |
-| `POST` | `/inventory/pos` | Create purchase order |
-| `PUT` | `/inventory/pos/:id/receive` | Receive PO (auto-updates stock) |
-
----
-
-## 🖥 Frontend
-
-### Pages (82)
-- **Auth**: Login, Register, Forgot Password, MFA Setup
-- **Dashboard**: Analytics, Widgets
-- **Patients**: Patient List, Patient Detail, Patient Portal
-- **Appointments**: Calendar, Scheduling, Telemedicine
-- **EMR**: Clinical Notes, Vitals, Medications, Allergies, Lab Results
-- **Billing**: Invoices, Payments, Insurance Claims
-- **Inventory**: Items, Stock, Warehouses, Suppliers, Purchase Orders
-- **Laboratory**: Orders, Results
-- **Radiology**: Orders, Results
-- **Pharmacy**: Medications, Dispensing
-- **HR**: Employees, Departments
-- **Admin**: Tenants, Branches, Users, Roles, Audit Logs
-- **Reports**: Clinical, Financial, Operational
-- **Settings**: Profile, Preferences, Integrations
-
-### Shared UI Components (19)
-`Badge` · `Button` · `Card` · `EmptyState` · `ErrorBoundary` · `FileUpload` · `FormField` · `ImageViewer` · `Input` · `Modal` · `PageLoader` · `PageTransition` · `PatientSearchField` · `PwaInstallPrompt` · `Select` · `SkipToContent` · `Spinner` · `Table`
-
-### State Management
-- **React Query (TanStack)** — Server state with `QueryClient` + domain hooks (`usePatients`, `useAppointments`, `useAuth`)
-- **React Context** — Auth state (`authStore.tsx` with HttpOnly cookies, no localStorage for tokens)
-- **Zustand** — Client state where needed
-
----
-
-## 🐳 Docker Deployment
+Production uses Docker Secrets for sensitive credentials (not environment variables):
 
 ```bash
-# Development
-docker-compose up -d
-
-# Production
-docker-compose -f docker-compose.prod.yml up -d
+# Create secret files
+cp secrets/*.txt.example secrets/*.txt
+nano secrets/db_password.txt      # Real DB password
+nano secrets/jwt_secret.txt       # Real JWT secret
+nano secrets/jwt_refresh_secret.txt
 ```
 
-### Services
-| Service | Port | Description |
-|---------|------|-------------|
-| `frontend` | 5173 | React + Vite dev server |
-| `backend` | 3000 | Fastify API server |
-| `postgres` | 5432 | PostgreSQL database |
-| `redis` | 6379 | Redis cache |
-| `minio` | 9000 | S3-compatible object storage |
-
-### Production Features
-- Multi-stage Docker builds (smaller images)
-- Database SSL for production connections
-- Graceful shutdown handlers (SIGTERM/SIGINT)
-- Structured logging with Pino (JSON, redaction)
-- Error handler strips stack traces in production
+The backend reads secrets via the `_FILE` convention:
+- `DB_PASSWORD_FILE=/run/secrets/db_password`
+- `JWT_SECRET_FILE=/run/secrets/jwt_secret`
+- `JWT_REFRESH_SECRET_FILE=/run/secrets/jwt_refresh_secret`
 
 ---
 
-## 🧪 Testing
+## 📦 Backend Modules
 
-### Backend Tests
+### Core Modules (Clean Architecture)
 
-```bash
-cd packages/backend
-npm run test          # Run all tests
-npm run test:watch    # Watch mode
-```
+| Module | Files | Description |
+|--------|-------|-------------|
+| `auth/` | 7 files | Authentication, MFA, OTP, JWT, account lockout |
+| `patient/` | 7 files | Egyptian NID validation, AES-256-GCM encryption, RLS |
+| `appointment/` | 6 files | Scheduling, reminders, telemedicine links |
+| `inventory/` | 7 files | Stock management, purchase orders, warehouses |
 
-**20 test files, 139 tests** covering:
+### Other Modules (20+)
 
-| Module | Tests | Coverage |
-|--------|-------|----------|
-| `auth` | 20 | Login, register, lockout, MFA, refresh tokens, CSRF |
-| `patients` | 10 | DOB validation, age calculation, MRN, search, NID |
-| `appointment` | 25 | Conflict detection, status transitions, working hours, cancellation policy, timezone, bulk ops |
-| `inventory` | 26 | Stock updates, FEFO, expiration, low stock, adjustments, transfers, valuation, bulk receipt |
-| `billing` | 4 | Invoice creation, totals, status |
-| `laboratory` | 3 | Lab orders, results |
-| `pharmacy` | 4 | Medications, dispensing |
-| `hr` | 4 | Employees, departments |
-| `ai` | 3 | Predictions, risk scores |
-| `compliance` | 3 | HIPAA audit, retention, consent |
-| `notifications` | 3 | Multi-channel, preferences, batching |
-| `reports` | 3 | Revenue, visits, date ranges |
-| `timeline` | 3 | Event sorting, empty, mixed types |
-| `allergies` | 4 | Allergy validation |
-| `icd10` | 3 | ICD-10 code validation |
-| `medications` | 4 | Medication validation |
-| `validators` | 4 | ICD-10, password strength |
-| `formatters` | 2 | Currency, BMI |
-| `audit` | 1 | Audit logging |
-| `totp` | 3 | TOTP secret, QR, verify |
-
-### E2E Tests (Playwright)
-
-```bash
-npx playwright install chromium
-npx playwright test
-```
-
-Configured in `playwright.config.ts` with Chromium.
-
-### TypeScript
-
-```bash
-cd packages/backend
-npx tsc --noEmit    # Type checking (0 errors in decomposed modules)
-```
+| Module | Description |
+|--------|-------------|
+| `billing/` | Invoicing, payments, Stripe/Fawry/InstaPay |
+| `emr/` | Electronic Medical Records |
+| `financial-deepening/` | Expenses, budgets, ETA invoicing, payments |
+| `patient-portal/` | Patient-facing OTP login, dashboard |
+| `patient-experience/` | Kiosk check-in, surveys, queue management |
+| `advanced-communication/` | Chat, voice calls, WhatsApp, SMS |
+| `ai-intelligence/` | Clinical AI, predictive analytics |
+| `compliance/` | HIPAA, PDPL, audit trails |
+| `insurance-claims/` | Claims lifecycle management |
+| `laboratory/` | Lab orders, results, catalog |
+| `pharmacy/` | Prescriptions, inventory |
+| `radiology/` | Orders, DICOM links |
+| `hr/` | Employees, payroll, leave |
+| `crm/` | Campaigns, patient feedback |
+| `dms/` | Document management |
+| `automation/` | Business rules engine |
+| `barcodes/` | Label generation, scanning |
+| ... and 30+ more |
 
 ---
 
 ## 🔒 Security
 
-### Auth Hardening
-- **Password hashing**: bcrypt with configurable rounds
-- **Account lockout**: 5 failed attempts → 15-minute lock
-- **MFA/TOTP**: Two-factor authentication with QR code setup
-- **Refresh token rotation**: Tokens invalidated on password change
-- **HttpOnly cookies**: Refresh tokens stored in HttpOnly, Secure cookies (not localStorage)
-- **CSRF protection**: CSRF middleware + SameSite cookies
-- **Email verification**: Token-based email verification flow
-- **Session tracking**: Max 5 concurrent sessions per user
-- **IP-based login tracking**: Failed attempts logged by IP
-- **Honeypot detection**: Bot detection on registration
+### OWASP Top 10 Compliance
 
-### API Security
-- **JWT**: Access tokens with minimal payload (no permissions/roles embedded)
-- **Rate limiting**: Redis-backed distributed rate limiter with in-memory fallback
-- **CORS**: Configurable allowed origins
-- **Helmet**: Security headers
-- **Input validation**: Zod schemas on all endpoints
-- **Error handler**: Stack traces stripped in production
+| Category | Status | Implementation |
+|----------|--------|---------------|
+| A01: Broken Access Control | ✅ PASS | RBAC + tenant isolation + RLS |
+| A02: Cryptographic Failures | ✅ PASS | AES-256-GCM, bcrypt, crypto.randomInt |
+| A03: Injection | ✅ PASS | Parameterized queries, Zod validation |
+| A04: Insecure Design | ✅ PASS | Clean Architecture, defense-in-depth |
+| A05: Security Misconfiguration | ✅ PASS | Security headers, rate limiting |
+| A06: Vulnerable Components | ✅ PASS | Dependabot weekly updates |
+| A07: Auth Failures | ✅ PASS | Account lockout, MFA, rate limiting |
+| A08: Data Integrity | ✅ PASS | CSRF protection, JWT validation |
+| A09: Logging Failures | ✅ PASS | Audit logging, pino with redaction |
+| A10: SSRF | ✅ PASS | Webhook URL validation, IP blocking |
 
-### Data Protection
-- **RLS**: Row Level Security enabled on patients table
-- **Soft deletes**: Patient and inventory data preserved
-- **Audit logging**: All write operations logged to `audit_logs`
-- **Controlled substances**: Enhanced audit for class I–V medications
-- **Password complexity**: Uppercase + lowercase + digit + special character + 8+ chars
+### Security Features
 
-### Security Audit
-- OWASP Top 10 (2021) audit documented in `docs/security/SECURITY_AUDIT.md`
+- **Authentication:** JWT (access + HttpOnly refresh cookies), MFA/TOTP, OTP
+- **Authorization:** Role-Based Access Control (RBAC) with fine-grained permissions
+- **Encryption:** AES-256-GCM for National IDs at rest, bcrypt for passwords
+- **Rate Limiting:** Per-route limits (login: 5/min, API: 30/s, portal: 10/min)
+- **Audit Logging:** Every write operation logged with tenant, user, IP, user-agent
+- **Input Sanitization:** OWASP-compliant `sanitize.ts` with XSS prevention
+- **Container Security:** Non-root user (appuser:1001) in all Dockerfiles
+- **Secrets Management:** Docker Secrets with `_FILE` convention
+- **Nginx Headers:** HSTS, CSP, X-Frame-Options, Permissions-Policy
+- **SQL Injection:** Parameterized queries, no raw SQL with user input
+- **Token Security:** Access tokens in memory only, refresh in HttpOnly cookies
 
-### ESLint Rules
-- `no-debugger`: error
-- `@typescript-eslint/no-explicit-any`: error
-- `curly`: ["error", "all"]
-- `eqeqeq`: ["error", "always"]
-- `no-var`: error
-- `prefer-const`: error
+---
+
+## 🧪 Testing
+
+```bash
+# Run all backend tests
+cd packages/backend && npx vitest run
+
+# Run specific test file
+cd packages/backend && npx vitest run src/modules/__tests__/auth.test.ts
+
+# Type-check backend
+cd packages/backend && npx tsc --noEmit
+
+# Type-check frontend
+cd packages/frontend && npx tsc --noEmit
+```
+
+### Test Results
+
+| Metric | Value |
+|--------|-------|
+| Test files | 20 |
+| Total tests | 154 |
+| Passing | 154 ✅ |
+| TypeScript errors | 0 |
+| Coverage areas | Auth, Patient, Appointment, Billing, EMR, Inventory, Compliance, AI, HR, Reports, Forms, Workflows, CRM, Insurance, Financial |
+
+---
+
+## 📊 Production Readiness Audit
+
+### Audit Status: ✅ COMPLETE
+
+| Area | Status | Details |
+|------|--------|---------|
+| Backend Modules (20+) | ✅ | Tenant isolation, audit logging, type safety |
+| Frontend Security | ✅ | In-memory tokens, XSS protection, 0 `any` types |
+| Migrations | ✅ | 29 migrations, audit_logs schema fixed |
+| Docker/Deployment | ✅ | Non-root containers, Docker Secrets, nginx hardening |
+| Dead Link Audit | ✅ | 0 dead links between frontend and backend |
+| `Math.random()` | ✅ | All replaced with `crypto.randomInt/Bytes` |
+| `console.log` | ✅ | All removed from production code |
+| ESLint Rules | ✅ | `no-explicit-any: error`, `curly: all`, `eqeqeq: always` |
+
+### Key Security Fixes Applied
+
+- AES-256-GCM encryption for Egyptian National IDs
+- PostgreSQL Row Level Security (RLS) policies
+- Unique partial indexes for race condition prevention
+- SSRF protection on webhook URLs
+- RBAC enforcement on admin endpoints
+- Account lockout after 5 failed attempts
+- Refresh token pre-rotation checks
+- Incident response plan documented
+- Dependabot configured for weekly updates
+
+Full audit report: [`docs/FINAL_AUDIT_REPORT.md`](docs/FINAL_AUDIT_REPORT.md)
 
 ---
 
 ## 🇪🇬 Egypt Market Features
 
-- **Fawry Payments** — Egyptian payment gateway integration
-- **InstaPay** — Mobile wallet integration
-- **ETA e-Invoice** — QR code generation for Egyptian Tax Authority compliance
-- **Egyptian National ID** — 14-digit validation (century, governorate, birth date, checksum)
-- **Egyptian Phone Validation** — Egyptian mobile number format
-- **8 Egyptian Insurers** — Misr Insurance, Allianz Egypt, AXA Egypt, GIG Egypt, Arab Misr Insurance, CIL, Royal Insurance, Egypt Life Takaful
-- **Arabic ICD-10** — 25+ diagnosis codes with Arabic translations
-- **Arabic Medications** — 20+ drugs with Arabic names and usage instructions
-- **Full RTL Support** — Complete right-to-left layout for Arabic
-- **EGP Currency** — All financial operations in Egyptian Pounds
-- **Arabic UI** — Complete Arabic translation (2,674 keys)
-- **Default timezone** — Africa/Cairo
+- **Egyptian National ID Validation:** Full checksum, governorate, birth date, gender verification
+- **ETA E-Invoice Integration:** QR code generation, invoice submission, UUID tracking
+- **Fawry Payment Integration:** Create and process Fawry payment requests
+- **InstaPay Integration:** Wallet-to-wallet payment support
+- **Bilingual UI:** Complete English + Arabic (2,674 i18n keys)
+- **RTL Layout:** Automatic direction switching based on locale
+- **EGP Currency:** Egyptian Pound formatting and calculations
+- **Egyptian Phone Validation:** Supports 010/011/012/015 + international formats
 
 ---
 
-## 📊 Project Statistics
+## 📈 Project Statistics
 
-| Metric | Count |
+| Metric | Value |
 |--------|-------|
 | Backend modules | 57 |
 | Clean Architecture modules | 4 (auth, patient, appointment, inventory) |
 | Backend services | 17 |
-| Database migrations | 25 |
-| API endpoints | 200+ |
+| Database migrations | 29 |
+| API endpoints | 360+ |
 | Frontend pages | 82 |
 | Shared UI components | 19 |
-| React Query hooks | Domain-specific (usePatients, useAppointments, useAuth) |
-| i18n keys | 2,674 (EN) |
+| Frontend API clients | 20+ |
+| React Query hooks | Domain-specific |
+| i18n keys | 2,674 (EN + AR) |
 | Backend test files | 20 |
-| Backend tests | 139 |
+| Backend tests | 154 |
 | ESLint rules | Strict (no any, curly, eqeqeq, no-debugger error) |
-| Git commits | 146 |
-| Target market | Egypt 🇪🇬 |
-| Currency | EGP (Egyptian Pound) |
+| Security headers | 7 (HSTS, CSP, X-Frame, X-Content-Type, X-XSS, Referrer, Permissions) |
+| OWASP categories | 10/10 PASS |
+| Docker services | 7 (postgres, redis, minio, backend, frontend, nginx, backup) |
 
 ---
 
@@ -514,23 +422,25 @@ npx tsc --noEmit    # Type checking (0 errors in decomposed modules)
 
 1. Fork → `git checkout -b feature/my-feature`
 2. Code: Follow existing module patterns (see Clean Architecture modules for reference)
-3. Test: `cd packages/backend && npm run test`
-4. Lint: `npm run lint`
+3. Test: `cd packages/backend && npx vitest run`
+4. Type-check: `npx tsc --noEmit` (in both backend and frontend)
 5. Commit: `git commit -m 'feat: Add my feature'`
 6. Push: `git push origin feature/my-feature`
 7. PR: Open pull request
 
 ### Code Conventions
-- TypeScript strict — no `any` types (ESLint enforced)
-- Backend modules: `registerXxxModule(app)` pattern
-- Decomposed modules: `types.ts` → `schema.ts` → `repository.ts` → `controller.ts` → `routes.ts` → `mapper.ts`
-- Frontend: Lazy-loaded pages, `useTranslation()` for i18n
-- All text: EN + AR translation keys (no hardcoded English)
-- Security: `sanitizeString()` on all user inputs
-- Forms: Zod validation with error display on every form
-- Actions: `try/catch` with `toast.error()` on every async action
-- Components: Use shared UI components (Modal, Button, Input, Select, Badge, etc.)
-- Audit: `logAudit()` on all write operations in decomposed modules
+
+- **TypeScript strict** — no `any` types (ESLint enforced)
+- **Backend modules:** `registerXxxModule(app)` pattern
+- **Decomposed modules:** `types.ts` → `schema.ts` → `repository.ts` → `controller.ts` → `routes.ts`
+- **Frontend:** Lazy-loaded pages, `useTranslation()` for i18n
+- **All text:** EN + AR translation keys (no hardcoded English)
+- **Security:** `sanitizeString()` on all user inputs
+- **Forms:** Zod validation with error display on every form
+- **Actions:** `try/catch` with `toast.error()` on every async action
+- **Components:** Use shared UI components (Modal, Button, Input, Select, Badge, etc.)
+- **Audit:** `logAudit()` on all write operations
+- **Crypto:** Use `crypto.randomInt()` / `crypto.randomBytes()` — never `Math.random()`
 
 ---
 
