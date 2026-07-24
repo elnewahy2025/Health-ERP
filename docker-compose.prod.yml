@@ -8,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-healthcare}
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -19,7 +19,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
-    networks:
+    secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  jwt_refresh_secret:
+    file: ./secrets/jwt_refresh_secret.txt
+
+networks:
       - visionhc-net
     deploy:
       resources:
@@ -39,7 +47,15 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-    networks:
+    secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  jwt_refresh_secret:
+    file: ./secrets/jwt_refresh_secret.txt
+
+networks:
       - visionhc-net
     deploy:
       resources:
@@ -62,7 +78,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks:
+    secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  jwt_refresh_secret:
+    file: ./secrets/jwt_refresh_secret.txt
+
+networks:
       - visionhc-net
     deploy:
       resources:
@@ -77,6 +101,10 @@ services:
     container_name: visionhc-backend
     restart: unless-stopped
     env_file: .env
+    secrets:
+      - db_password
+      - jwt_secret
+      - jwt_refresh_secret
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -85,7 +113,7 @@ services:
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-healthcare}
       DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD_FILE: /run/secrets/db_password
       REDIS_HOST: redis
       REDIS_PORT: 6379
       MINIO_ENDPOINT: minio
@@ -107,7 +135,15 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    networks:
+    secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  jwt_refresh_secret:
+    file: ./secrets/jwt_refresh_secret.txt
+
+networks:
       - visionhc-net
     deploy:
       resources:
@@ -121,7 +157,15 @@ services:
       dockerfile: Dockerfile.frontend
     container_name: visionhc-frontend
     restart: unless-stopped
-    networks:
+    secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  jwt_refresh_secret:
+    file: ./secrets/jwt_refresh_secret.txt
+
+networks:
       - visionhc-net
     deploy:
       resources:
@@ -150,7 +194,15 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-    networks:
+    secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  jwt_refresh_secret:
+    file: ./secrets/jwt_refresh_secret.txt
+
+networks:
       - visionhc-net
     deploy:
       resources:
@@ -169,7 +221,7 @@ services:
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-healthcare}
       DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD_FILE: /run/secrets/db_password
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION:-7}
       S3_BUCKET: ${BACKUP_S3_BUCKET:-}
       S3_ACCESS_KEY: ${AWS_ACCESS_KEY_ID:-}
@@ -181,13 +233,29 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
+    secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  jwt_refresh_secret:
+    file: ./secrets/jwt_refresh_secret.txt
+
+networks:
       - visionhc-net
     deploy:
       resources:
         limits:
           memory: 256M
           cpus: '0.25'
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  jwt_refresh_secret:
+    file: ./secrets/jwt_refresh_secret.txt
 
 networks:
   visionhc-net:

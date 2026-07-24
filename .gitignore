@@ -58,3 +58,5 @@ deployment/nginx/ssl/*.crt
 
 # Allow Dockerfile.backup
 !Dockerfile.backup
+secrets/
+!.gitignore

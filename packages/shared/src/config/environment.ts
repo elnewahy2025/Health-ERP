@@ -1,3 +1,22 @@
+import fs from 'fs';
+
+/**
+ * Read a secret from a Docker secret file or environment variable.
+ * Docker convention: if JWT_SECRET_FILE is set, read from that file path.
+ * Falls back to the direct environment variable.
+ */
+function readSecret(envVar: string, fileVar: string, defaultValue?: string): string {
+  const filePath = process.env[fileVar];
+  if (filePath) {
+    try {
+      return fs.readFileSync(filePath, 'utf-8').trim();
+    } catch {
+      // Fall through to env var
+    }
+  }
+  return process.env[envVar] || defaultValue || '';
+}
+
 export interface Environment {
   NODE_ENV: 'development' | 'production' | 'test';
   PORT: number;
@@ -82,13 +101,13 @@ export function getEnv(): Environment {
     DB_PORT: parseInt(process.env.DB_PORT || '5432', 10),
     DB_NAME: process.env.DB_NAME || 'healthcare',
     DB_USER: process.env.DB_USER || 'postgres',
-    DB_PASSWORD: process.env.DB_PASSWORD || 'postgres',
+    DB_PASSWORD: readSecret('DB_PASSWORD', 'DB_PASSWORD_FILE', 'postgres'),
     DB_SSL: process.env.DB_SSL === "true",
     REDIS_HOST: process.env.REDIS_HOST || 'localhost',
     REDIS_PORT: parseInt(process.env.REDIS_PORT || '6379', 10),
     REDIS_PASSWORD: process.env.REDIS_PASSWORD,
-    JWT_SECRET: process.env.JWT_SECRET || 'dev-secret-change-in-production',
-    JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret-change-in-production',
+    JWT_SECRET: readSecret('JWT_SECRET', 'JWT_SECRET_FILE', 'dev-secret-change-in-production'),
+    JWT_REFRESH_SECRET: readSecret('JWT_REFRESH_SECRET', 'JWT_REFRESH_SECRET_FILE', 'dev-refresh-secret-change-in-production'),
     MINIO_ENDPOINT: process.env.MINIO_ENDPOINT || 'localhost',
     MINIO_PORT: parseInt(process.env.MINIO_PORT || '9000', 10),
     MINIO_ACCESS_KEY: process.env.MINIO_ACCESS_KEY || 'minioadmin',

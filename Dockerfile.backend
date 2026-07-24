@@ -18,11 +18,20 @@ RUN npm run build -w packages/backend
 FROM node:20-alpine AS runner
 WORKDIR /app
 
+ENV NODE_ENV=production
+
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -S appuser -u 1001 -G appgroup
+
 COPY --from=builder /app/packages/backend/dist ./dist
 COPY --from=builder /app/packages/backend/package.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/shared/dist ./node_modules/@healthcare/shared/dist
 COPY --from=builder /app/packages/shared/package.json ./node_modules/@healthcare/shared/package.json
+
+RUN chown -R appuser:appgroup /app
+
+USER appuser
 
 EXPOSE 3000
 
