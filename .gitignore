@@ -5,6 +5,8 @@ node_modules/
 packages/backend/dist/
 packages/frontend/dist/
 packages/shared/dist/
+# TypeScript incremental build cache (machine/build-state, not source)
+*.tsbuildinfo
 
 # Environment files
 .env
