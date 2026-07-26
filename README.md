@@ -18,6 +18,7 @@
 - [Project Structure](#-project-structure)
 - [Quick Start](#-quick-start)
 - [Production Deployment](#-production-deployment)
+- [Troubleshooting](#-troubleshooting)
 - [Environment Variables](#-environment-variables)
 - [Docker Secrets](#-docker-secrets)
 - [Backend Modules](#backend-modules)
@@ -131,41 +132,83 @@ vision-healthcare-erp/
 
 ## 🚀 Quick Start
 
-### Development
+### Prerequisites
 
-```bash
-# Clone the repository
+| Tool | Version | Install |
+|------|---------|---------|
+| Node.js | v20+ (v22 recommended) | `winget install OpenJS.NodeJS.LTS` or [nodejs.org](https://nodejs.org) |
+| Docker Desktop | Latest | `winget install Docker.DockerDesktop` |
+| Git | Latest | `winget install Git.Git` |
+
+### Windows (PowerShell)
+
+```powershell
+# Clone
+cd C:\Projects
 git clone https://github.com/elnewahy2025/vision-healthcare-erp.git
 cd vision-healthcare-erp
 
-# Install dependencies
+# Create environment files
+Copy-Item .env.example .env
+Copy-Item .env.docker.example .env.docker
+# Edit both .env and .env.docker with your credentials
+
+# Generate JWT secrets (run twice, use each output once)
+-join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })
+
+# Start infrastructure
+docker compose up -d postgres redis minio
+docker compose ps   # wait until all show 'healthy'
+
+# Install dependencies (builds shared package automatically)
 npm install
 
-# Set up environment
-cp .env.example .env
-# Edit .env with your database credentials
+# Build all packages (shared → backend → frontend)
+npm run build
 
-# Start PostgreSQL and Redis (Docker)
+# Run database migrations
+cd packages/backend && npm run migrate && cd ../..
+
+# Start dev servers (backend :3000, frontend :5173)
+npm run dev
+```
+
+### Linux / macOS
+
+```bash
+# Clone
+git clone https://github.com/elnewahy2025/vision-healthcare-erp.git
+cd vision-healthcare-erp
+
+# Create environment files
+cp .env.example .env
+cp .env.docker.example .env.docker
+# Edit both .env and .env.docker with your credentials
+
+# Start infrastructure
 docker compose up -d postgres redis minio
 
-# Run migrations
-cd packages/backend && npx knex migrate:latest
+# Install dependencies and build
+npm install
+npm run build
 
-# Start development servers
+# Run migrations
+cd packages/backend && npm run migrate && cd ../..
+
+# Start dev servers
 npm run dev
 ```
 
 ### Build
 
 ```bash
-# Build shared package
+# Full build (shared → backend → frontend) — always use this
+npm run build
+
+# Or build individual packages
 npm run build -w packages/shared
-
-# Build backend
 npm run build -w packages/backend
-
-# Build frontend
-cd packages/frontend && npx vite build
+npm run build -w packages/frontend
 ```
 
 ---
@@ -332,10 +375,11 @@ cd packages/backend && npx vitest run
 # Run specific test file
 cd packages/backend && npx vitest run src/modules/__tests__/auth.test.ts
 
-# Type-check backend
-cd packages/backend && npx tsc --noEmit
+# Type-check all packages
+npm run build   # includes tsc for shared, backend, and frontend
 
-# Type-check frontend
+# Or type-check individually
+cd packages/backend && npx tsc --noEmit
 cd packages/frontend && npx tsc --noEmit
 ```
 
@@ -421,12 +465,16 @@ Full audit report: [`docs/FINAL_AUDIT_REPORT.md`](docs/FINAL_AUDIT_REPORT.md)
 ## 🤝 Contributing
 
 1. Fork → `git checkout -b feature/my-feature`
-2. Code: Follow existing module patterns (see Clean Architecture modules for reference)
-3. Test: `cd packages/backend && npx vitest run`
-4. Type-check: `npx tsc --noEmit` (in both backend and frontend)
-5. Commit: `git commit -m 'feat: Add my feature'`
-6. Push: `git push origin feature/my-feature`
-7. PR: Open pull request
+2. Install: `npm install`
+3. Build: `npm run build` (ensures shared package is compiled for backend/frontend)
+4. Code: Follow existing module patterns (see Clean Architecture modules for reference)
+5. Test: `cd packages/backend && npx vitest run`
+6. Type-check: `npm run build` (includes tsc for all packages)
+7. Commit: `git commit -m 'feat: Add my feature'`
+8. Push: `git push origin feature/my-feature`
+9. PR: Open pull request
+
+> **Note:** The `*.tsbuildinfo` pattern in `.gitignore` is intentional — these are machine-local incremental build caches that must not be committed. If you see stale `TS2307` errors after pulling, delete them and rebuild: `Get-ChildItem -Path . -Filter "tsconfig.tsbuildinfo" -Recurse | Remove-Item -Force && npm run build`
 
 ### Code Conventions
 
@@ -441,6 +489,55 @@ Full audit report: [`docs/FINAL_AUDIT_REPORT.md`](docs/FINAL_AUDIT_REPORT.md)
 - **Components:** Use shared UI components (Modal, Button, Input, Select, Badge, etc.)
 - **Audit:** `logAudit()` on all write operations
 - **Crypto:** Use `crypto.randomInt()` / `crypto.randomBytes()` — never `Math.random()`
+
+---
+
+## 🔧 Troubleshooting
+
+### `TS2307: Cannot find module '@healthcare/shared/...'`
+
+The `packages/shared/dist` output is incomplete. Delete stale build caches and rebuild:
+
+```powershell
+# Windows
+Get-ChildItem -Path . -Filter "tsconfig.tsbuildinfo" -Recurse | Remove-Item -Force
+npm run build
+```
+
+```bash
+# Linux / macOS
+find . -name "tsconfig.tsbuildinfo" -delete
+npm run build
+```
+
+### `TS2305: Module has no exported member 'screen' / 'waitFor'`
+
+Missing `@testing-library/dom` peer dependency. Run:
+
+```bash
+npm install
+```
+
+This is already fixed in the repo — if you see it, you're on an older branch.
+
+### Docker containers won't start
+
+```powershell
+docker compose down -v
+docker compose up -d postgres redis minio
+docker compose ps   # verify all healthy
+```
+
+### Port conflicts
+
+The dev servers use:
+- **Backend:** `localhost:3000`
+- **Frontend:** `localhost:5173`
+- **PostgreSQL:** `localhost:5432`
+- **Redis:** `localhost:6379`
+- **MinIO:** `localhost:9000` (API) / `localhost:9001` (console)
+
+Kill any process using these ports before starting.
 
 ---
 
