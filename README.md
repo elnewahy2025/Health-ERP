@@ -271,6 +271,41 @@ curl http://localhost:3000/api/v1/health
 
 ---
 
+### Live Production (Vercel + Railway)
+
+The project is deployed end-to-end (frontend, API proxy, backend, Postgres):
+
+| Component | URL |
+|---|---|
+| Frontend (Vercel) | https://vision-healthcare-erp.vercel.app |
+| Backend API (Railway) | https://vision-healthcare-erp-production.up.railway.app |
+| API docs | https://vision-healthcare-erp-production.up.railway.app/docs |
+| Health check | https://vision-healthcare-erp-production.up.railway.app/api/v1/health |
+
+**Demo credentials** (seeded via `npm run seed -w packages/backend`, tenant slug `demo`):
+
+| Role | Email | Password |
+|---|---|---|
+| Super Admin | `admin@demo.com` | `Admin@123` |
+| Doctor | `doctor@demo.com` | `Doctor@123` |
+| Receptionist | `reception@demo.com` | `Recept@123` |
+
+**Login payload** — the API requires a tenant slug:
+
+```json
+{ "email": "admin@demo.com", "password": "Admin@123", "tenantSlug": "demo" }
+```
+
+**Deploying updates**
+
+- Backend: push to `main` → Railway builds via `railway.json` (`npm install --include=dev`, builds `shared` + `backend`) and runs `npm run migrate` before starting.
+- Frontend: push to `main` → Vercel builds the SPA and proxies `/api/*` to the Railway backend (see `vercel.json`).
+
+**Notes**
+
+- `/api/v1/health` reports `redis: degraded` because no Redis service is provisioned yet — rate limiting and background queues are the only features affected; the rest of the app is fully functional.
+- Migrations and demo seed run against Railway Postgres; `packages/shared` `dist` is rebuilt automatically by the Railway build so `@healthcare/shared/*` subpath imports resolve from the workspace symlink.
+
 ## ⚙️ Environment Variables
 
 Copy `.env.example` to `.env` and configure:
