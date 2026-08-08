@@ -62,3 +62,4 @@ deployment/nginx/ssl/*.crt
 !Dockerfile.backup
 secrets/
 !.gitignore
+.vercel

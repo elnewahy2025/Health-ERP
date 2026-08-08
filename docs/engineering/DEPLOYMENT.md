@@ -11,7 +11,7 @@
 | Local dev | Docker Compose (`docker-compose.yml`) | infra only (postgres, redis, minio) + `npm run dev` |
 | Self-hosted prod | `docker-compose.prod.yml` | full stack incl. nginx + backup |
 | Railway | Nixpacks (`railway.json`) | managed backend (API) |
-| **Vercel (production frontend)** | `vercel.json` + CI workflow | managed SPA hosting + API proxy |
+| **Vercel (production frontend)** | `vercel.json` + CI workflow | managed SPA hosting + API proxy — **live at https://vision-healthcare-erp.vercel.app** |
 
 **Production topology:** backend API runs on Railway (`railway.json`, `node dist/index.js`);
 the frontend SPA runs on Vercel and proxies `/api/*` to the backend through `vercel.json`

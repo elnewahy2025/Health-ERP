@@ -18,7 +18,8 @@ production-grade documentation package per the project documentation standard.
 - ✅ README with Windows/Linux setup + troubleshooting
 - ✅ Documentation package scaffolded: core (10/10), engineering (in progress), product, project-management, AI, modules
 - ✅ Documentation package completed and pushed (commit `417e281`)
-- 🔄 Vercel production setup: `vercel.json` + CI workflow written; deploy pending token
+- ✅ Vercel production deployed: https://vision-healthcare-erp.vercel.app (project `vision-healthcare-erp`, scope `khaled-osmans-projects-2ee3f454`)
+- ✅ `vercel.json` + CI workflow written; workflow push pending GitHub token with `workflow` scope
 
 ## Pending Work
 
@@ -27,7 +28,7 @@ production-grade documentation package per the project documentation standard.
 - Project management docs: release, versioning, risk, issues, bug triage, retrospective
 - AI docs: instructions, context, reading map, execution rules, phase checkpoints
 - Module docs: 15 major modules per template
-- Vercel production deploy (needs `VERCEL_TOKEN` + real backend URL in `vercel.json`)
+- Real production backend URL must be set in `vercel.json` rewrites (assumed Railway host returns 404 — API proxy currently non-functional until set)
 - E2E coverage expansion (3 → 8 specs)
 
 ## Known Issues
