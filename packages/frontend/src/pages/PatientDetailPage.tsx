@@ -181,8 +181,8 @@ interface InvoiceSummary { id: string; total: number; status: string; createdAt:
       setTouchedFields({});
       toast.success('Patient updated successfully');
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { error?: string } }; message?: string };
-      toast.error(axiosErr?.response?.data?.error || 'Failed to update patient');
+      const axiosErr = err as { response?: { data?: { error?: string; message?: string } }; message?: string };
+      toast.error(axiosErr?.response?.data?.message || axiosErr?.response?.data?.error || 'Failed to update patient');
     } finally {
       setSaving(false);
     }

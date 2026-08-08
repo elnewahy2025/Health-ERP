@@ -78,7 +78,11 @@ export async function updatePatient(request: FastifyRequest, reply: FastifyReply
   if (!existing) throw new PatientNotFoundError(patientId);
 
   // #14: Optimistic concurrency — if client sent _updatedAt, verify it matches
-  if (expectedUpdatedAt && existing.updated_at !== expectedUpdatedAt) {
+  // (compare at millisecond precision; pg truncates timestamp microseconds)
+  if (
+    expectedUpdatedAt &&
+    new Date(existing.updated_at).getTime() !== new Date(expectedUpdatedAt).getTime()
+  ) {
     return reply.status(409).send({
       success: false,
       error: 'Conflict',

@@ -134,7 +134,9 @@ export async function updatePatientById(
 ): Promise<PatientRow | undefined> {
   const [updated] = await db('patients')
     .where({ id: patientId, tenant_id: tenantId })
-    .where('updated_at', '=', expectedUpdatedAt)
+    // updated_at is stored with microsecond precision; truncate to ms so the
+    // client's ISO timestamp (ms precision) matches exactly
+    .whereRaw("date_trunc('milliseconds', updated_at) = ?::timestamp", [expectedUpdatedAt])
     .update(updateData)
     .returning('*');
   return updated;

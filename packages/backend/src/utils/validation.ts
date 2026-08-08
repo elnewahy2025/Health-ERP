@@ -60,7 +60,7 @@ export const createPatientSchema = z.object({
     phone: z.string(),
   }).optional(),
   notes: z.string().optional(),
-});
+}).passthrough();
 
 export const updatePatientSchema = createPatientSchema.partial();
 
