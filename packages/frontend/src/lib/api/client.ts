@@ -14,6 +14,8 @@ export const apiClient = axios.create({
 
 // Store access token in memory only (not localStorage)
 let inMemoryAccessToken: string | null = null;
+// CSRF token from the login/refresh response body — echoed back as a header
+let inMemoryCsrfToken: string | null = null;
 
 export function setAccessToken(token: string | null): void {
   inMemoryAccessToken = token;
@@ -21,6 +23,10 @@ export function setAccessToken(token: string | null): void {
 
 export function getAccessToken(): string | null {
   return inMemoryAccessToken;
+}
+
+export function setCsrfToken(token: string | null): void {
+  inMemoryCsrfToken = token;
 }
 
 apiClient.interceptors.request.use(
@@ -32,6 +38,9 @@ apiClient.interceptors.request.use(
     }
     if (tenantSlug && config.headers) {
       config.headers['X-Tenant-Slug'] = tenantSlug;
+    }
+    if (inMemoryCsrfToken && config.headers) {
+      config.headers['x-csrf-token'] = inMemoryCsrfToken;
     }
     return config;
   },
@@ -100,6 +109,7 @@ apiClient.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null);
         inMemoryAccessToken = null;
+        inMemoryCsrfToken = null;
         localStorage.removeItem('tenantSlug');
         localStorage.removeItem('locale');
         if (hadToken) {

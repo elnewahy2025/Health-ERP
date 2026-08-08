@@ -149,13 +149,18 @@ export async function mfaVerify(request: FastifyRequest, reply: FastifyReply) {
   await svc.createSessionRecord(tenant.id, user.id, refreshToken, ip, userAgent);
   await logAudit({ tenantId: tenant.id, userId: user.id, action: 'user.login.mfa', ipAddress: ip });
 
+  const csrfToken = svc.generateCsrfToken();
   reply.setCookie('refresh_token', refreshToken, {
     httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
     path: '/api/v1/auth/refresh', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
+  reply.setCookie('csrf_token', svc.hashCsrfToken(csrfToken), {
+    httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
+    path: '/', maxAge: 3600,
+  });
 
   return sendSuccess(reply, {
-    accessToken, expiresIn: 3600,
+    accessToken, csrfToken, expiresIn: 3600,
     user: { id: user.id, email: user.email, firstName: user.first_name, lastName: user.last_name,
       roles: typeof user.roles === 'string' ? JSON.parse(user.roles) : user.roles, locale: user.locale },
   });
@@ -199,12 +204,17 @@ export async function refreshToken(request: FastifyRequest, reply: FastifyReply)
   await repo.updateSessionActivity(user.id, oldRecord.tenant_id, oldTokenHash);
   await logAudit({ tenantId: oldRecord.tenant_id, userId: user.id, action: 'user.token_refresh' });
 
+  const csrfToken = svc.generateCsrfToken();
   reply.setCookie('refresh_token', result.refreshToken, {
     httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
     path: '/api/v1/auth/refresh', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
+  reply.setCookie('csrf_token', svc.hashCsrfToken(csrfToken), {
+    httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
+    path: '/', maxAge: 3600,
+  });
 
-  return sendSuccess(reply, { accessToken, expiresIn: 3600 });
+  return sendSuccess(reply, { accessToken, csrfToken, expiresIn: 3600 });
 }
 
 export async function logout(request: FastifyRequest, reply: FastifyReply) {
@@ -386,7 +396,7 @@ export async function csrfValidation(request: FastifyRequest, reply: FastifyRepl
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return;
 
   const url = request.url;
-  if (url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/auth/forgot-password') || url.includes('/auth/otp/') || (url.includes('/tenants') && method === 'POST')) return;
+  if (url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/auth/forgot-password') || url.includes('/auth/verify-email') || url.includes('/auth/reset-password') || url.includes('/auth/resend-verification') || url.includes('/auth/otp/') || (url.includes('/tenants') && method === 'POST')) return;
 
   const csrfHeader = request.headers["x-csrf-token"];
   const cookies = request.cookies;

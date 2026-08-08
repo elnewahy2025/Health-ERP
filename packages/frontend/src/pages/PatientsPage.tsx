@@ -81,7 +81,8 @@ export default function PatientsPage() {
         if (value && !isValidEmail(value)) return 'Enter a valid email address';
         return null;
       case 'nationalId':
-        if (value && !isValidEgyptianNationalId(value)) return 'Enter a valid 14-digit National ID';
+        if (!value.trim()) return 'National ID is required';
+        if (!isValidEgyptianNationalId(value)) return 'Enter a valid 14-digit National ID';
         return null;
       default:
         return null;
@@ -90,7 +91,7 @@ export default function PatientsPage() {
 
   const validateAll = (): boolean => {
     const errors: Partial<Record<keyof PatientFormData, string>> = {};
-    const requiredFields: (keyof PatientFormData)[] = ['firstName', 'lastName', 'dateOfBirth', 'gender', 'phone'];
+    const requiredFields: (keyof PatientFormData)[] = ['firstName', 'lastName', 'dateOfBirth', 'gender', 'phone', 'nationalId'];
     for (const field of requiredFields) {
       const error = validateField(field, newPatient[field]);
       if (error) errors[field] = error;
@@ -144,8 +145,9 @@ export default function PatientsPage() {
       setFormErrors({});
       setTouchedFields({});
       loadPatients();
-    } catch {
-      toast.error('Failed to create patient');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } }; message?: string };
+      toast.error(axiosErr?.response?.data?.error || 'Failed to create patient');
     } finally {
       setSaving(false);
     }
@@ -296,11 +298,11 @@ export default function PatientsPage() {
               onChange={e => handleFieldChange('bloodType', e.target.value)}
               placeholder={t('common.filter')}
               options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(v => ({ value: v, label: v }))} />
-            <Input label={t('patient.nationalId')} placeholder="14-digit National ID" maxLength={14}
+            <Input label={`${t('patient.nationalId')} *`} placeholder="14-digit National ID" maxLength={14}
               value={newPatient.nationalId}
               onChange={e => handleFieldChange('nationalId', e.target.value.replace(/\D/g, '').substring(0, 14))}
               onBlur={() => handleFieldBlur('nationalId')}
-              error={getFieldError('nationalId')} helpText="14-digit Egyptian National ID" />
+              error={getFieldError('nationalId')} helpText="14-digit Egyptian National ID" required />
           </div>
           <Input label={t('patient.nationality')} value={newPatient.nationality}
             onChange={e => handleFieldChange('nationality', e.target.value)} />

@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { setAccessToken } from './client';
+import { setAccessToken, setCsrfToken } from './client';
 
 export const authApi = {
   login: async (data: { email: string; password: string; tenantSlug: string }) => {
@@ -8,6 +8,9 @@ export const authApi = {
     // Access token goes to memory only; refresh token is in HttpOnly cookie
     if (result.accessToken) {
       setAccessToken(result.accessToken);
+    }
+    if (result.csrfToken) {
+      setCsrfToken(result.csrfToken);
     }
     return result;
   },
@@ -22,6 +25,9 @@ export const authApi = {
     if (result.accessToken) {
       setAccessToken(result.accessToken);
     }
+    if (result.csrfToken) {
+      setCsrfToken(result.csrfToken);
+    }
     return result;
   },
   verifyMfa: async (code: string, partialToken: string) => {
@@ -30,6 +36,9 @@ export const authApi = {
     if (result.accessToken) {
       setAccessToken(result.accessToken);
     }
+    if (result.csrfToken) {
+      setCsrfToken(result.csrfToken);
+    }
     return result;
   },
   logout: async () => {
@@ -37,6 +46,7 @@ export const authApi = {
       await apiClient.post('/auth/logout');
     } finally {
       setAccessToken(null);
+      setCsrfToken(null);
     }
   },
 };

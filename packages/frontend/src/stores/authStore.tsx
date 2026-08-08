@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authApi } from '../lib/api';
-import { setAccessToken } from '../lib/api/client';
+import { setAccessToken, setCsrfToken } from '../lib/api/client';
 
 export interface User {
   id: string;
@@ -109,6 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Ignore errors — clear local state regardless
     });
     setAccessToken(null);
+    setCsrfToken(null);
     localStorage.removeItem('tenantSlug');
     localStorage.removeItem('locale');
     setUser(null);
