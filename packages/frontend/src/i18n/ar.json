@@ -2675,5 +2675,6 @@
   "auditAdv.system": "النظام",
   "auditAdv.close": "إغلاق",
   "auditAdv.loadingLogs": "جاري تحميل سجلات التدقيق...",
-  "common.view": "عرض"
+  "common.view": "عرض",
+  "patient.nationality": "الجنسية"
 }
