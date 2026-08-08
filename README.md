@@ -16,6 +16,7 @@
 - [Architecture Overview](#-architecture-overview)
 - [Tech Stack](#-tech-stack)
 - [Project Structure](#-project-structure)
+- [Documentation](#-documentation)
 - [Quick Start](#-quick-start)
 - [Production Deployment](#-production-deployment)
 - [Troubleshooting](#-troubleshooting)
@@ -31,6 +32,22 @@
 - [License](#-license)
 
 ---
+
+## 📚 Documentation
+
+The complete production-grade documentation package lives in [`docs/`](docs/index.md).
+It covers product, engineering, security, testing, deployment, project management, AI,
+and per-module documentation — always kept in sync with the codebase.
+
+| Area | Index |
+|---|---|
+| All documents | [docs/index.md](docs/index.md) |
+| Core (PRD, specs, architecture, decisions, roadmap) | [docs/core](docs/core/) |
+| Engineering (API, DB, security, testing, deployment, config) | [docs/engineering](docs/engineering/) |
+| Product (UX, design system, content, accessibility) | [docs/product](docs/product/) |
+| Project management | [docs/project-management](docs/project-management/) |
+| AI | [docs/ai](docs/ai/) |
+| Modules (auth, patient, EMR, billing, …) | [docs/modules](docs/modules/) |
 
 ## 🏗 Architecture Overview
 
