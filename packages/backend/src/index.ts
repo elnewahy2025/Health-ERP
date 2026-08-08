@@ -243,7 +243,7 @@ async function start() {
 
   // Run migrations automatically on startup
   try {
-    const migrationDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../migrations');
+    const migrationDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../migrations');
     const [batchNo, migrations] = await db.migrate.latest({
       directory: migrationDir,
     });
