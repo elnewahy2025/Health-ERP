@@ -365,7 +365,7 @@ export async function verifyOtpHandler(request: FastifyRequest, reply: FastifyRe
 }
 
 // ── CSRF validation middleware ──
-export function csrfValidation(request: FastifyRequest, reply: FastifyReply): void {
+export async function csrfValidation(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const method = request.method.toUpperCase();
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return;
 
