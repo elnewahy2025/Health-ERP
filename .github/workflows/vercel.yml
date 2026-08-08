@@ -13,8 +13,7 @@ concurrency:
 jobs:
   vercel:
     runs-on: ubuntu-latest
-    # Skip until the repository has Vercel secrets configured
-    if: ${{ secrets.VERCEL_TOKEN != '' }}
+    
     steps:
       - uses: actions/checkout@v4
 
