@@ -13,15 +13,10 @@ describe('Patient Module', () => {
       if (month < 1 || month > 12) return false;
       const day = parseInt(id.substring(5, 7), 10);
       if (day < 1 || day > 31) return false;
-      const gov = parseInt(id.substring(7, 9), 10);
-      if (gov < 1 || gov > 27) return false;
-      let sum = 0;
-      for (let i = 0; i < 13; i++) {
-        const digit = parseInt(id[i], 10);
-        sum += digit * (i % 2 === 0 ? 2 : 1);
-      }
-      const checkDigit = (10 - (sum % 10)) % 10;
-      return checkDigit === parseInt(id[13], 10);
+      return [
+        '01', '02', '03', '04', '11', '12', '13', '14', '15', '16', '17', '18', '19',
+        '21', '22', '23', '24', '25', '26', '27', '28', '29', '31', '32', '33', '34', '35', '88',
+      ].includes(id.substring(7, 9));
     }
 
     it('rejects non-14-digit strings', () => {
@@ -53,36 +48,33 @@ describe('Patient Module', () => {
 
     it('rejects invalid governorate code', () => {
       // Governorate 00
-      expect(validateNid('20010100012345')).toBe(false);
-      // Governorate 28 (> 27)
-      expect(validateNid('20010128012345')).toBe(false);
+      expect(validateNid('20101010001234')).toBe(false);
+      // Governorate 05 (unassigned)
+      expect(validateNid('20101010501234')).toBe(false);
+      // Governorate 30 (unassigned)
+      expect(validateNid('20101013001234')).toBe(false);
     });
 
-    it('validates checksum correctly', () => {
-      // Build a valid 13-digit base, then compute 14th check digit
-      // century=2, year=01, month=01, day=01, gov=01, seq=000, gender=1
-      const base = '2001010101001'; // 13 digits
-      let sum = 0;
-      for (let i = 0; i < 13; i++) {
-        const digit = parseInt(base[i], 10);
-        sum += digit * (i % 2 === 0 ? 2 : 1);
-      }
-      const checkDigit = (10 - (sum % 10)) % 10;
-      const validNid = base + checkDigit;
-      expect(validNid.length).toBe(14);
-      expect(validateNid(validNid)).toBe(true);
+    it('accepts all real governorate codes', () => {
+      // Aswan (28), Luxor (29), Red Sea (31), foreign-born (88)
+      expect(validateNid('20101012801234')).toBe(true);
+      expect(validateNid('20101012901234')).toBe(true);
+      expect(validateNid('20101013101234')).toBe(true);
+      expect(validateNid('20101018801234')).toBe(true);
     });
 
-    it('rejects NID with wrong checksum', () => {
-      const base = '2001010101001'; // 13 digits
-      let sum = 0;
-      for (let i = 0; i < 13; i++) {
-        const digit = parseInt(base[i], 10);
-        sum += digit * (i % 2 === 0 ? 2 : 1);
-      }
-      const correctCheck = (10 - (sum % 10)) % 10;
-      const wrongCheck = (correctCheck + 1) % 10;
-      expect(validateNid(base + wrongCheck)).toBe(false);
+    it('accepts any 14th digit (serial, no checksum)', () => {
+      // Same structure, different last digit: all should pass
+      expect(validateNid('26804071600170')).toBe(true);
+      expect(validateNid('26804071600173')).toBe(true);
+      expect(validateNid('26804071600179')).toBe(true);
+    });
+
+    it('accepts a real-world-style NID with valid structure', () => {
+      // Cairo male born 2001-05-15 (known-good example)
+      expect(validateNid('30105150101511')).toBe(true);
+      // Alexandria female born 1990-08-20
+      expect(validateNid('29008200201240')).toBe(true);
     });
   });
 

@@ -13,7 +13,8 @@ export function isValidEgyptianPhone(phone: string): boolean {
 }
 
 // Egyptian National ID validation
-// 14 digits: century(1) + year(2) + month(2) + day(2) + governorate(2) + sequence(2) + gender(1) + check(1)
+// 14 digits: [century(1)][year(2)][month(2)][day(2)][governorate(2)][sequence(4)]
+// No checksum: the 14th digit is a sequential serial digit.
 export function isValidEgyptianNationalId(id: string): boolean {
   const cleaned = id.replace(/\s/g, '');
   if (!/^\d{14}$/.test(cleaned)) return false;
@@ -27,17 +28,11 @@ export function isValidEgyptianNationalId(id: string): boolean {
   const day = parseInt(cleaned.substring(5, 7), 10);
   if (day < 1 || day > 31) return false;
 
-  const governorate = parseInt(cleaned.substring(7, 9), 10);
-  if (governorate < 1 || governorate > 27) return false;
-
-  // Official Egyptian National ID checksum (matches backend): weighted sum of the
-  // first 13 digits, alternating weights 2,1,2,1,..., then check digit = (10 - sum % 10) % 10.
-  let sum = 0;
-  for (let i = 0; i < 13; i++) {
-    sum += parseInt(cleaned[i], 10) * (i % 2 === 0 ? 2 : 1);
-  }
-  const checkDigit = (10 - (sum % 10)) % 10;
-  return checkDigit === parseInt(cleaned[13], 10);
+  // Governorate codes: 01-04, 11-19, 21-29, 31-35, 88 (foreign-born)
+  return [
+    '01', '02', '03', '04', '11', '12', '13', '14', '15', '16', '17', '18', '19',
+    '21', '22', '23', '24', '25', '26', '27', '28', '29', '31', '32', '33', '34', '35', '88',
+  ].includes(cleaned.substring(7, 9));
 }
 
 // Email validation

@@ -26,6 +26,7 @@ export const createPatientSchema = z.object({
   }, 'Date of birth must be between 1900 and today'),
   gender: z.enum(['male', 'female']),
   nationalId: z.string().length(14).regex(/^\d{14}$/).refine((id) => {
+    // Structure: [century][YY][MM][DD][governorate][SSSS][X]
     // Century indicator: 2 = 1900s, 3 = 2000s
     const century = parseInt(id.substring(0, 1), 10);
     if (century < 2 || century > 3) return false;
@@ -35,18 +36,13 @@ export const createPatientSchema = z.object({
     // Day: 01-31
     const day = parseInt(id.substring(5, 7), 10);
     if (day < 1 || day > 31) return false;
-    // Governorate code: digits 7-8 (01-27 valid for Egypt)
-    const gov = parseInt(id.substring(7, 9), 10);
-    if (gov < 1 || gov > 27) return false;
-    // Weighted checksum (mod 11)
-    let sum = 0;
-    for (let i = 0; i < 13; i++) {
-      const digit = parseInt(id[i], 10);
-      sum += digit * (i % 2 === 0 ? 2 : 1);
-    }
-    const checkDigit = (10 - (sum % 10)) % 10;
-    return checkDigit === parseInt(id[13], 10);
-  }, 'Invalid Egyptian National ID format or checksum'),
+    // Governorate codes: 01-04, 11-19, 21-29, 31-35, 88 (foreign-born).
+    // No checksum: the 14th digit is a sequential serial digit.
+    return [
+      '01','02','03','04','11','12','13','14','15','16','17','18','19',
+      '21','22','23','24','25','26','27','28','29','31','32','33','34','35','88',
+    ].includes(id.substring(7, 9));
+  }, 'Invalid Egyptian National ID format'),
   phone: z.string().min(7).max(20),
   email: z.string().email().or(z.literal('')).optional(),
   nationality: z.string().optional(),
