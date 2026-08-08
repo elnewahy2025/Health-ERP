@@ -63,6 +63,11 @@ apiClient.interceptors.response.use(
     };
 
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // Anonymous 401 (e.g. /auth/me on a fresh page load, or a failed login):
+      // there is no access token to refresh, so reject and let the app handle it.
+      if (!inMemoryAccessToken) {
+        return Promise.reject(error);
+      }
       if (isRefreshing) {
         return new Promise<string>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
