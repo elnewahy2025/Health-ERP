@@ -131,7 +131,20 @@ async function buildApp() {
       await request.jwtVerify();
     } catch {
       reply.status(401).send({ success: false, error: "Unauthorized" });
+      return;
     }
+    const req = request as any;
+    const { tenantId, userId, roles, permissions, locale, branchId } = request.user as any;
+    req.tenantId = tenantId;
+    req.ctx = {
+      tenantId,
+      userId,
+      roles: roles || [],
+      permissions: permissions || [],
+      locale: locale || 'en',
+      branchId,
+      requestId: request.id,
+    };
   });
 
   await app.register(swagger, {
