@@ -7,11 +7,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://vision-healthcare-backend-production.up.railway.app/api/$1"
+      "destination": "https://vision-healthcare-erp-production.up.railway.app/api/$1"
     },
     {
       "source": "/queue/display/:branchId*",
-      "destination": "https://vision-healthcare-backend-production.up.railway.app/api/v1/queue/display/$branchId"
+      "destination": "https://vision-healthcare-erp-production.up.railway.app/api/v1/queue/display/$branchId"
     },
     {
       "source": "/((?!api/|assets/|queue/display).*)",

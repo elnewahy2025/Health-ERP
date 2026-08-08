@@ -80,8 +80,7 @@ git clone https://github.com/elnewahy2025/vision-healthcare-erp.git && cd vision
    vercel login
    vercel link   # selects repo root (monorepo)
    ```
-2. Backend URL: replace the assumed Railway host in `vercel.json` rewrites with the real
-   production backend URL (e.g., `https://vision-healthcare-backend-production.up.railway.app`).
+2. Backend URL: set in `vercel.json` rewrites — currently `https://vision-healthcare-erp-production.up.railway.app`.
 3. GitHub Actions secrets (auto-deploy, `.github/workflows/vercel.yml`):
    - `VERCEL_TOKEN` — create in Vercel → Account Settings → Tokens
    - `VERCEL_ORG_ID` — `vercel teams ls` (or dashboard → settings → ID)
