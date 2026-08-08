@@ -98,8 +98,9 @@ apiClient.interceptors.response.use(
           withCredentials: true,
         });
 
-        const { accessToken } = response.data.data;
+        const { accessToken, csrfToken } = response.data.data;
         inMemoryAccessToken = accessToken;
+        if (csrfToken) inMemoryCsrfToken = csrfToken;
         processQueue(null, accessToken);
 
         if (originalRequest.headers) {
