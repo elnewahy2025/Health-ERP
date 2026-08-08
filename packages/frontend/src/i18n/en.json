@@ -2679,5 +2679,10 @@
   "auditAdv.loadingLogs": "Loading audit logs...",
   "common.view": "View",
   "patient.nationality": "Nationality",
-  "patient.registered": "Registered"
+  "patient.registered": "Registered",
+  "appointment.branch": "Branch",
+  "appointment.selectDoctor": "Select Doctor",
+  "appointment.selectBranch": "Select Branch",
+  "validate.selectDoctor": "Please select a doctor",
+  "validate.selectBranch": "Please select a branch"
 }

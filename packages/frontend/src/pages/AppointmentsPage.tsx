@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { Appointment } from '../types/appointment';
 import { useTranslation } from 'react-i18next';
-import { appointmentsApi } from '../lib/api';
+import { appointmentsApi, commonApi } from '../lib/api';
 import { isValidTime, isFutureDate } from '../lib/validators';
 import { Modal, Input, Select, PatientSearchField } from '../components/ui';
 import { Plus, Loader2, CalendarCheck, CheckCircle2, Ban } from 'lucide-react';
@@ -56,6 +56,18 @@ export default function AppointmentsPage() {
   const [saving, setSaving] = useState(false);
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof AppointmentFormData, string>>>({});
   const [newAppointment, setNewAppointment] = useState<AppointmentFormData>(INITIAL_FORM);
+  const [doctors, setDoctors] = useState<{ id: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    commonApi.doctors().then(setDoctors).catch(() => {});
+    commonApi.branches().then((data) => {
+      setBranches(data);
+      if (data.length === 1) {
+        setNewAppointment(prev => prev.branchId ? prev : { ...prev, branchId: data[0].id });
+      }
+    }).catch(() => {});
+  }, []);
 
   const loadAppointments = async () => {
     setLoading(true);
@@ -75,6 +87,8 @@ export default function AppointmentsPage() {
   const validateForm = (): boolean => {
     const errors: Partial<Record<keyof AppointmentFormData, string>> = {};
     if (!newAppointment.patientId) errors.patientId = t('validate.selectPatient');
+    if (!newAppointment.doctorId) errors.doctorId = t('validate.selectDoctor');
+    if (!newAppointment.branchId) errors.branchId = t('validate.selectBranch');
     if (!newAppointment.appointmentDate) errors.appointmentDate = t('validate.required');
     if (!isFutureDate(newAppointment.appointmentDate) && newAppointment.appointmentDate !== new Date().toISOString().split('T')[0]) {
       errors.appointmentDate = t('validate.futureDate');
@@ -182,13 +196,13 @@ export default function AppointmentsPage() {
             ) : appointments.map(a => (
               <tr key={a.id} className="hover:bg-gray-50">
                 <td><p className="font-medium">{a.patientName}</p><p className="text-xs text-gray-500 font-mono">{a.patientMrn}</p></td>
-                <td>{a.appointmentDate}</td><td>{a.startTime} - {a.endTime}</td>
+                <td>{a.appointmentDate?.substring(0, 10)}</td><td>{a.startTime} - {a.endTime}</td>
                 <td><span className="badge-info">{a.type}</span></td>
                 <td>{a.doctorName || '-'}</td>
                 <td><span className={statusBadge(a.status)}>{a.status}</span></td>
                 <td>
                   <div className="flex flex-wrap gap-1">
-                    {a.status === 'scheduled' && <button onClick={() => handleCheckIn(a.id)} className="btn-ghost btn-sm"><CalendarCheck className="w-3.5 h-3.5" />{t('appointment.status.checkedIn')}</button>}
+                    {(a.status === 'scheduled' || a.status === 'confirmed') && <button onClick={() => handleCheckIn(a.id)} className="btn-ghost btn-sm"><CalendarCheck className="w-3.5 h-3.5" />{t('appointment.status.checkedIn')}</button>}
                     {a.status === 'checked_in' && <button onClick={() => handleComplete(a.id)} className="btn-ghost btn-sm text-green-600"><CheckCircle2 className="w-3.5 h-3.5" />{t('appointment.status.completed')}</button>}
                     {(a.status === 'scheduled' || a.status === 'confirmed') && <button onClick={() => handleCancel(a.id)} className="btn-ghost btn-sm text-red-600"><Ban className="w-3.5 h-3.5" />{t('appointment.status.cancelled')}</button>}
                   </div>
@@ -226,6 +240,19 @@ export default function AppointmentsPage() {
             onChange={id => { setNewAppointment(prev => ({ ...prev, patientId: id })); setFormErrors(prev => { const n = { ...prev }; delete n.patientId; return n; }); }}
             error={formErrors.patientId}
             required />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select label={`${t('appointment.doctor')} *`} value={newAppointment.doctorId}
+              onChange={e => { setNewAppointment(prev => ({ ...prev, doctorId: e.target.value })); setFormErrors(prev => { const n = { ...prev }; delete n.doctorId; return n; }); }}
+              placeholder={t('appointment.selectDoctor')}
+              error={formErrors.doctorId}
+              options={doctors.map(d => ({ value: d.id, label: d.name }))} />
+            <Select label={`${t('appointment.branch')} *`} value={newAppointment.branchId}
+              onChange={e => { setNewAppointment(prev => ({ ...prev, branchId: e.target.value })); setFormErrors(prev => { const n = { ...prev }; delete n.branchId; return n; }); }}
+              placeholder={t('appointment.selectBranch')}
+              error={formErrors.branchId}
+              options={branches.map(b => ({ value: b.id, label: b.name }))} />
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label={`${t('appointment.date')} *`} type="date" value={newAppointment.appointmentDate}

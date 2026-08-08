@@ -2677,5 +2677,10 @@
   "auditAdv.loadingLogs": "جاري تحميل سجلات التدقيق...",
   "common.view": "عرض",
   "patient.nationality": "الجنسية",
-  "patient.registered": "تاريخ التسجيل"
+  "patient.registered": "تاريخ التسجيل",
+  "appointment.branch": "الفرع",
+  "appointment.selectDoctor": "اختر الطبيب",
+  "appointment.selectBranch": "اختر الفرع",
+  "validate.selectDoctor": "يرجى اختيار الطبيب",
+  "validate.selectBranch": "يرجى اختيار الفرع"
 }

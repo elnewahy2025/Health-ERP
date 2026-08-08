@@ -93,6 +93,12 @@ export async function createAppointment(request: FastifyRequest, reply: FastifyR
   const patient = await repo.findPatientForAppointment(body.patientId, tenantId);
   if (!patient) throw new PatientNotFoundError(body.patientId);
 
+  // Validate doctor and branch exist in this clinic (avoids phantom appointments)
+  const doctor = await repo.findUserForDoctorValidation(body.doctorId, tenantId);
+  if (!doctor) throw new ValidationError('Doctor not found in this clinic');
+  const branch = await repo.findBranchForTenant(body.branchId, tenantId);
+  if (!branch) throw new ValidationError('Branch not found in this clinic');
+
   // ── #7: Working hours validation ──
   if (!isWithinWorkingHours(body.startTime)) {
     throw new WorkingHoursError(body.startTime, WORKING_HOURS.open, WORKING_HOURS.close);
@@ -129,7 +135,6 @@ export async function createAppointment(request: FastifyRequest, reply: FastifyR
 
   // ── #11: Wire reminder service — send confirmation ──
   try {
-    const doctor = await repo.findUserForDoctorValidation(body.doctorId, tenantId);
     const doctorDisplayName = doctor ? `Dr. ${doctor.first_name} ${doctor.last_name}` : 'Dr.';
     await sendAppointmentConfirmation({
       tenantId,
@@ -183,35 +188,46 @@ export async function updateAppointment(request: FastifyRequest, reply: FastifyR
 
   const updateData: Record<string, unknown> = { updated_at: new Date() };
 
+  if (body.doctorId) {
+    const newDoctor = await repo.findUserForDoctorValidation(body.doctorId, tenantId);
+    if (!newDoctor) throw new ValidationError('Doctor not found in this clinic');
+    updateData.doctor_id = body.doctorId;
+  }
+
   if (body.appointmentDate) updateData.appointment_date = body.appointmentDate;
+
   if (body.startTime) {
     // ── #7: Working hours validation ──
     if (!isWithinWorkingHours(body.startTime)) {
       throw new WorkingHoursError(body.startTime, WORKING_HOURS.open, WORKING_HOURS.close);
     }
-
     updateData.start_time = body.startTime;
-    updateData.end_time = calculateEndTime(body.startTime, body.duration || existing.duration);
-
-    // ── #4: Check for scheduling conflict on time change ──
-    const conflictDate = body.appointmentDate || existing.appointment_date;
-    const conflictDuration = body.duration || existing.duration;
-    const overlap = await repo.findOverlappingAppointment(
-      tenantId, body.doctorId || existing.doctor_id,
-      conflictDate, body.startTime, conflictDuration, appointmentId,
-    );
-    if (overlap) {
-      throw new SchedulingConflictError(
-        body.doctorId || existing.doctor_id, conflictDate, body.startTime,
-      );
-    }
   }
 
   if (body.duration) updateData.duration = body.duration;
+
+  // Keep end_time consistent whenever start time or duration changes
+  const effectiveStart = body.startTime || existing.start_time;
+  const effectiveDuration = body.duration || existing.duration;
+  if (body.startTime || body.duration) {
+    updateData.end_time = calculateEndTime(effectiveStart, effectiveDuration);
+  }
+
+  // ── #4: Check for scheduling conflict when schedule-relevant fields change ──
+  if (body.appointmentDate || body.startTime || body.duration || body.doctorId) {
+    const conflictDate = body.appointmentDate || existing.appointment_date;
+    const conflictDoctor = body.doctorId || existing.doctor_id;
+    const overlap = await repo.findOverlappingAppointment(
+      tenantId, conflictDoctor, conflictDate, effectiveStart, effectiveDuration, appointmentId,
+    );
+    if (overlap) {
+      throw new SchedulingConflictError(conflictDoctor, conflictDate, effectiveStart);
+    }
+  }
+
   if (body.type) updateData.type = body.type;
   if (body.reason !== undefined) updateData.reason = body.reason;
   if (body.notes !== undefined) updateData.notes = body.notes;
-  if (body.doctorId) updateData.doctor_id = body.doctorId;
   if (body.timezone) updateData.timezone = body.timezone;
   if (body.isVirtual !== undefined) {
     updateData.is_virtual = body.isVirtual;
@@ -341,7 +357,7 @@ export async function todaySummary(request: FastifyRequest, reply: FastifyReply)
 
   const counts = {
     total: appointments.length,
-    scheduled: appointments.filter((a: AppointmentRow) => a.status === 'scheduled').length,
+    scheduled: appointments.filter((a: AppointmentRow) => a.status === 'scheduled' || a.status === 'confirmed').length,
     checkedIn: appointments.filter((a: AppointmentRow) => a.status === 'checked_in').length,
     inProgress: appointments.filter((a: AppointmentRow) => a.status === 'in_progress').length,
     completed: appointments.filter((a: AppointmentRow) => a.status === 'completed').length,
@@ -388,6 +404,18 @@ export async function bulkCreateAppointments(request: FastifyRequest, reply: Fas
     const patient = await repo.findPatientForAppointment(apt.patientId, tenantId);
     if (!patient) {
       conflicts.push(`Patient ${apt.patientId} not found`);
+      continue;
+    }
+
+    // Validate doctor and branch
+    const doctor = await repo.findUserForDoctorValidation(apt.doctorId, tenantId);
+    if (!doctor) {
+      conflicts.push(`Doctor ${apt.doctorId} not found`);
+      continue;
+    }
+    const branch = await repo.findBranchForTenant(apt.branchId, tenantId);
+    if (!branch) {
+      conflicts.push(`Branch ${apt.branchId} not found`);
       continue;
     }
 

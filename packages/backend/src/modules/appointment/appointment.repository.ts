@@ -84,6 +84,12 @@ export async function findPatientForAppointment(patientId: string, tenantId: str
   return db('patients').where({ id: patientId, tenant_id: tenantId }).first();
 }
 
+export async function findBranchForTenant(branchId: string, tenantId: string) {
+  return db('branches')
+    .where({ id: branchId, tenant_id: tenantId, status: 'active' })
+    .first();
+}
+
 export async function insertAppointment(data: Record<string, unknown>): Promise<AppointmentRow> {
   const [appointment] = await db('appointments').insert(data).returning('*');
   return appointment;

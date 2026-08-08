@@ -1,6 +1,12 @@
 import { randomBytes } from 'crypto';
 import type { AppointmentRow, AppointmentResponse } from './types.js';
 
+function formatDate(value: string | Date): string {
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value).substring(0, 10);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
 export function mapAppointment(a: AppointmentRow): AppointmentResponse {
   return {
     id: a.id,
@@ -8,7 +14,7 @@ export function mapAppointment(a: AppointmentRow): AppointmentResponse {
     patientId: a.patient_id,
     doctorId: a.doctor_id,
     branchId: a.branch_id,
-    appointmentDate: a.appointment_date,
+    appointmentDate: formatDate(a.appointment_date),
     startTime: a.start_time,
     endTime: a.end_time,
     duration: a.duration,
