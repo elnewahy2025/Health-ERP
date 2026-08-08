@@ -44,5 +44,9 @@
     "@fastify/websocket": "^8.3.1",
     "bullmq": "^5.80.0",
     "pdfmake": "^0.2.23"
+  },
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10"
   }
 }
