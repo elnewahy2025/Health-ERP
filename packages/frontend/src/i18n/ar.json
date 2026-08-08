@@ -2676,5 +2676,6 @@
   "auditAdv.close": "إغلاق",
   "auditAdv.loadingLogs": "جاري تحميل سجلات التدقيق...",
   "common.view": "عرض",
-  "patient.nationality": "الجنسية"
+  "patient.nationality": "الجنسية",
+  "patient.registered": "تاريخ التسجيل"
 }

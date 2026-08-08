@@ -21,8 +21,8 @@ interface PatientFormData {
 
 export default function PatientDetailPage() {
   const { id } = useParams();
-  const { t } = useTranslation();
-  interface PatientDetail { id: string; firstName: string; lastName: string; email?: string; phone: string; gender: string; dateOfBirth: string; bloodType: string; nationality: string; status: string; medicalRecordNumber: string; nationalId?: string; updatedAt?: string; recentAppointments: AppointmentSummary[]; recentInvoices: InvoiceSummary[]; }
+  const { t, i18n } = useTranslation();
+  interface PatientDetail { id: string; firstName: string; lastName: string; email?: string; phone: string; gender: string; dateOfBirth: string; bloodType: string; nationality: string; status: string; medicalRecordNumber: string; nationalId?: string; createdAt?: string; updatedAt?: string; recentAppointments: AppointmentSummary[]; recentInvoices: InvoiceSummary[]; }
 interface AppointmentSummary { id: string; appointmentDate: string; appointment_date?: string; start_time?: string; status: string; type: string; doctorName?: string; }
 interface InvoiceSummary { id: string; total: number; status: string; createdAt: string; invoice_number?: string; }
   const [patient, setPatient] = useState<PatientDetail | null>(null);
@@ -274,6 +274,9 @@ interface InvoiceSummary { id: string; total: number; status: string; createdAt:
             ) : (
               <>
                 <InfoRow label="MRN" value={patient.medicalRecordNumber} />
+                <InfoRow label={t('patient.registered')} value={patient.createdAt
+                  ? new Date(patient.createdAt).toLocaleString(i18n.language, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                  : '-'} />
                 <InfoRow label={t('patient.dob')} value={patient.dateOfBirth} />
                 <InfoRow label={t('patient.gender')} value={patient.gender} />
                 <InfoRow label={t('patient.phone')} value={patient.phone} />

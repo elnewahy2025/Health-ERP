@@ -2678,5 +2678,6 @@
   "auditAdv.close": "Close",
   "auditAdv.loadingLogs": "Loading audit logs...",
   "common.view": "View",
-  "patient.nationality": "Nationality"
+  "patient.nationality": "Nationality",
+  "patient.registered": "Registered"
 }

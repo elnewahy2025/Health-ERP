@@ -25,9 +25,9 @@ const INITIAL_FORM: PatientFormData = {
 };
 
 export default function PatientsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  interface PatientListItem { id: string; firstName: string; lastName: string; phone: string; status: string; medicalRecordNumber?: string; dateOfBirth?: string; gender?: string; bloodType?: string; }
+  interface PatientListItem { id: string; firstName: string; lastName: string; phone: string; status: string; medicalRecordNumber?: string; dateOfBirth?: string; gender?: string; bloodType?: string; createdAt?: string; }
   const [patients, setPatients] = useState<PatientListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -201,6 +201,7 @@ export default function PatientsPage() {
               <th>{t('patient.firstName')}</th>
               <th>{t('patient.lastName')}</th>
               <th>{t('patient.dob')}</th>
+              <th>{t('patient.registered')}</th>
               <th>{t('patient.gender')}</th>
               <th>{t('patient.phone')}</th>
               <th>{t('patient.bloodType')}</th>
@@ -210,9 +211,9 @@ export default function PatientsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={9} className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin mx-auto text-primary-600" /></td></tr>
+              <tr><td colSpan={10} className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin mx-auto text-primary-600" /></td></tr>
             ) : patients.length === 0 ? (
-              <tr><td colSpan={9} className="text-center py-12 text-gray-500">{t('common.noData')}</td></tr>
+              <tr><td colSpan={10} className="text-center py-12 text-gray-500">{t('common.noData')}</td></tr>
             ) : (
               patients.map((p: PatientListItem) => (
                 <tr key={p.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/patients/${p.id}`)}>
@@ -220,6 +221,7 @@ export default function PatientsPage() {
                   <td className="font-medium">{p.firstName}</td>
                   <td>{p.lastName}</td>
                   <td>{p.dateOfBirth}</td>
+                  <td>{p.createdAt ? new Date(p.createdAt).toLocaleDateString(i18n.language, { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</td>
                   <td>{p.gender === 'male' ? t('patient.gender.male') : t('patient.gender.female')}</td>
                   <td dir="ltr" className="text-left">{p.phone}</td>
                   <td><span className="badge-info">{p.bloodType || '-'}</span></td>
