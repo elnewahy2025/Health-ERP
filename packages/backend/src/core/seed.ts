@@ -27,11 +27,11 @@ async function runSeeds() {
   });
 
   try {
-    const [batchNo, seeds] = await db.seed.run();
+    const seeds = await db.seed.run();
     if (seeds.length === 0) {
       console.log('✓ No seed files found');
     } else {
-      console.log(`✓ Ran ${seeds.length} seed file(s) (batch ${batchNo})`);
+      console.log(`✓ Ran ${seeds.length} seed file(s)`);
       seeds.forEach((s: string) => console.log(`  - ${s}`));
     }
   } catch (error) {
