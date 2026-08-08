@@ -114,6 +114,11 @@ export async function login(request: FastifyRequest, reply: FastifyReply) {
     accessToken, csrfToken, expiresIn: 3600,
     user: { id: user.id, email: user.email, firstName: user.first_name, lastName: user.last_name,
       roles: typeof user.roles === 'string' ? JSON.parse(user.roles) : user.roles, locale: user.locale },
+    tenant: {
+      id: tenant.id, name: tenant.name, slug: tenant.slug,
+      locale: tenant.locale, direction: tenant.settings?.direction || (tenant.locale === 'ar' ? 'rtl' : 'ltr'),
+      settings: tenant.settings ?? {},
+    },
   });
 }
 
@@ -220,10 +225,13 @@ export async function me(request: FastifyRequest, reply: FastifyReply) {
   if (!user) throw new UnauthorizedError('User not found');
   const tenant = await repo.findTenantById(tenantId);
   return sendSuccess(reply, {
-    id: user.id, email: user.email, firstName: user.first_name, lastName: user.last_name,
-    roles: typeof user.roles === 'string' ? JSON.parse(user.roles) : user.roles,
-    permissions: typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions,
-    locale: user.locale || 'en', status: user.status, mfaEnabled: user.mfa_enabled,
+    user: {
+      id: user.id, email: user.email, firstName: user.first_name, lastName: user.last_name,
+      roles: typeof user.roles === 'string' ? JSON.parse(user.roles) : user.roles,
+      permissions: typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions,
+      locale: user.locale || 'en', status: user.status, mfaEnabled: user.mfa_enabled,
+      passwordChangedAt: user.password_changed_at,
+    },
     tenant: tenant ? {
       id: tenant.id, name: tenant.name, slug: tenant.slug,
       locale: tenant.locale, direction: tenant.settings?.direction || (tenant.locale === 'ar' ? 'rtl' : 'ltr'),
