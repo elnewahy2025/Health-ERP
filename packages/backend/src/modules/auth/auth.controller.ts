@@ -13,12 +13,11 @@ import { getEnv } from '@healthcare/shared/config';
 import * as svc from './auth.service.js';
 import * as repo from './auth.repository.js';
 import {
-  registerTenantSchema, loginSchema, mfaVerifySchema, refreshSchema,
+  registerTenantSchema, loginSchema, mfaVerifySchema,
   logoutSchema, sessionIdSchema, forgotPasswordSchema, resetPasswordSchema,
   changePasswordSchema, verifyEmailSchema, resendVerificationSchema,
   mfaEnableSchema, mfaDisableSchema, otpSendSchema, otpVerifySchema,
 } from './auth.schema.js';
-
 const env = getEnv();
 
 export async function registerTenant(request: FastifyRequest, reply: FastifyReply) {
@@ -158,7 +157,12 @@ export async function mfaVerify(request: FastifyRequest, reply: FastifyReply) {
 }
 
 export async function refreshToken(request: FastifyRequest, reply: FastifyReply) {
-  const { refreshToken: oldToken } = refreshSchema.parse(request.body);
+  // Accept the token from the body (API clients) or the HttpOnly refresh_token cookie
+  // (browser session restore — the frontend cannot read the cookie to send it in the body).
+  const body = (request.body ?? {}) as Record<string, unknown>;
+  const bodyToken = typeof body.refreshToken === 'string' ? body.refreshToken : undefined;
+  const oldToken = bodyToken || request.cookies?.refresh_token;
+  if (!oldToken) throw new UnauthorizedError('Missing refresh token');
   const ip = request.ip ?? '127.0.0.1';
   const userAgent = (request.headers['user-agent'] as string) || null;
 

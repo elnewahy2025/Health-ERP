@@ -63,11 +63,11 @@ apiClient.interceptors.response.use(
     };
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // Anonymous 401 (e.g. /auth/me on a fresh page load, or a failed login):
-      // there is no access token to refresh, so reject and let the app handle it.
-      if (!inMemoryAccessToken) {
-        return Promise.reject(error);
-      }
+      // Remember whether we had a live token: only hard-redirect on refresh failure
+      // when a real session expired mid-use. Anonymous 401s (first load, login page)
+      // still attempt a cookie-based refresh for session restore, and reject cleanly
+      // if there is no session, so the router can render /login without a reload loop.
+      const hadToken = Boolean(inMemoryAccessToken);
       if (isRefreshing) {
         return new Promise<string>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -102,7 +102,9 @@ apiClient.interceptors.response.use(
         inMemoryAccessToken = null;
         localStorage.removeItem('tenantSlug');
         localStorage.removeItem('locale');
-        window.location.href = '/login';
+        if (hadToken) {
+          window.location.href = '/login';
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
