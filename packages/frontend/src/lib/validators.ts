@@ -19,7 +19,7 @@ export function isValidEgyptianNationalId(id: string): boolean {
   if (!/^\d{14}$/.test(cleaned)) return false;
 
   const century = parseInt(cleaned.substring(0, 1), 10);
-  if (century < 1 || century > 3) return false;
+  if (century < 2 || century > 3) return false;
 
   const month = parseInt(cleaned.substring(3, 5), 10);
   if (month < 1 || month > 12) return false;
@@ -28,15 +28,16 @@ export function isValidEgyptianNationalId(id: string): boolean {
   if (day < 1 || day > 31) return false;
 
   const governorate = parseInt(cleaned.substring(7, 9), 10);
-  if (governorate < 1 || governorate > 99) return false;
+  if (governorate < 1 || governorate > 27) return false;
 
-  // Verify checksum (Luhn-like)
+  // Official Egyptian National ID checksum (matches backend): weighted sum of the
+  // first 13 digits, alternating weights 2,1,2,1,..., then check digit = (10 - sum % 10) % 10.
   let sum = 0;
-  for (let i = 0; i < 14; i++) {
-    const digit = parseInt(cleaned[i], 10);
-    sum += i % 2 === 0 ? digit : (digit * 2) % 9 + (digit >= 5 ? 1 : 0);
+  for (let i = 0; i < 13; i++) {
+    sum += parseInt(cleaned[i], 10) * (i % 2 === 0 ? 2 : 1);
   }
-  return sum % 10 === 0;
+  const checkDigit = (10 - (sum % 10)) % 10;
+  return checkDigit === parseInt(cleaned[13], 10);
 }
 
 // Email validation
