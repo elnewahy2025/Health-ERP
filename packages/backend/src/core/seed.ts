@@ -27,7 +27,7 @@ async function runSeeds() {
   });
 
   try {
-    const seeds = await db.seed.run();
+    const [seeds] = await db.seed.run();
     if (seeds.length === 0) {
       console.log('✓ No seed files found');
     } else {
