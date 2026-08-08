@@ -51,13 +51,29 @@ export async function enforceSessionLimit(userId: string, tenantId: string) {
   }
 }
 
+export function summarizeDevice(userAgent: string | null): string {
+  if (!userAgent) return 'Unknown device';
+  let browser = 'Browser';
+  if (/edg\/|edge\//i.test(userAgent)) browser = 'Edge';
+  else if (/opr\/|opera/i.test(userAgent)) browser = 'Opera';
+  else if (/samsungbrowser/i.test(userAgent)) browser = 'Samsung Internet';
+  else if (/crios|chrome/i.test(userAgent)) browser = 'Chrome';
+  else if (/fxios|firefox/i.test(userAgent)) browser = 'Firefox';
+  else if (/safari/i.test(userAgent)) browser = 'Safari';
+  const device = /iphone|ipad|ipod/i.test(userAgent) ? 'iOS' : /android/i.test(userAgent) ? 'Android' : 'Desktop';
+  return `${browser} \u00b7 ${device}`;
+}
+
 export async function createSessionRecord(
   tenantId: string, userId: string, refreshToken: string, ip: string, userAgent: string | null,
 ) {
   const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
   await repo.createSession({
     tenant_id: tenantId, user_id: userId, token_hash: tokenHash,
-    device: userAgent, ip_address: ip, user_agent: userAgent, is_active: true,
+    device: summarizeDevice(userAgent),
+    ip_address: ip,
+    user_agent: userAgent ? userAgent.slice(0, 1000) : null,
+    is_active: true,
     expires_at: new Date(Date.now() + env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
   });
 }
