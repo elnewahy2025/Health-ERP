@@ -114,7 +114,7 @@ function AppContent() {
     document.documentElement.lang = locale;
 
     if (tenant) {
-      const theme = tenant.settings.theme;
+      const theme = tenant.settings?.theme;
       if (theme?.primaryColor) {
         document.documentElement.style.setProperty('--color-primary', theme.primaryColor);
       }

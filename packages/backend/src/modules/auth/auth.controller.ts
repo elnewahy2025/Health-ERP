@@ -224,7 +224,11 @@ export async function me(request: FastifyRequest, reply: FastifyReply) {
     roles: typeof user.roles === 'string' ? JSON.parse(user.roles) : user.roles,
     permissions: typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions,
     locale: user.locale || 'en', status: user.status, mfaEnabled: user.mfa_enabled,
-    tenant: tenant ? { id: tenant.id, name: tenant.name, slug: tenant.slug } : null,
+    tenant: tenant ? {
+      id: tenant.id, name: tenant.name, slug: tenant.slug,
+      locale: tenant.locale, direction: tenant.settings?.direction || (tenant.locale === 'ar' ? 'rtl' : 'ltr'),
+      settings: tenant.settings ?? {},
+    } : null,
   });
 }
 
