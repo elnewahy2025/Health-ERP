@@ -10,8 +10,12 @@
 |---|---|---|
 | Local dev | Docker Compose (`docker-compose.yml`) | infra only (postgres, redis, minio) + `npm run dev` |
 | Self-hosted prod | `docker-compose.prod.yml` | full stack incl. nginx + backup |
-| Railway | Nixpacks (`railway.json`) | managed backend |
-| Vercel | `vercel.json` (frontend scope) | managed frontend static hosting |
+| Railway | Nixpacks (`railway.json`) | managed backend (API) |
+| **Vercel (production frontend)** | `vercel.json` + CI workflow | managed SPA hosting + API proxy |
+
+**Production topology:** backend API runs on Railway (`railway.json`, `node dist/index.js`);
+the frontend SPA runs on Vercel and proxies `/api/*` to the backend through `vercel.json`
+rewrites (same-origin, no CORS changes required).
 
 ## 2. Build Pipeline
 
@@ -57,6 +61,47 @@ git clone https://github.com/elnewahy2025/vision-healthcare-erp.git && cd vision
 - `.env` (app) and `.env.docker` (containers); secrets via env or Docker secrets `_FILE` convention.
 - Backend validates environment on boot (`validateProductionEnvironment` / `validateDevelopmentEnvironment`).
 - Never commit `.env*` (`.gitignore`); use `.env.example` as the template.
+
+## 5b. Vercel Production (Frontend)
+
+### Configuration (`vercel.json` at repo root)
+- `framework: "vite"`, `outputDirectory: "packages/frontend/dist"`
+- `installCommand: "npm install"` (installs workspaces, runs `prepare` → builds shared)
+- `buildCommand: "npm run build -w packages/shared && npm run build -w packages/frontend"`
+- Rewrites:
+  - `/api/(.*)` → `https://<BACKEND_URL>/api/$1` (backend host set in `vercel.json`)
+  - `/queue/display/:branchId*` → backend `/api/v1/queue/display/$branchId`
+  - SPA fallback → `/index.html`
+- Headers: immutable caching for `/assets/*`; security headers (HSTS, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy).
+
+### One-time setup
+1. Create a Vercel project and link it:
+   ```bash
+   vercel login
+   vercel link   # selects repo root (monorepo)
+   ```
+2. Backend URL: replace the assumed Railway host in `vercel.json` rewrites with the real
+   production backend URL (e.g., `https://vision-healthcare-backend-production.up.railway.app`).
+3. GitHub Actions secrets (auto-deploy, `.github/workflows/vercel.yml`):
+   - `VERCEL_TOKEN` — create in Vercel → Account Settings → Tokens
+   - `VERCEL_ORG_ID` — `vercel teams ls` (or dashboard → settings → ID)
+   - `VERCEL_PROJECT_ID` — `vercel projects ls` / project settings
+4. Deploy manually once: `vercel --prod`
+
+### Automatic deploys
+- Push to `main` → production deploy (job `Deploy Frontend to Vercel`).
+- Pull requests → preview deploy with a unique URL.
+- Workflow is skipped until `VERCEL_TOKEN` secret exists.
+
+### Known limitations on Vercel
+- WebSocket proxying to an external backend is not supported by Vercel rewrites.
+  Real-time features that depend on WS (chat, telemedicine waiting room, voice,
+  live queue push) fall back to polling or require a WS-capable host for those
+  channels; the queue display page has a built-in polling fallback.
+- Long-running jobs (BullMQ workers) stay on the backend (Railway/Docker), never Vercel.
+
+### Rollback
+`vercel rollback <deployment-url>` or redeploy a previous deployment from the Vercel dashboard.
 
 ## 6. Migrations in Deploy
 

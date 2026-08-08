@@ -11,7 +11,7 @@
 | Local dev | :3000 (`npm run dev`) | :5173 (Vite) | Docker postgres :5432 | Docker redis :6379 | Docker minio :9000/9001 | `NODE_ENV=development` |
 | CI | ephemeral | — | service container | service container | — | `NODE_ENV=test` |
 | Staging | Railway/Docker | Vercel preview | managed pg | managed redis | S3-compatible | pre-prod validation |
-| Production | Railway/Docker | Vercel/nginx :80 | managed pg | managed redis | MinIO/S3 | `NODE_ENV=production` |
+| Production | Railway (API) | **Vercel (SPA)** — `vercel.json` | managed pg | managed redis | MinIO/S3 | `NODE_ENV=production` |
 
 ## 2. Local Topology
 
@@ -44,6 +44,20 @@ Removing volumes wipes local data: `docker compose down -v`.
 - Frontend dev server on `:5173`; CORS origin must include `http://localhost:5173`.
 - Prod: frontend on :80 via nginx; API proxied to backend.
 - MinIO console :9001 (admin UI).
+
+## 5b. Vercel Production Topology
+
+```text
+┌────────────────────────┐      /api/* rewrite      ┌───────────────────────┐
+│ Vercel (frontend SPA)  │ ───────────────────────► │ Railway (backend API) │
+│ https://app.vercel.app │                          │ :3000 node dist/      │
+│ + vercel.json proxy    │                          └──────────┬────────────┘
+└────────────────────────┘                                     │ pg/redis/minio
+```
+
+- The SPA and API share the Vercel origin (proxy), so `CORS_ORIGIN` needs no change.
+- `VITE_API_URL` stays unset (defaults to `/api/v1` → proxied).
+- WebSocket channels are not proxied by Vercel; polling fallback used (see DEPLOYMENT.md).
 
 ## 6. Verification
 

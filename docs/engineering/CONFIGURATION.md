@@ -77,6 +77,17 @@ Copy-Item .env.docker.example .env.docker
 #   -join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })
 ```
 
+## 3b. Vercel-Specific Configuration
+
+| Setting | Where | Value |
+|---|---|---|
+| Backend URL for API proxy | `vercel.json` rewrites | real production backend URL |
+| `VITE_API_URL` | Vercel env (optional) | leave unset → `/api/v1` proxied |
+| Secrets (auto-deploy) | GitHub repo secrets | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` |
+| Security headers | `vercel.json` headers | HSTS, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy |
+
+See DEPLOYMENT.md §5b for the one-time setup and rollback.
+
 ## 4. Validation on Boot
 
 - Development: `validateDevelopmentEnvironment()` warns on missing optional vars.

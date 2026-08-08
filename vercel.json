@@ -1,4 +1,39 @@
 {
-  "project": "vision-healthcare",
-  "scope": "frontend"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build -w packages/shared && npm run build -w packages/frontend",
+  "outputDirectory": "packages/frontend/dist",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://vision-healthcare-backend-production.up.railway.app/api/$1"
+    },
+    {
+      "source": "/queue/display/:branchId*",
+      "destination": "https://vision-healthcare-backend-production.up.railway.app/api/v1/queue/display/$branchId"
+    },
+    {
+      "source": "/((?!api/|assets/|queue/display).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
+      ]
+    }
+  ]
 }
