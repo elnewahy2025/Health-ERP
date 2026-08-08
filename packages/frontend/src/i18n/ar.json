@@ -2674,5 +2674,6 @@
   "auditAdv.na": "غير متاح",
   "auditAdv.system": "النظام",
   "auditAdv.close": "إغلاق",
-  "auditAdv.loadingLogs": "جاري تحميل سجلات التدقيق..."
+  "auditAdv.loadingLogs": "جاري تحميل سجلات التدقيق...",
+  "common.view": "عرض"
 }

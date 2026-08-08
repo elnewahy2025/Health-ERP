@@ -2676,5 +2676,6 @@
   "auditAdv.na": "N/A",
   "auditAdv.system": "System",
   "auditAdv.close": "Close",
-  "auditAdv.loadingLogs": "Loading audit logs..."
+  "auditAdv.loadingLogs": "Loading audit logs...",
+  "common.view": "View"
 }
