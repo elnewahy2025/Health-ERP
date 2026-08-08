@@ -48,7 +48,7 @@ export const createPatientSchema = z.object({
     return checkDigit === parseInt(id[13], 10);
   }, 'Invalid Egyptian National ID format or checksum'),
   phone: z.string().min(7).max(20),
-  email: z.string().email().optional(),
+  email: z.string().email().or(z.literal('')).optional(),
   nationality: z.string().optional(),
   bloodType: z.string().optional(),
   address: z.object({
