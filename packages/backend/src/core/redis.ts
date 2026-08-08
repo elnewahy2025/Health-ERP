@@ -3,6 +3,12 @@ import { getEnv } from '@healthcare/shared/config';
 
 const env = getEnv();
 
+// Redis is optional for boot: rate limiting falls back to an in-memory store,
+// and queue-dependent features retry. Never let a missing Redis crash the API.
+redis.on('error', (err: Error) => {
+  console.warn('[redis] connection error (continuing):', err.message);
+});
+
 export const redis = new Redis({
   host: env.REDIS_HOST,
   port: env.REDIS_PORT,
