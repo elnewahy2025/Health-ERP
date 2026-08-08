@@ -77,6 +77,25 @@ apiClient.interceptors.response.use(
       // still attempt a cookie-based refresh for session restore, and reject cleanly
       // if there is no session, so the router can render /login without a reload loop.
       const hadToken = Boolean(inMemoryAccessToken);
+      // Anonymous auth endpoints must surface their own errors: there is no session
+      // cookie to refresh, and attempting one replaces e.g. "Invalid email or
+      // password" with the refresh route's "Missing refresh token" message.
+      const url = originalRequest.url || '';
+      const isAnonymousAuthCall =
+        !hadToken &&
+        [
+          '/auth/login',
+          '/auth/register',
+          '/auth/mfa/verify',
+          '/auth/forgot-password',
+          '/auth/reset-password',
+          '/auth/otp/send',
+          '/auth/otp/verify',
+          '/tenants',
+        ].some((path) => url.includes(path));
+      if (isAnonymousAuthCall) {
+        return Promise.reject(error);
+      }
       if (isRefreshing) {
         return new Promise<string>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
