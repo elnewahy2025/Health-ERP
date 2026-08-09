@@ -9,6 +9,9 @@ interface AuditEntry {
   metadata?: any;
   ipAddress?: string;
   userAgent?: string | null;
+  branchId?: string;
+  principalKind?: 'user' | 'patient';
+  result?: 'success' | 'denied' | 'failed';
 }
 
 export async function logAudit(entry: AuditEntry): Promise<void> {
@@ -22,6 +25,9 @@ export async function logAudit(entry: AuditEntry): Promise<void> {
       metadata: entry.metadata ? JSON.stringify(entry.metadata) : null,
       ip_address: entry.ipAddress || null,
       user_agent: entry.userAgent ? String(entry.userAgent).substring(0, 500) : null,
+      branch_id: entry.branchId || null,
+      principal_kind: entry.principalKind || 'user',
+      result: entry.result || 'success',
     });
   } catch (error) {
     console.error('✗ Audit log failed:', error);

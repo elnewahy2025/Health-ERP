@@ -3,11 +3,12 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import type { NotificationPreferenceRow, EmployeeRow } from "../types.js";
 
 export async function registerUserPreferencesModule(app: FastifyInstance) {
   // ── User Settings ──
-  app.get('/api/v1/user/settings', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/user/settings', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request);
     let settings = await db('user_settings').where({ tenant_id: tenantId, user_id: ctx.userId }).first();
     if (!settings) {
@@ -26,7 +27,7 @@ export async function registerUserPreferencesModule(app: FastifyInstance) {
     });
   });
 
-  app.put('/api/v1/user/settings', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/user/settings', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
     const existing = await db('user_settings').where({ tenant_id: tenantId, user_id: ctx.userId }).first();
     const update: Record<string, unknown> = { updated_at: new Date() };
@@ -48,7 +49,7 @@ export async function registerUserPreferencesModule(app: FastifyInstance) {
   });
 
   // ── Notification Preferences ──
-  app.get('/api/v1/user/notification-preferences', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/user/notification-preferences', { preHandler: [authenticate, authorize('notifications.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request);
     const prefs = await db('notification_preferences').where({ tenant_id: tenantId, user_id: ctx.userId }).orderBy('channel');
     return sendSuccess(reply, prefs.map((p: Record<string, unknown>) => ({
@@ -56,7 +57,7 @@ export async function registerUserPreferencesModule(app: FastifyInstance) {
     })));
   });
 
-  app.put('/api/v1/user/notification-preferences/:channel', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/user/notification-preferences/:channel', { preHandler: [authenticate, authorize('notifications.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request);
     const { channel } = request.params as { channel: string }; const body = request.body as Record<string, unknown>;
     const existing = await db('notification_preferences').where({ tenant_id: tenantId, user_id: ctx.userId, channel }).first();
@@ -72,7 +73,7 @@ export async function registerUserPreferencesModule(app: FastifyInstance) {
   });
 
   // ── Quick Search endpoint ──
-  app.get('/api/v1/search', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/search', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { q } = request.query as { q?: string };
     if (!q || q.length < 2) return sendSuccess(reply, []);
 

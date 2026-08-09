@@ -3,11 +3,12 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import type { FormSubmissionRow } from "../types.js";
 
 export async function registerFormsModule(app: FastifyInstance) {
   // Form Definitions
-  app.get('/api/v1/forms/definitions', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/forms/definitions', { preHandler: [authenticate, authorize('forms.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { category, isActive } = request.query as { category?: string; isActive?: string };
     let q = db('form_definitions').where('form_definitions.tenant_id', tenantId);
     if (category) q = q.andWhere('category', category);
@@ -21,7 +22,7 @@ export async function registerFormsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/forms/definitions', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/forms/definitions', { preHandler: [authenticate, authorize('forms.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
     const slug = body.slug || (body.name as string).toLowerCase().replace(/\s+/g, '_');
     const [def] = await db('form_definitions').insert({
@@ -33,7 +34,7 @@ export async function registerFormsModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: def.id, name: def.name, slug: def.slug }, 'Form definition created', 201);
   });
 
-  app.put('/api/v1/forms/definitions/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/forms/definitions/:id', { preHandler: [authenticate, authorize('forms.view')] }, async (request, reply) => {
     const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.name) update.name = body.name;
@@ -46,7 +47,7 @@ export async function registerFormsModule(app: FastifyInstance) {
     return sendSuccess(reply, null, 'Form definition updated');
   });
 
-  app.get('/api/v1/forms/definitions/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/forms/definitions/:id', { preHandler: [authenticate, authorize('forms.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string };
     const def = await db('form_definitions').where({ id, tenant_id: tenantId }).first();
     if (!def) return reply.status(404).send({ success: false, error: 'Form definition not found' });
@@ -59,7 +60,7 @@ export async function registerFormsModule(app: FastifyInstance) {
   });
 
   // Form Submissions
-  app.get('/api/v1/forms/submissions', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/forms/submissions', { preHandler: [authenticate, authorize('forms.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { formId, patientId } = request.query as { formId?: string; patientId?: string };
     let q = db('form_submissions').where('form_submissions.tenant_id', tenantId);
     if (formId) q = q.andWhere('form_id', formId);
@@ -76,7 +77,7 @@ export async function registerFormsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/forms/submissions', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/forms/submissions', { preHandler: [authenticate, authorize('forms.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
     const [sub] = await db('form_submissions').insert({
       tenant_id: tenantId, form_id: body.formId, patient_id: body.patientId || null,

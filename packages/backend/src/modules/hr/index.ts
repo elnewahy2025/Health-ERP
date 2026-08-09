@@ -3,10 +3,11 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
 
 export async function registerHrModule(app: FastifyInstance) {
-  app.get('/api/v1/hr/employees', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/hr/employees', { preHandler: [authenticate, authorize('hr.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { department, status } = request.query as { department?: string; status?: string };
     let q = db('employees').where('employees.tenant_id', tenantId).whereNull('employees.deleted_at');
@@ -16,7 +17,7 @@ export async function registerHrModule(app: FastifyInstance) {
     return sendSuccess(reply, employees);
   });
 
-  app.post('/api/v1/hr/employees', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/hr/employees', { preHandler: [authenticate, authorize('hr.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -28,7 +29,7 @@ export async function registerHrModule(app: FastifyInstance) {
     return sendSuccess(reply, emp, 'Employee added', 201);
   });
 
-  app.get('/api/v1/hr/attendance', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/hr/attendance', { preHandler: [authenticate, authorize('hr.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { date } = request.query as { date?: string };
     let q = db('attendance').where('attendance.tenant_id', tenantId);
@@ -37,7 +38,7 @@ export async function registerHrModule(app: FastifyInstance) {
     return sendSuccess(reply, records);
   });
 
-  app.get('/api/v1/hr/leave-requests', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/hr/leave-requests', { preHandler: [authenticate, authorize('hr.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status } = request.query as { status?: string };
     let q = db('leave_requests').where('leave_requests.tenant_id', tenantId);
@@ -46,7 +47,7 @@ export async function registerHrModule(app: FastifyInstance) {
     return sendSuccess(reply, requests);
   });
 
-  app.post('/api/v1/hr/leave-requests', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/hr/leave-requests', { preHandler: [authenticate, authorize('hr.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -60,7 +61,7 @@ export async function registerHrModule(app: FastifyInstance) {
     return sendSuccess(reply, lr, 'Leave request submitted', 201);
   });
 
-  app.put('/api/v1/hr/leave-requests/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/hr/leave-requests/:id', { preHandler: [authenticate, authorize('hr.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -74,7 +75,7 @@ export async function registerHrModule(app: FastifyInstance) {
     return sendSuccess(reply, null, 'Leave request updated');
   });
 
-  app.get('/api/v1/hr/payroll', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/hr/payroll', { preHandler: [authenticate, authorize('hr.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const runs = await db('payroll_runs').where({ tenant_id: tenantId }).orderBy('created_at', 'desc').limit(20);
     return sendSuccess(reply, runs);

@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
 
 const EXPORT_TABLES: Record<string, string[]> = {
@@ -21,7 +22,7 @@ const EXPORT_TABLES: Record<string, string[]> = {
 
 export async function registerDataExportModule(app: FastifyInstance) {
   // ── Export Definitions ──
-  app.get('/api/v1/export/definitions', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/export/definitions', { preHandler: [authenticate, authorize('data_export.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const defs = await db('export_definitions').where({ tenant_id: tenantId }).orderBy('name');
     return sendSuccess(reply, defs.map((d: Record<string, unknown>) => ({
@@ -32,7 +33,7 @@ export async function registerDataExportModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/export/definitions', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/export/definitions', { preHandler: [authenticate, authorize('data_export.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -55,7 +56,7 @@ export async function registerDataExportModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: def.id, name: def.name }, 'Export definition created', 201);
   });
 
-  app.delete('/api/v1/export/definitions/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.delete('/api/v1/export/definitions/:id', { preHandler: [authenticate, authorize('data_export.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -72,14 +73,14 @@ export async function registerDataExportModule(app: FastifyInstance) {
   });
 
   // ── Available modules for export ──
-  app.get('/api/v1/export/modules', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/export/modules', { preHandler: [authenticate, authorize('data_export.view')] }, async (request, reply) => {
     return sendSuccess(reply, Object.entries(EXPORT_TABLES).map(([module, tables]) => ({
       module, tables, formats: ['csv', 'json', 'fhir_json'],
     })));
   });
 
   // ── Run Export ──
-  app.post('/api/v1/export/run', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/export/run', { preHandler: [authenticate, authorize('data_export.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -124,7 +125,7 @@ export async function registerDataExportModule(app: FastifyInstance) {
   });
 
   // ── Export Jobs History ──
-  app.get('/api/v1/export/jobs', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/export/jobs', { preHandler: [authenticate, authorize('data_export.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status, module } = request.query as { module?: string; status?: string };
     let q = db('export_jobs').where('export_jobs.tenant_id', tenantId);
@@ -141,7 +142,7 @@ export async function registerDataExportModule(app: FastifyInstance) {
   });
 
   // ── HL7 FHIR Export stub ──
-  app.get('/api/v1/export/fhir/:resourceType', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/export/fhir/:resourceType', { preHandler: [authenticate, authorize('data_export.view')] }, async (request, reply) => {
     const { resourceType } = request.params as { resourceType: string };
     const { tenantSlug } = request.query as { tenantSlug?: string };
     if (!tenantSlug) return reply.status(400).send({ success: false, error: 'tenantSlug required' });
@@ -158,7 +159,7 @@ export async function registerDataExportModule(app: FastifyInstance) {
   });
 
   // ── Download endpoint stub ──
-  app.get('/api/v1/export/download/:jobId', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/export/download/:jobId', { preHandler: [authenticate, authorize('data_export.export')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { jobId } = request.params as { jobId: string };
     const job = await db('export_jobs').where({ id: jobId, tenant_id: tenantId }).first();

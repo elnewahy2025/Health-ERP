@@ -4,26 +4,59 @@ import { z } from 'zod';
 import { db } from '../../core/database.js';
 import { sendSuccess, sendPaginated } from '../../utils/response.js';
 import { createEmrSchema, paginationSchema } from '../../utils/validation.js';
-import { PatientNotFoundError } from '@healthcare/shared/errors';
+import { PatientNotFoundError, ForbiddenError } from '@healthcare/shared/errors';
 import { calculateBMI } from '@healthcare/shared/utils';
 import { authenticate } from '../auth-guard.js';
+import { authorize, hasPermission, assignedPatientIds, canAccessPatient, type Principal } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
 import type { EmrRecordRow } from '../types.js';
 
 export async function registerEmrModule(app: FastifyInstance) {
+  /** Scope for EMR lists: tenant-wide, branch-wide, or assigned patients. */
+  async function resolveEmrListScope(principal: Principal): Promise<{ branchIds?: string[]; patientIds?: string[] }> {
+    if (hasPermission(principal, 'emr.view', 'system') || hasPermission(principal, 'emr.view', 'tenant')) return {};
+    if (hasPermission(principal, 'emr.view', 'branch') || hasPermission(principal, 'emr.view', 'branches')) {
+      return { branchIds: principal.branches };
+    }
+    if (hasPermission(principal, 'emr.view', 'assigned_patients') || hasPermission(principal, 'emr.view', 'department')) {
+      return { patientIds: await assignedPatientIds(principal) };
+    }
+    return { patientIds: [] };
+  }
+
+  async function assertEmrAccess(principal: Principal, record: { tenant_id: string; patient_id: string; doctor_id?: string | null; branch_id?: string | null }): Promise<void> {
+    if (principal.tenantId !== record.tenant_id) throw new ForbiddenError('You do not have access to this EMR record');
+    if (hasPermission(principal, 'emr.view', 'tenant') || hasPermission(principal, 'emr.view', 'system')) return;
+    if ((hasPermission(principal, 'emr.view', 'branch') || hasPermission(principal, 'emr.view', 'branches')) && record.branch_id) {
+      if (principal.branches.includes(String(record.branch_id))) return;
+    }
+    if (hasPermission(principal, 'emr.view', 'assigned_patients') || hasPermission(principal, 'emr.view', 'department')) {
+      if (record.doctor_id === principal.id) return;
+      const ids = await assignedPatientIds(principal);
+      if (ids.includes(record.patient_id)) return;
+    }
+    throw new ForbiddenError('You do not have access to this EMR record');
+  }
+
   // List EMR records
   app.get('/api/v1/emr', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('emr.view')],
   }, async (request, reply) => {
     const query = paginationSchema.parse(request.query);
     const tenantId = getTenantId(request);
     const { patientId, doctorId, status } = request.query as { doctorId?: string; patientId?: string; status?: string };
+    const { principal } = getCtx(request);
+    const scope = await resolveEmrListScope(principal);
 
     let queryBuilder = db('emr_records')
       .join('patients', 'emr_records.patient_id', 'patients.id')
       .where('emr_records.tenant_id', tenantId)
       .whereNull('emr_records.deleted_at');
 
+    if (scope.branchIds && scope.branchIds.length > 0) queryBuilder = queryBuilder.whereIn('patients.branch_id', scope.branchIds);
+    if (scope.branchIds && scope.branchIds.length === 0) queryBuilder = queryBuilder.where(db.raw('false'));
+    if (scope.patientIds && scope.patientIds.length > 0) queryBuilder = queryBuilder.whereIn('emr_records.patient_id', scope.patientIds);
+    if (scope.patientIds && scope.patientIds.length === 0) queryBuilder = queryBuilder.where(db.raw('false'));
     if (patientId) queryBuilder = queryBuilder.andWhere('emr_records.patient_id', patientId);
     if (doctorId) queryBuilder = queryBuilder.andWhere('emr_records.doctor_id', doctorId);
     if (status) queryBuilder = queryBuilder.andWhere('emr_records.status', status);
@@ -48,7 +81,7 @@ export async function registerEmrModule(app: FastifyInstance) {
 
   // Get single EMR record
   app.get('/api/v1/emr/:emrId', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('emr.view')],
   }, async (request, reply) => {
     const { emrId } = request.params as { emrId: string };
     const tenantId = getTenantId(request);
@@ -64,12 +97,19 @@ export async function registerEmrModule(app: FastifyInstance) {
         'patients.medical_record_number',
         'patients.date_of_birth as patient_dob',
         'patients.gender as patient_gender',
+        'patients.branch_id as patient_branch_id',
       )
       .first();
 
     if (!record) {
       return reply.status(404).send({ success: false, error: 'EMR record not found' });
     }
+    await assertEmrAccess(getCtx(request).principal, {
+      tenant_id: record.tenant_id,
+      patient_id: record.patient_id,
+      doctor_id: record.doctor_id,
+      branch_id: record.patient_branch_id,
+    });
 
     const { userId } = getCtx(request);
     try { await logAudit({ tenantId, userId, action: 'emr.view', entityType: 'emr_record', entityId: emrId }); } catch {}
@@ -78,7 +118,7 @@ export async function registerEmrModule(app: FastifyInstance) {
 
   // Create EMR record
   app.post('/api/v1/emr', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('emr.create')],
   }, async (request, reply) => {
     const body = createEmrSchema.parse(request.body);
     const tenantId = getTenantId(request); const userId = getCtx(request).userId;
@@ -127,7 +167,7 @@ export async function registerEmrModule(app: FastifyInstance) {
 
   // Update EMR record
   app.put('/api/v1/emr/:emrId', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('emr.edit')],
   }, async (request, reply) => {
     const { emrId } = request.params as { emrId: string };
     const tenantId = getTenantId(request);
@@ -139,6 +179,7 @@ export async function registerEmrModule(app: FastifyInstance) {
     if (!existing) {
       return reply.status(404).send({ success: false, error: 'EMR record not found' });
     }
+    await assertEmrAccess(getCtx(request).principal, existing);
 
     const updateData: Record<string, unknown> = { updated_at: new Date() };
     if (body.subjective !== undefined) updateData.subjective = body.subjective;
@@ -173,7 +214,7 @@ export async function registerEmrModule(app: FastifyInstance) {
 
   // Sign EMR record
   app.post('/api/v1/emr/:emrId/sign', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('emr.approve')],
   }, async (request, reply) => {
     const { emrId } = request.params as { emrId: string };
     const tenantId = getTenantId(request);
@@ -184,6 +225,7 @@ export async function registerEmrModule(app: FastifyInstance) {
     if (!existing) {
       return reply.status(404).send({ success: false, error: 'EMR record not found' });
     }
+    await assertEmrAccess(getCtx(request).principal, existing);
 
     const [record] = await db('emr_records')
       .where({ id: emrId, tenant_id: tenantId })
@@ -197,7 +239,7 @@ export async function registerEmrModule(app: FastifyInstance) {
 
   // Add diagnosis to EMR
   app.post('/api/v1/emr/:emrId/diagnosis', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('emr.edit')],
   }, async (request, reply) => {
     const { emrId } = request.params as { emrId: string };
     const body = z.object({
@@ -235,7 +277,7 @@ export async function registerEmrModule(app: FastifyInstance) {
 
   // Prescribe medication
   app.post('/api/v1/emr/:emrId/medications', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('emr.edit')],
   }, async (request, reply) => {
     const { emrId } = request.params as { emrId: string };
     const body = z.object({
@@ -277,11 +319,18 @@ export async function registerEmrModule(app: FastifyInstance) {
 
   // Get patient EMR history
   app.get('/api/v1/patients/:patientId/emr', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('emr.view')],
   }, async (request, reply) => {
     const { patientId } = request.params as { patientId: string };
     const tenantId = getTenantId(request);
     const query = paginationSchema.parse(request.query);
+    const { principal } = getCtx(request);
+
+    const patient = await db('patients').where({ id: patientId, tenant_id: tenantId }).first();
+    if (!patient) throw new PatientNotFoundError(patientId);
+    if (!(await canAccessPatient(principal, patient))) {
+      throw new ForbiddenError('You do not have access to this patient');
+    }
 
     const records = await db('emr_records')
       .where({ patient_id: patientId, tenant_id: tenantId })

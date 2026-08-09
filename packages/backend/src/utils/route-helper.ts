@@ -1,4 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import type { Principal } from '../services/authorization.js';
 import type { FastifyInstance } from 'fastify';
 
 interface ServerWithAuth extends FastifyInstance {
@@ -11,9 +12,11 @@ interface RequestWithMeta extends FastifyRequest {
     userId: string;
     roles: string[];
     permissions: string[];
+    branches: string[];
     locale: 'ar' | 'en';
     branchId?: string;
     requestId: string;
+    principal: Principal;
   };
   tenantId?: string;
 }

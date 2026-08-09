@@ -4,27 +4,59 @@ import { z } from 'zod';
 import { db } from '../../core/database.js';
 import { sendSuccess, sendPaginated } from '../../utils/response.js';
 import { createInvoiceSchema, paginationSchema } from '../../utils/validation.js';
-import { PatientNotFoundError } from '@healthcare/shared/errors';
+import { PatientNotFoundError, ForbiddenError } from '@healthcare/shared/errors';
 import { getEnv } from '@healthcare/shared/config';
 import { generateInvoiceNumber } from '@healthcare/shared/utils';
 import { authenticate } from '../auth-guard.js';
+import { authorize, hasPermission, assignedPatientIds, canAccessPatient, type Principal } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
 import type { InvoiceRow } from '../types.js';
 
 export async function registerBillingModule(app: FastifyInstance) {
+  /** Scope for invoice lists: tenant-wide, branch-wide, or assigned patients. */
+  async function resolveBillingListScope(principal: Principal): Promise<{ branchIds?: string[]; patientIds?: string[] }> {
+    if (hasPermission(principal, 'billing.view', 'system') || hasPermission(principal, 'billing.view', 'tenant')) return {};
+    if (hasPermission(principal, 'billing.view', 'branch') || hasPermission(principal, 'billing.view', 'branches')) {
+      return { branchIds: principal.branches };
+    }
+    if (hasPermission(principal, 'billing.view', 'assigned_patients') || hasPermission(principal, 'billing.view', 'department')) {
+      return { patientIds: await assignedPatientIds(principal) };
+    }
+    return { patientIds: [] };
+  }
+
+  async function assertInvoiceAccess(principal: Principal, invoice: { tenant_id: string; patient_id: string; branch_id?: string | null }): Promise<void> {
+    if (principal.tenantId !== invoice.tenant_id) throw new ForbiddenError('You do not have access to this invoice');
+    if (hasPermission(principal, 'billing.view', 'tenant') || hasPermission(principal, 'billing.view', 'system')) return;
+    if ((hasPermission(principal, 'billing.view', 'branch') || hasPermission(principal, 'billing.view', 'branches')) && invoice.branch_id) {
+      if (principal.branches.includes(String(invoice.branch_id))) return;
+    }
+    if (hasPermission(principal, 'billing.view', 'assigned_patients') || hasPermission(principal, 'billing.view', 'department')) {
+      const ids = await assignedPatientIds(principal);
+      if (ids.includes(invoice.patient_id)) return;
+    }
+    throw new ForbiddenError('You do not have access to this invoice');
+  }
+
   // List invoices
   app.get('/api/v1/invoices', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('billing.view')],
   }, async (request, reply) => {
     const query = paginationSchema.parse(request.query);
     const tenantId = getTenantId(request);
     const { status, patientId, startDate, endDate } = request.query as { endDate?: string; patientId?: string; startDate?: string; status?: string };
+    const { principal } = getCtx(request);
+    const scope = await resolveBillingListScope(principal);
 
     let queryBuilder = db('invoices')
       .join('patients', 'invoices.patient_id', 'patients.id')
       .where('invoices.tenant_id', tenantId)
       .whereNull('invoices.deleted_at');
 
+    if (scope.branchIds && scope.branchIds.length > 0) queryBuilder = queryBuilder.whereIn('patients.branch_id', scope.branchIds);
+    if (scope.branchIds && scope.branchIds.length === 0) queryBuilder = queryBuilder.where(db.raw('false'));
+    if (scope.patientIds && scope.patientIds.length > 0) queryBuilder = queryBuilder.whereIn('invoices.patient_id', scope.patientIds);
+    if (scope.patientIds && scope.patientIds.length === 0) queryBuilder = queryBuilder.where(db.raw('false'));
     if (status) queryBuilder = queryBuilder.andWhere('invoices.status', status);
     if (patientId) queryBuilder = queryBuilder.andWhere('invoices.patient_id', patientId);
     if (startDate) queryBuilder = queryBuilder.andWhere('invoices.issued_at', '>=', startDate);
@@ -50,7 +82,7 @@ export async function registerBillingModule(app: FastifyInstance) {
 
   // Get single invoice
   app.get('/api/v1/invoices/:invoiceId', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('billing.view')],
   }, async (request, reply) => {
     const { invoiceId } = request.params as { invoiceId: string };
     const tenantId = getTenantId(request);
@@ -66,12 +98,18 @@ export async function registerBillingModule(app: FastifyInstance) {
         'patients.medical_record_number',
         'patients.phone as patient_phone',
         'patients.email as patient_email',
+        'patients.branch_id as patient_branch_id',
       )
       .first();
 
     if (!invoice) {
       return reply.status(404).send({ success: false, error: 'Invoice not found' });
     }
+    await assertInvoiceAccess(getCtx(request).principal, {
+      tenant_id: invoice.tenant_id,
+      patient_id: invoice.patient_id,
+      branch_id: invoice.patient_branch_id,
+    });
 
     const { userId } = getCtx(request);
     try { await logAudit({ tenantId, userId, action: 'invoice.view', entityType: 'invoice', entityId: invoiceId }); } catch {}
@@ -81,7 +119,7 @@ export async function registerBillingModule(app: FastifyInstance) {
 
   // Create invoice
   app.post('/api/v1/invoices', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('billing.create')],
   }, async (request, reply) => {
     const body = createInvoiceSchema.parse(request.body);
     const tenantId = getTenantId(request); const userId = getCtx(request).userId;
@@ -126,7 +164,7 @@ export async function registerBillingModule(app: FastifyInstance) {
 
   // Record payment
   app.post('/api/v1/invoices/:invoiceId/pay', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('billing.create')],
   }, async (request, reply) => {
     const { invoiceId } = request.params as { invoiceId: string };
     const tenantId = getTenantId(request);
@@ -143,6 +181,7 @@ export async function registerBillingModule(app: FastifyInstance) {
     if (!invoice) {
       return reply.status(404).send({ success: false, error: 'Invoice not found' });
     }
+    await assertInvoiceAccess(getCtx(request).principal, invoice);
 
     const newPaid = Number(invoice.paid) + body.amount;
     const newDue = Number(invoice.total) - newPaid;
@@ -185,7 +224,7 @@ export async function registerBillingModule(app: FastifyInstance) {
 
   // Get revenue summary
   app.get('/api/v1/billing/revenue', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('billing.view')],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { startDate, endDate } = request.query as { endDate?: string; startDate?: string };
@@ -219,7 +258,7 @@ export async function registerBillingModule(app: FastifyInstance) {
 
   // Get patient invoices
   app.get('/api/v1/patients/:patientId/invoices', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('billing.view')],
   }, async (request, reply) => {
     const { patientId } = request.params as { patientId: string };
     const tenantId = getTenantId(request);
@@ -245,7 +284,7 @@ export async function registerBillingModule(app: FastifyInstance) {
   });
   // Create Stripe checkout session
   app.post('/api/v1/payments/stripe/create', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('billing.create')],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { invoiceId, amount, currency } = z.object({
@@ -263,7 +302,7 @@ export async function registerBillingModule(app: FastifyInstance) {
 
   // Get payment link
   app.get('/api/v1/payments/link/:tenantSlug/:invoiceId', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('billing.view')],
   }, async (request, reply) => {
     const { invoiceId, tenantSlug } = request.params as { invoiceId: string; tenantSlug: string };
     const { generatePaymentLink } = await import('../../services/payment.js');
@@ -274,7 +313,7 @@ export async function registerBillingModule(app: FastifyInstance) {
 
   // Revenue by month
   app.get('/api/v1/billing/revenue/monthly', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('billing.view')],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const year = parseInt(String((request.query as Record<string, unknown>)["year"])) || new Date().getFullYear();
@@ -289,7 +328,7 @@ export async function registerBillingModule(app: FastifyInstance) {
 
   // Aging report
   app.get('/api/v1/billing/reports/aging', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('billing.view')],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const [current] = await db('invoices').where('tenant_id', tenantId).whereNull('deleted_at').where('due', '>', 0).whereRaw("issued_at >= NOW() - INTERVAL '30 days'").select(db.raw('COALESCE(SUM(due),0) as amount'));
@@ -303,7 +342,7 @@ export async function registerBillingModule(app: FastifyInstance) {
 
   // Top patients by revenue
   app.get('/api/v1/billing/reports/top-patients', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('billing.view')],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const patients = await db('invoices').join('patients', 'invoices.patient_id', 'patients.id')

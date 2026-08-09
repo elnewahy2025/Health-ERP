@@ -7,13 +7,14 @@ import { sendSuccess, sendPaginated, sendError } from '../../utils/response.js';
 import { logAudit } from '../../services/audit.js';
 import { getEnv } from '@healthcare/shared/config';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 
 export async function registerFinancialDeepeningModule(app: FastifyInstance) {
   const env = getEnv();
 
   // ==================== EXPENSE CATEGORIES ====================
 
-  app.get('/api/v1/expense-categories', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/expense-categories', { preHandler: [authenticate, authorize('expenses.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const categories = await db('expense_categories')
       .where(function () { this.whereNull('tenant_id').orWhere('tenant_id', tenantId); })
@@ -24,7 +25,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     return sendSuccess(reply, categories);
   });
 
-  app.post('/api/v1/expense-categories', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/expense-categories', { preHandler: [authenticate, authorize('expenses.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const body = z.object({
       name: z.string().min(1), code: z.string().min(1).max(50),
@@ -41,7 +42,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
 
   // ==================== EXPENSES ====================
 
-  app.get('/api/v1/expenses', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/expenses', { preHandler: [authenticate, authorize('expenses.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const query = z.object({
       page: z.coerce.number().optional().default(1),
@@ -69,7 +70,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     return sendPaginated(reply, data, Number(total?.count || 0), query.page, query.limit);
   });
 
-  app.post('/api/v1/expenses', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/expenses', { preHandler: [authenticate, authorize('expenses.view')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const body = z.object({
       title: z.string().min(1), amount: z.number().positive(),
@@ -102,7 +103,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     return sendSuccess(reply, expense, 'Expense created', 201);
   });
 
-  app.put('/api/v1/expenses/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/expenses/:id', { preHandler: [authenticate, authorize('expenses.edit')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const body = z.object({
@@ -135,7 +136,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     return sendSuccess(reply, { id }, 'Expense updated');
   });
 
-  app.get('/api/v1/expenses/stats', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/expenses/stats', { preHandler: [authenticate, authorize('expenses.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const query = z.object({ fromDate: z.string().optional(), toDate: z.string().optional() }).parse(request.query);
 
@@ -159,7 +160,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
 
   // ==================== ETA E-INVOICING ====================
 
-  app.post('/api/v1/eta/invoices/generate', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/eta/invoices/generate', { preHandler: [authenticate, authorize('eta_invoicing.create')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const body = z.object({
       invoiceId: z.string().uuid(),
@@ -249,7 +250,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     return sendSuccess(reply, etaInvoice, 'ETA invoice generated', 201);
   });
 
-  app.post('/api/v1/eta/invoices/:id/submit', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/eta/invoices/:id/submit', { preHandler: [authenticate, authorize('eta_invoicing.manage')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
 
@@ -279,7 +280,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     return sendSuccess(reply, { id, etaUuid, etaInvoiceNumber }, 'ETA invoice submitted successfully');
   });
 
-  app.get('/api/v1/eta/invoices', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/eta/invoices', { preHandler: [authenticate, authorize('eta_invoicing.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const query = z.object({
       page: z.coerce.number().optional().default(1), limit: z.coerce.number().optional().default(20),
@@ -296,7 +297,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
 
   // ==================== P&L AND FINANCIAL REPORTS ====================
 
-  app.get('/api/v1/financial/pl-report', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/financial/pl-report', { preHandler: [authenticate, authorize('financial_reports.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const query = z.object({
       fromDate: z.string().optional().default(() => new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]),
@@ -380,7 +381,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
 
   // ==================== BUDGET MANAGEMENT ====================
 
-  app.get('/api/v1/budget-plans', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/budget-plans', { preHandler: [authenticate, authorize('expenses.manage')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const data = await db('budget_plans').where({ tenant_id: tenantId }).orderBy('start_date', 'desc');
     const { userId: budgetUserId } = getCtx(request);
@@ -388,7 +389,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     return sendSuccess(reply, data);
   });
 
-  app.post('/api/v1/budget-plans', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/budget-plans', { preHandler: [authenticate, authorize('expenses.manage')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const body = z.object({
       name: z.string().min(1), period: z.string(),
@@ -443,7 +444,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
   // ==================== FAWRY CREATE ====================
 
   app.post('/api/v1/payments/fawry/create', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('billing.create')],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { userId } = getCtx(request);
@@ -489,7 +490,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
   // ==================== INSTAPAY CREATE ====================
 
   app.post('/api/v1/payments/instapay', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('billing.create')],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { userId } = getCtx(request);
@@ -525,7 +526,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
   // ==================== ETA QR CODE ====================
 
   app.get('/api/v1/invoices/:id/eta-qr', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('eta_invoicing.view')],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { id } = request.params as { id: string };

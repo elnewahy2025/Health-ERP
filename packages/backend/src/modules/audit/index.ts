@@ -5,10 +5,11 @@ import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { sendSuccess, sendPaginated } from '../../utils/response.js';
 import type { AuditLogRow } from "../types.js";
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 
 export async function registerAuditModule(app: FastifyInstance) {
   // List audit logs (paginated, filterable)
-  app.get('/api/v1/audit-logs', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/audit-logs', { preHandler: [authenticate, authorize('audit.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const query = z.object({
       page: z.coerce.number().optional().default(1),
@@ -35,7 +36,7 @@ export async function registerAuditModule(app: FastifyInstance) {
   });
 
   // Get audit log detail
-  app.get('/api/v1/audit-logs/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/audit-logs/:id', { preHandler: [authenticate, authorize('audit.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const log = await db('audit_logs').where({ id, tenant_id: tenantId }).first();
@@ -44,14 +45,14 @@ export async function registerAuditModule(app: FastifyInstance) {
   });
 
   // Get all distinct action types (for filtering)
-  app.get('/api/v1/audit-logs/actions/types', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/audit-logs/actions/types', { preHandler: [authenticate, authorize('audit.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const actions = await db('audit_logs').where({ tenant_id: tenantId }).distinct('action').orderBy('action');
     return sendSuccess(reply, actions.map((a: AuditLogRow) => a.action));
   });
 
   // Export audit logs (CSV/JSON)
-  app.get('/api/v1/audit/logs/export', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/audit/logs/export', { preHandler: [authenticate, authorize('audit.export')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const query = z.object({ format: z.enum(['csv', 'json']).optional().default('json'), action: z.string().optional(), entityType: z.string().optional(), fromDate: z.string().optional(), toDate: z.string().optional() }).parse(request.query);
 

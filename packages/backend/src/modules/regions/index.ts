@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 
 export async function registerRegionsModule(app: FastifyInstance) {
   // ── Regions (system catalog) ──
@@ -15,7 +16,7 @@ export async function registerRegionsModule(app: FastifyInstance) {
   });
 
   // ── Tenant Data Residency ──
-  app.get('/api/v1/regions/residency', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/regions/residency', { preHandler: [authenticate, authorize('regions.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const residency = await db('tenant_data_residency').where({ tenant_id: tenantId })
       .leftJoin('regions as pr', 'tenant_data_residency.primary_region_id', 'pr.id')
@@ -35,7 +36,7 @@ export async function registerRegionsModule(app: FastifyInstance) {
     });
   });
 
-  app.put('/api/v1/regions/residency', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/regions/residency', { preHandler: [authenticate, authorize('regions.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const body = request.body as Record<string, unknown>;
     const existing = await db('tenant_data_residency').where({ tenant_id: tenantId }).first();
     const data: Record<string, unknown> = { updated_at: new Date() };

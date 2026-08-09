@@ -1,5 +1,48 @@
 import { db } from '../../core/database.js';
 import crypto from 'crypto';
+import type { Knex } from 'knex';
+import { SEED_ROLES, expandRoleGrants } from '@healthcare/shared/authz';
+
+async function seedSystemRoles(
+  trx: Knex.Transaction,
+  tenantId: string,
+): Promise<Map<string, string>> {
+  const roleIds = new Map<string, string>();
+  for (const [slug, template] of Object.entries(SEED_ROLES)) {
+    let role = await trx('roles').where({ tenant_id: tenantId, slug }).first();
+    if (!role) {
+      const [inserted] = await trx('roles')
+        .insert({
+          tenant_id: tenantId,
+          name: slug.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+          slug,
+          description: template.description || null,
+          permissions: '[]',
+          is_system: true,
+          level: template.level,
+          scope_default: template.scopeDefault,
+        })
+        .returning('*');
+      role = inserted;
+    }
+    roleIds.set(slug, String(role.id));
+
+    const grants = expandRoleGrants(template);
+    const existing = await trx('role_permissions').where({ role_id: role.id }).select('permission', 'scope');
+    const existingKeys = new Set(existing.map((r: { permission: string; scope: string }) => `${r.permission}:${r.scope}`));
+    for (const grant of grants) {
+      const key = `${grant.permission}:${grant.scope}`;
+      if (existingKeys.has(key)) continue;
+      await trx('role_permissions').insert({
+        role_id: role.id,
+        tenant_id: tenantId,
+        permission: grant.permission,
+        scope: grant.scope,
+      });
+    }
+  }
+  return roleIds;
+}
 
 // ── Tenants ──
 
@@ -197,35 +240,34 @@ export async function registerTenantWithAdmin(data: {
       settings: data.settings, status: 'active',
     }).returning('*');
 
-    const [adminRole] = await trx('roles').insert({
-      tenant_id: tenant.id, name: 'Super Admin', slug: 'super_admin',
-      description: 'Full system access',
-      permissions: JSON.stringify([
-        'patient:read', 'patient:write', 'patient:delete',
-        'appointment:read', 'appointment:write', 'appointment:delete',
-        'emr:read', 'emr:write', 'emr:delete',
-        'billing:read', 'billing:write', 'billing:delete',
-        'admin:access', 'admin:users', 'admin:settings',
-        'settings:read', 'settings:write', 'audit:read',
-      ]),
-      is_system: true,
-    }).returning('*');
+    const roleIds = await seedSystemRoles(trx, tenant.id);
+    const adminRoleId = roleIds.get('super_admin');
+    if (!adminRoleId) throw new Error('Failed to seed super_admin role');
+
+    const legacyAdminPermissions = [
+      'patient:read', 'patient:write', 'patient:delete',
+      'appointment:read', 'appointment:write', 'appointment:delete',
+      'emr:read', 'emr:write', 'emr:delete',
+      'billing:read', 'billing:write', 'billing:delete',
+      'admin:access', 'admin:users', 'admin:settings',
+      'settings:read', 'settings:write', 'audit:read',
+    ];
 
     const [user] = await trx('users').insert({
       tenant_id: tenant.id, email: data.adminEmail, password_hash: data.passwordHash,
       first_name: data.adminFirstName, last_name: data.adminLastName,
-      role_id: adminRole.id, roles: JSON.stringify(['super_admin']),
-      permissions: JSON.stringify([
-        'patient:read', 'patient:write', 'patient:delete',
-        'appointment:read', 'appointment:write', 'appointment:delete',
-        'emr:read', 'emr:write', 'emr:delete',
-        'billing:read', 'billing:write', 'billing:delete',
-        'admin:access', 'admin:users', 'admin:settings',
-        'settings:read', 'settings:write', 'audit:read',
-      ]),
+      role_id: adminRoleId, roles: JSON.stringify(['super_admin']),
+      permissions: JSON.stringify(legacyAdminPermissions),
       locale: data.locale, status: 'active', mfa_enabled: false,
       email_verification_token: data.verificationToken, email_verified: false,
     }).returning('*');
+
+    await trx('user_roles').insert({
+      user_id: user.id,
+      role_id: adminRoleId,
+      tenant_id: tenant.id,
+      assigned_by: user.id,
+    });
 
     return { tenant, user, verificationToken: data.verificationToken };
   });

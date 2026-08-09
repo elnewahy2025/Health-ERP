@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
 
 interface CompliancePolicyRow {
@@ -70,7 +71,7 @@ interface BreachLogRow {
 
 export async function registerComplianceModule(app: FastifyInstance) {
   // Policies
-  app.get('/api/v1/compliance/policies', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/compliance/policies', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { category, status } = request.query as { category?: string; status?: string };
     let q = db('compliance_policies').where('compliance_policies.tenant_id', tenantId);
@@ -85,7 +86,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/compliance/policies', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/compliance/policies', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -108,7 +109,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: pol.id, code: pol.code, title: pol.title }, 'Policy created', 201);
   });
 
-  app.put('/api/v1/compliance/policies/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/compliance/policies/:id', { preHandler: [authenticate, authorize('compliance.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -135,7 +136,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
   });
 
   // Audits
-  app.get('/api/v1/compliance/audits', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/compliance/audits', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status, type } = request.query as { status?: string; type?: string };
     let q = db('compliance_audits').where('compliance_audits.tenant_id', tenantId);
@@ -150,7 +151,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/compliance/audits', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/compliance/audits', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -171,7 +172,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: audit.id, title: audit.title }, 'Audit created', 201);
   });
 
-  app.put('/api/v1/compliance/audits/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/compliance/audits/:id', { preHandler: [authenticate, authorize('compliance.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -198,7 +199,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
   });
 
   // Consent Logs
-  app.get('/api/v1/compliance/consents', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/compliance/consents', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { patientId } = request.query as { patientId?: string };
     let q = db('data_consent_logs').where('data_consent_logs.tenant_id', tenantId);
@@ -213,7 +214,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/compliance/consents', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/compliance/consents', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -235,7 +236,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
   });
 
   // Breach Log
-  app.get('/api/v1/compliance/breaches', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/compliance/breaches', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status, severity } = request.query as { severity?: string; status?: string };
     let q = db('breach_log').where('breach_log.tenant_id', tenantId);
@@ -251,7 +252,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/compliance/breaches', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/compliance/breaches', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -274,7 +275,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: breach.id, type: breach.type }, 'Breach logged', 201);
   });
 
-  app.put('/api/v1/compliance/breaches/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/compliance/breaches/:id', { preHandler: [authenticate, authorize('compliance.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };

@@ -3,10 +3,11 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import type { HomeVisitRow } from "../types.js";
 
 export async function registerHomeVisitsModule(app: FastifyInstance) {
-  app.get('/api/v1/home-visits', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/home-visits', { preHandler: [authenticate, authorize('home_visits.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { status, assignedTo } = request.query as { assignedTo?: string; status?: string };
     let q = db('home_visits').where('home_visits.tenant_id', tenantId).whereNull('home_visits.deleted_at');
     if (status) q = q.andWhere('home_visits.status', status);
@@ -25,7 +26,7 @@ export async function registerHomeVisitsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/home-visits', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/home-visits', { preHandler: [authenticate, authorize('home_visits.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
     const visitNum = "HV-" + Date.now().toString(36).toUpperCase();
     const [visit] = await db('home_visits').insert({
@@ -37,7 +38,7 @@ export async function registerHomeVisitsModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: visit.id, visitNumber: visit.visit_number }, 'Home visit scheduled', 201);
   });
 
-  app.put('/api/v1/home-visits/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/home-visits/:id', { preHandler: [authenticate, authorize('home_visits.edit')] }, async (request, reply) => {
     const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.status) update.status = body.status;

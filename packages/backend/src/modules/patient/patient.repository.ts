@@ -15,6 +15,8 @@ export async function findPatients(tenantId: string, options: {
   order?: string;
   limit: number;
   offset: number;
+  branchIds?: string[];
+  patientIds?: string[];
 }): Promise<{ patients: PatientRow[]; total: number }> {
   const safeLimit = enforceLimit(options.limit);
   let query = db('patients')
@@ -34,6 +36,13 @@ export async function findPatients(tenantId: string, options: {
 
   if (options.status) {
     query = query.andWhere('status', options.status);
+  }
+
+  if (options.branchIds && options.branchIds.length > 0) {
+    query = query.whereIn('branch_id', options.branchIds);
+  }
+  if (options.patientIds && options.patientIds.length > 0) {
+    query = query.whereIn('id', options.patientIds);
   }
 
   const total = await query.clone().count('id as count').first();
@@ -57,9 +66,9 @@ export async function findPatientWithRelatedData(patientId: string, tenantId: st
   if (!patient) return null;
 
   const [appointments, emrRecords, invoices] = await Promise.all([
-    db('appointments').where({ patient_id: patientId }).orderBy('appointment_date', 'desc').limit(5),
-    db('emr_records').where({ patient_id: patientId }).orderBy('encounter_date', 'desc').limit(5),
-    db('invoices').where({ patient_id: patientId }).orderBy('created_at', 'desc').limit(5),
+    db('appointments').where({ patient_id: patientId, tenant_id: tenantId }).orderBy('appointment_date', 'desc').limit(5),
+    db('emr_records').where({ patient_id: patientId, tenant_id: tenantId }).orderBy('encounter_date', 'desc').limit(5),
+    db('invoices').where({ patient_id: patientId, tenant_id: tenantId }).orderBy('created_at', 'desc').limit(5),
   ]);
 
   return { patient, appointments, emrRecords, invoices };
@@ -149,8 +158,8 @@ export async function softDeletePatient(patientId: string, tenantId: string): Pr
   });
 }
 
-export async function quickSearchPatients(tenantId: string, q: string): Promise<PatientRow[]> {
-  return db('patients')
+export async function quickSearchPatients(tenantId: string, q: string, options?: { branchIds?: string[]; patientIds?: string[] }): Promise<PatientRow[]> {
+  let query = db('patients')
     .where({ tenant_id: tenantId })
     .whereNull('deleted_at')
     .where(function () {
@@ -158,8 +167,15 @@ export async function quickSearchPatients(tenantId: string, q: string): Promise<
         .orWhere('last_name', 'ilike', `%${q}%`)
         .orWhere('phone', 'ilike', `%${q}%`)
         .orWhere('medical_record_number', 'ilike', `%${q}%`);
-    })
-    .select('id', 'first_name', 'last_name', 'medical_record_number', 'phone', 'date_of_birth', 'gender')
+    });
+  if (options?.branchIds && options.branchIds.length > 0) {
+    query = query.whereIn('branch_id', options.branchIds);
+  }
+  if (options?.patientIds && options.patientIds.length > 0) {
+    query = query.whereIn('id', options.patientIds);
+  }
+  return query
+    .select('id', 'first_name', 'last_name', 'medical_record_number', 'phone', 'date_of_birth', 'gender', 'branch_id')
     .limit(10);
 }
 

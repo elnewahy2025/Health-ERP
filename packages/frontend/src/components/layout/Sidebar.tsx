@@ -26,6 +26,7 @@ interface NavItem {
   path: string;
   icon: React.ComponentType<{ className?: string }>;
   labelKey: string;
+  permission?: string;
 }
 
 interface NavGroup {
@@ -41,14 +42,14 @@ const navGroups: NavGroup[] = [
     labelKey: 'navGroup.patientCare',
     icon: Stethoscope,
     items: [
-      { path: '/patients', icon: Users, labelKey: 'nav.patients' },
-      { path: '/appointments', icon: CalendarCheck, labelKey: 'nav.appointments' },
-      { path: '/emr', icon: FileText, labelKey: 'nav.emr' },
-      { path: '/queue', icon: ListOrdered, labelKey: 'nav.queue' },
-      { path: '/referrals', icon: ArrowLeftRight, labelKey: 'nav.referrals' },
-      { path: '/nursing', icon: Stethoscope, labelKey: 'nav.nursing' },
-      { path: '/home-visits', icon: Home, labelKey: 'nav.homeVisits' },
-      { path: '/telemedicine', icon: Video, labelKey: 'nav.telemedicine' },
+      { path: '/patients', icon: Users, labelKey: 'nav.patients', permission: 'patients.view' },
+      { path: '/appointments', icon: CalendarCheck, labelKey: 'nav.appointments', permission: 'appointments.view' },
+      { path: '/emr', icon: FileText, labelKey: 'nav.emr', permission: 'emr.view' },
+      { path: '/queue', icon: ListOrdered, labelKey: 'nav.queue', permission: 'queue.view' },
+      { path: '/referrals', icon: ArrowLeftRight, labelKey: 'nav.referrals', permission: 'referrals.view' },
+      { path: '/nursing', icon: Stethoscope, labelKey: 'nav.nursing', permission: 'nursing.view' },
+      { path: '/home-visits', icon: Home, labelKey: 'nav.homeVisits', permission: 'home_visits.view' },
+      { path: '/telemedicine', icon: Video, labelKey: 'nav.telemedicine', permission: 'telemedicine.view' },
     ],
   },
   {
@@ -56,9 +57,9 @@ const navGroups: NavGroup[] = [
     labelKey: 'navGroup.clinical',
     icon: FlaskConical,
     items: [
-      { path: '/laboratory', icon: FlaskConical, labelKey: 'nav.laboratory' },
-      { path: '/radiology', icon: ScanLine, labelKey: 'nav.radiology' },
-      { path: '/pharmacy', icon: PillBottle, labelKey: 'nav.pharmacy' },
+      { path: '/laboratory', icon: FlaskConical, labelKey: 'nav.laboratory', permission: 'laboratory.view' },
+      { path: '/radiology', icon: ScanLine, labelKey: 'nav.radiology', permission: 'radiology.view' },
+      { path: '/pharmacy', icon: PillBottle, labelKey: 'nav.pharmacy', permission: 'pharmacy.view' },
     ],
   },
   {
@@ -66,11 +67,11 @@ const navGroups: NavGroup[] = [
     labelKey: 'navGroup.financial',
     icon: Receipt,
     items: [
-      { path: '/billing', icon: Receipt, labelKey: 'nav.billing' },
-      { path: '/insurance', icon: ShieldCheck, labelKey: 'nav.insurance' },
-      { path: '/insurance-claims', icon: ShieldCheck, labelKey: 'nav.insuranceClaims' },
-      { path: '/expenses', icon: Wallet, labelKey: 'nav.expenseTracking' },
-      { path: '/eta-invoicing', icon: FileText, labelKey: 'nav.etaInvoicing' },
+      { path: '/billing', icon: Receipt, labelKey: 'nav.billing', permission: 'billing.view' },
+      { path: '/insurance', icon: ShieldCheck, labelKey: 'nav.insurance', permission: 'insurance.view' },
+      { path: '/insurance-claims', icon: ShieldCheck, labelKey: 'nav.insuranceClaims', permission: 'insurance_claims.view' },
+      { path: '/expenses', icon: Wallet, labelKey: 'nav.expenseTracking', permission: 'expenses.view' },
+      { path: '/eta-invoicing', icon: FileText, labelKey: 'nav.etaInvoicing', permission: 'eta_invoicing.view' },
     ],
   },
   {
@@ -78,14 +79,14 @@ const navGroups: NavGroup[] = [
     labelKey: 'navGroup.operations',
     icon: Package,
     items: [
-      { path: '/inventory', icon: Package, labelKey: 'nav.inventory' },
-      { path: '/hr', icon: UsersRound, labelKey: 'nav.hr' },
-      { path: '/crm', icon: BarChart3, labelKey: 'nav.crm' },
-      { path: '/dms', icon: FileText, labelKey: 'nav.dms' },
-      { path: '/workflow', icon: GitBranch, labelKey: 'nav.workflow' },
-      { path: '/forms', icon: ClipboardList, labelKey: 'nav.forms' },
-      { path: '/compliance', icon: ScrollText, labelKey: 'nav.compliance' },
-      { path: '/automation', icon: Zap, labelKey: 'nav.automation' },
+      { path: '/inventory', icon: Package, labelKey: 'nav.inventory', permission: 'inventory.view' },
+      { path: '/hr', icon: UsersRound, labelKey: 'nav.hr', permission: 'hr.view' },
+      { path: '/crm', icon: BarChart3, labelKey: 'nav.crm', permission: 'crm.view' },
+      { path: '/dms', icon: FileText, labelKey: 'nav.dms', permission: 'documents.view' },
+      { path: '/workflow', icon: GitBranch, labelKey: 'nav.workflow', permission: 'workflow.view' },
+      { path: '/forms', icon: ClipboardList, labelKey: 'nav.forms', permission: 'forms.view' },
+      { path: '/compliance', icon: ScrollText, labelKey: 'nav.compliance', permission: 'compliance.view' },
+      { path: '/automation', icon: Zap, labelKey: 'nav.automation', permission: 'automation.view' },
     ],
   },
   {
@@ -93,12 +94,12 @@ const navGroups: NavGroup[] = [
     labelKey: 'navGroup.analytics',
     icon: BarChart3,
     items: [
-      { path: '/bi', icon: BiIcon, labelKey: 'nav.bi' },
-      { path: '/reports', icon: FileSpreadsheet, labelKey: 'nav.reports' },
-      { path: '/financial-reports', icon: BarChart3, labelKey: 'nav.financialReports' },
-      { path: '/compliance-reports', icon: Shield, labelKey: 'nav.complianceReports' },
-      { path: '/advanced-reporting', icon: FileText, labelKey: 'nav.advancedReporting' },
-      { path: '/analytics-dashboard', icon: BarChart3, labelKey: 'nav.analyticsDashboard' },
+      { path: '/bi', icon: BiIcon, labelKey: 'nav.bi', permission: 'bi.view' },
+      { path: '/reports', icon: FileSpreadsheet, labelKey: 'nav.reports', permission: 'reports.view' },
+      { path: '/financial-reports', icon: BarChart3, labelKey: 'nav.financialReports', permission: 'financial_reports.view' },
+      { path: '/compliance-reports', icon: Shield, labelKey: 'nav.complianceReports', permission: 'compliance_reports.view' },
+      { path: '/advanced-reporting', icon: FileText, labelKey: 'nav.advancedReporting', permission: 'advanced_reporting.view' },
+      { path: '/analytics-dashboard', icon: BarChart3, labelKey: 'nav.analyticsDashboard', permission: 'analytics_dashboard.view' },
     ],
   },
   {
@@ -106,10 +107,10 @@ const navGroups: NavGroup[] = [
     labelKey: 'navGroup.ai',
     icon: Bot,
     items: [
-      { path: '/ai-hub', icon: Bot, labelKey: 'nav.aiHub' },
-      { path: '/clinical-ai', icon: Bot, labelKey: 'nav.clinicalAI' },
-      { path: '/predictive-analytics', icon: TrendingUp, labelKey: 'nav.predictiveAnalytics' },
-      { path: '/smart-scheduling', icon: Calendar, labelKey: 'nav.smartScheduling' },
+      { path: '/ai-hub', icon: Bot, labelKey: 'nav.aiHub', permission: 'ai_hub.view' },
+      { path: '/clinical-ai', icon: Bot, labelKey: 'nav.clinicalAI', permission: 'clinical_ai.view' },
+      { path: '/predictive-analytics', icon: TrendingUp, labelKey: 'nav.predictiveAnalytics', permission: 'predictive_analytics.view' },
+      { path: '/smart-scheduling', icon: Calendar, labelKey: 'nav.smartScheduling', permission: 'smart_scheduling.view' },
     ],
   },
   {
@@ -117,13 +118,13 @@ const navGroups: NavGroup[] = [
     labelKey: 'navGroup.communication',
     icon: MessageSquare,
     items: [
-      { path: '/notifications', icon: Bell, labelKey: 'nav.notifications' },
-      { path: '/communications', icon: Send, labelKey: 'nav.communications' },
-      { path: '/whatsapp', icon: MessageCircle, labelKey: 'nav.whatsapp' },
-      { path: '/whatsapp-templates', icon: MessageCircle, labelKey: 'nav.whatsappTemplates' },
-      { path: '/voice-calls', icon: PhoneCall, labelKey: 'nav.voiceCalls' },
-      { path: '/chat', icon: MessageSquare, labelKey: 'nav.chat' },
-      { path: '/patient-messages', icon: MessageSquare, labelKey: 'nav.patientMessages' },
+      { path: '/notifications', icon: Bell, labelKey: 'nav.notifications', permission: 'notifications.view' },
+      { path: '/communications', icon: Send, labelKey: 'nav.communications', permission: 'communications.view' },
+      { path: '/whatsapp', icon: MessageCircle, labelKey: 'nav.whatsapp', permission: 'whatsapp.view' },
+      { path: '/whatsapp-templates', icon: MessageCircle, labelKey: 'nav.whatsappTemplates', permission: 'whatsapp.view' },
+      { path: '/voice-calls', icon: PhoneCall, labelKey: 'nav.voiceCalls', permission: 'voice_calls.view' },
+      { path: '/chat', icon: MessageSquare, labelKey: 'nav.chat', permission: 'chat.view' },
+      { path: '/patient-messages', icon: MessageSquare, labelKey: 'nav.patientMessages', permission: 'patient_messages.view' },
     ],
   },
   {
@@ -131,13 +132,13 @@ const navGroups: NavGroup[] = [
     labelKey: 'navGroup.patientExperience',
     icon: Heart,
     items: [
-      { path: '/patient-portal', icon: UserRound, labelKey: 'nav.patientPortal' },
-      { path: '/online-booking', icon: CalendarPlus, labelKey: 'nav.onlineBooking' },
-      { path: '/patient-app', icon: Smartphone, labelKey: 'nav.patientApp' },
-      { path: '/patient-self-service', icon: User, labelKey: 'nav.patientSelfService' },
-      { path: '/post-visit-survey', icon: Heart, labelKey: 'nav.postVisitSurvey' },
-      { path: '/kiosk', icon: UserCheck, labelKey: 'nav.kiosk' },
-      { path: '/queue-display', icon: ListOrdered, labelKey: 'nav.queueDisplay' },
+      { path: '/patient-portal', icon: UserRound, labelKey: 'nav.patientPortal', permission: 'patient_portal.view' },
+      { path: '/online-booking', icon: CalendarPlus, labelKey: 'nav.onlineBooking', permission: 'online_booking.view' },
+      { path: '/patient-app', icon: Smartphone, labelKey: 'nav.patientApp', permission: 'patient_self_service.view' },
+      { path: '/patient-self-service', icon: User, labelKey: 'nav.patientSelfService', permission: 'patient_self_service.view' },
+      { path: '/post-visit-survey', icon: Heart, labelKey: 'nav.postVisitSurvey', permission: 'crm.view' },
+      { path: '/kiosk', icon: UserCheck, labelKey: 'nav.kiosk', permission: 'queue.view' },
+      { path: '/queue-display', icon: ListOrdered, labelKey: 'nav.queueDisplay', permission: 'queue.view' },
     ],
   },
   {
@@ -145,14 +146,14 @@ const navGroups: NavGroup[] = [
     labelKey: 'navGroup.platform',
     icon: Puzzle,
     items: [
-      { path: '/saas-billing', icon: CreditCard, labelKey: 'nav.saasBilling' },
-      { path: '/white-label', icon: Palette, labelKey: 'nav.whiteLabel' },
-      { path: '/integrations', icon: Puzzle, labelKey: 'nav.integrations' },
-      { path: '/dr-backup', icon: HardDrive, labelKey: 'nav.drBackup' },
-      { path: '/regions', icon: Globe, labelKey: 'nav.regions' },
-      { path: '/branches', icon: Building2, labelKey: 'nav.multiBranch' },
-      { path: '/barcodes', icon: Barcode, labelKey: 'nav.barcodes' },
-      { path: '/data-warehouse', icon: Database, labelKey: 'nav.dataWarehouse' },
+      { path: '/saas-billing', icon: CreditCard, labelKey: 'nav.saasBilling', permission: 'saas_billing.view' },
+      { path: '/white-label', icon: Palette, labelKey: 'nav.whiteLabel', permission: 'white_label.view' },
+      { path: '/integrations', icon: Puzzle, labelKey: 'nav.integrations', permission: 'integrations.view' },
+      { path: '/dr-backup', icon: HardDrive, labelKey: 'nav.drBackup', permission: 'dr_backup.view' },
+      { path: '/regions', icon: Globe, labelKey: 'nav.regions', permission: 'regions.view' },
+      { path: '/branches', icon: Building2, labelKey: 'nav.multiBranch', permission: 'branches.view' },
+      { path: '/barcodes', icon: Barcode, labelKey: 'nav.barcodes', permission: 'barcodes.view' },
+      { path: '/data-warehouse', icon: Database, labelKey: 'nav.dataWarehouse', permission: 'data_warehouse.view' },
     ],
   },
   {
@@ -160,27 +161,27 @@ const navGroups: NavGroup[] = [
     labelKey: 'navGroup.developer',
     icon: Code,
     items: [
-      { path: '/api-keys', icon: KeyRound, labelKey: 'nav.apiKeys' },
-      { path: '/developer-portal', icon: Code, labelKey: 'nav.developerPortal' },
-      { path: '/data-export', icon: Download, labelKey: 'nav.dataExport' },
-      { path: '/bulk-import', icon: Upload, labelKey: 'nav.bulkImport' },
-      { path: '/data-import-advanced', icon: Upload, labelKey: 'nav.dataImport' },
+      { path: '/api-keys', icon: KeyRound, labelKey: 'nav.apiKeys', permission: 'api_keys.view' },
+      { path: '/developer-portal', icon: Code, labelKey: 'nav.developerPortal', permission: 'developer_portal.view' },
+      { path: '/data-export', icon: Download, labelKey: 'nav.dataExport', permission: 'data_export.view' },
+      { path: '/bulk-import', icon: Upload, labelKey: 'nav.bulkImport', permission: 'bulk_import.view' },
+      { path: '/data-import-advanced', icon: Upload, labelKey: 'nav.dataImport', permission: 'bulk_import.view' },
     ],
   },
 ];
 
 const secondaryItems: NavItem[] = [
-  { path: '/settings', icon: Settings, labelKey: 'nav.settings' },
-  { path: '/admin', icon: Shield, labelKey: 'nav.admin' },
-  { path: '/security', icon: Shield, labelKey: 'nav.security' },
-  { path: '/audit-logs', icon: ClipboardList, labelKey: 'nav.auditLogs' },
-  { path: '/audit-logs-advanced', icon: ClipboardList, labelKey: 'nav.auditLogsAdvanced' },
-  { path: '/notification-templates', icon: MessageSquare, labelKey: 'nav.notificationTemplates' },
-  { path: '/notification-logs', icon: Send, labelKey: 'nav.notificationLogs' },
-  { path: '/sessions', icon: ShieldIcon, labelKey: 'nav.sessions' },
-  { path: '/system-monitor', icon: Monitor, labelKey: 'nav.systemMonitor' },
-  { path: '/print-templates', icon: Printer, labelKey: 'nav.printTemplates' },
-  { path: '/user-preferences', icon: UserCog, labelKey: 'nav.userPreferences' },
+  { path: '/settings', icon: Settings, labelKey: 'nav.settings', permission: 'settings.view' },
+  { path: '/admin', icon: Shield, labelKey: 'nav.admin', permission: 'users.view' },
+  { path: '/security', icon: Shield, labelKey: 'nav.security', permission: 'sessions.view' },
+  { path: '/audit-logs', icon: ClipboardList, labelKey: 'nav.auditLogs', permission: 'audit.view' },
+  { path: '/audit-logs-advanced', icon: ClipboardList, labelKey: 'nav.auditLogsAdvanced', permission: 'audit.view' },
+  { path: '/notification-templates', icon: MessageSquare, labelKey: 'nav.notificationTemplates', permission: 'communications.view' },
+  { path: '/notification-logs', icon: Send, labelKey: 'nav.notificationLogs', permission: 'notifications.view' },
+  { path: '/sessions', icon: ShieldIcon, labelKey: 'nav.sessions', permission: 'sessions.view' },
+  { path: '/system-monitor', icon: Monitor, labelKey: 'nav.systemMonitor', permission: 'system_monitor.view' },
+  { path: '/print-templates', icon: Printer, labelKey: 'nav.printTemplates', permission: 'settings.view' },
+  { path: '/user-preferences', icon: UserCog, labelKey: 'nav.userPreferences', permission: 'settings.view' },
 ];
 
 function SidebarGroup({
@@ -254,9 +255,23 @@ export default function Sidebar({
   onClose: () => void;
 }) {
   const { t, i18n } = useTranslation();
-  const { tenant } = useAuth();
+  const { tenant, can } = useAuth();
   const location = useLocation();
   const isRtl = i18n.language === 'ar';
+
+  const visibleGroups = useMemo(() => {
+    return navGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => !item.permission || can(item.permission)),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [can]);
+
+  const visibleSecondary = useMemo(
+    () => secondaryItems.filter((item) => !item.permission || can(item.permission)),
+    [can],
+  );
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
     const initial = new Set<string>();
@@ -289,9 +304,9 @@ export default function Sidebar({
   }, []);
 
   const filteredGroups = useMemo(() => {
-    if (!search.trim()) return navGroups;
+    if (!search.trim()) return visibleGroups;
     const q = search.toLowerCase();
-    return navGroups
+    return visibleGroups
       .map((group) => ({
         ...group,
         items: group.items.filter(
@@ -304,16 +319,16 @@ export default function Sidebar({
   }, [search, t]);
 
   const filteredSecondary = useMemo(() => {
-    if (!search.trim()) return secondaryItems;
+    if (!search.trim()) return visibleSecondary;
     const q = search.toLowerCase();
-    return secondaryItems.filter(
+    return visibleSecondary.filter(
       (item) =>
         t(item.labelKey).toLowerCase().includes(q) ||
         item.path.toLowerCase().includes(q)
     );
   }, [search, t]);
 
-  const totalItems = navGroups.reduce((sum, g) => sum + g.items.length, 0);
+  const totalItems = visibleGroups.reduce((sum, g) => sum + g.items.length, 0);
 
   const handleNavigate = useCallback(() => {
     onClose();

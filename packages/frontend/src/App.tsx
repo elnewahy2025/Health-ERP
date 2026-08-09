@@ -1,11 +1,13 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './stores/authStore';
 import { ThemeProvider } from './stores/themeStore';
 import { useTranslation } from 'react-i18next';
 import DashboardLayout from './layouts/DashboardLayout';
 import { ErrorBoundary, PageLoader } from './components/ui';
+import { Shield } from 'lucide-react';
 import { useDirection } from './hooks/useDirection';
+import { routePermissions } from './router';
 
 // Lazy-loaded page components
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -88,16 +90,43 @@ const PharmacyAdvancedPage = lazy(() => import('./pages/PharmacyAdvancedPage'));
 const InsuranceClaimsLifecyclePage = lazy(() => import('./pages/InsuranceClaimsLifecyclePage'));
 const AdvancedReportingPage = lazy(() => import('./pages/AdvancedReportingPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
+const UsersPage = lazy(() => import('./pages/UsersPage'));
+const RolesPage = lazy(() => import('./pages/RolesPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const DeveloperPortalPage = lazy(() => import('./pages/DeveloperPortalPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
+function PermissionDenied() {
+  return (
+    <div className="min-h-[60vh] flex flex-col items-center justify-center text-center p-8">
+      <Shield className="w-12 h-12 text-gray-300 mb-4" />
+      <h2 className="text-xl font-semibold text-gray-800 mb-2">You don't have access to this page</h2>
+      <p className="text-gray-500 text-sm mb-6">Your account doesn't include permission to view this module. Contact your administrator if you believe this is a mistake.</p>
+      <Link to="/" className="text-primary-600 hover:text-primary-700 text-sm font-medium">Back to dashboard</Link>
+    </div>
+  );
+}
+
+function resolveRoutePermission(pathname: string): string | undefined {
+  if (routePermissions[pathname]) return routePermissions[pathname];
+  const segments = pathname.split('/').filter(Boolean);
+  if (segments.length > 1) {
+    return routePermissions[`/${segments[0]}`];
+  }
+  return undefined;
+}
+
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, can } = useAuth();
+  const location = useLocation();
   if (isLoading) {
     return <PageLoader />;
   }
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  const required = resolveRoutePermission(location.pathname);
+  if (required && !can(required)) {
+    return <PermissionDenied />;
+  }
   return <>{children}</>;
 }
 
@@ -201,6 +230,8 @@ function AppContent() {
             <Route path="advanced-reporting" element={<AdvancedReportingPage />} />
             <Route path="developer-portal" element={<DeveloperPortalPage />} />
             <Route path="admin" element={<AdminPage />} />
+            <Route path="admin/users" element={<UsersPage />} />
+            <Route path="admin/roles" element={<RolesPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
           

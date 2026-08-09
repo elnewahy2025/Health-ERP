@@ -5,10 +5,11 @@ import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import type { TenantDomainRow } from "../types.js";
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 
 export async function registerWhiteLabelModule(app: FastifyInstance) {
   // ── Tenant Branding ──
-  app.get('/api/v1/white-label/branding', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/white-label/branding', { preHandler: [authenticate, authorize('white_label.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     let brand = await db('tenant_branding').where({ tenant_id: tenantId }).first();
     if (!brand) {
@@ -30,7 +31,7 @@ export async function registerWhiteLabelModule(app: FastifyInstance) {
     });
   });
 
-  app.put('/api/v1/white-label/branding', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/white-label/branding', { preHandler: [authenticate, authorize('white_label.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const body = request.body as Record<string, unknown>;
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.brandName !== undefined) update.brand_name = body.brandName;
@@ -55,7 +56,7 @@ export async function registerWhiteLabelModule(app: FastifyInstance) {
   });
 
   // ── Custom Domains ──
-  app.get('/api/v1/white-label/domains', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/white-label/domains', { preHandler: [authenticate, authorize('white_label.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const domains = await db('tenant_domains').where({ tenant_id: tenantId }).orderBy('is_primary', 'desc');
     return sendSuccess(reply, domains.map((d: Record<string, unknown>) => ({
@@ -65,7 +66,7 @@ export async function registerWhiteLabelModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/white-label/domains', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/white-label/domains', { preHandler: [authenticate, authorize('white_label.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const body = request.body as Record<string, unknown>;
     const token = crypto.randomBytes(24).toString("base64url");
     const [d] = await db('tenant_domains').insert({
@@ -75,19 +76,19 @@ export async function registerWhiteLabelModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: d.id, domain: d.domain, verificationToken: d.verification_token }, 'Domain added. Verify by adding the TXT record.', 201);
   });
 
-  app.post('/api/v1/white-label/domains/:id/verify', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/white-label/domains/:id/verify', { preHandler: [authenticate, authorize('white_label.manage')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     await db('tenant_domains').where({ id }).update({ is_verified: true, verified_at: new Date(), ssl_status: 'active', updated_at: new Date() });
     return sendSuccess(reply, null, 'Domain verified');
   });
 
-  app.delete('/api/v1/white-label/domains/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.delete('/api/v1/white-label/domains/:id', { preHandler: [authenticate, authorize('white_label.manage')] }, async (request, reply) => {
     await db('tenant_domains').where({ id: (request.params as { id: string }).id }).del();
     return sendSuccess(reply, null, 'Domain removed');
   });
 
   // ── Tenant Settings (branding-aware) ──
-  app.get('/api/v1/white-label/settings', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/white-label/settings', { preHandler: [authenticate, authorize('white_label.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const tenant = await db('tenants').where({ id: tenantId }).select('name', 'slug', 'domain', 'locale', 'timezone', 'settings').first();
     const brand = await db('tenant_branding').where({ tenant_id: tenantId }).first();

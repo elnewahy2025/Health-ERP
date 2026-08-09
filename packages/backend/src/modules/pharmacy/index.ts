@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
 
 interface PharmacyInventoryRow {
@@ -40,7 +41,7 @@ interface PharmacyPrescriptionItemRow {
 
 export async function registerPharmacyModule(app: FastifyInstance) {
   // Inventory
-  app.get('/api/v1/pharmacy/inventory', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/pharmacy/inventory', { preHandler: [authenticate, authorize('pharmacy.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { search, status } = request.query as { search?: string; status?: string };
     let q = db('pharmacy_inventory').where({ tenant_id: tenantId });
@@ -50,7 +51,7 @@ export async function registerPharmacyModule(app: FastifyInstance) {
     return sendSuccess(reply, items.map(mapDrug));
   });
 
-  app.post('/api/v1/pharmacy/inventory', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/pharmacy/inventory', { preHandler: [authenticate, authorize('pharmacy.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -68,7 +69,7 @@ export async function registerPharmacyModule(app: FastifyInstance) {
     return sendSuccess(reply, mapDrug(item), 'Drug added', 201);
   });
 
-  app.put('/api/v1/pharmacy/inventory/:id/stock', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/pharmacy/inventory/:id/stock', { preHandler: [authenticate, authorize('pharmacy.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -81,7 +82,7 @@ export async function registerPharmacyModule(app: FastifyInstance) {
   });
 
   // Prescriptions
-  app.get('/api/v1/pharmacy/prescriptions', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/pharmacy/prescriptions', { preHandler: [authenticate, authorize('pharmacy.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status, patientId } = request.query as { patientId?: string; status?: string };
     let q = db('pharmacy_prescriptions').where('pharmacy_prescriptions.tenant_id', tenantId).whereNull('pharmacy_prescriptions.deleted_at');
@@ -101,7 +102,7 @@ export async function registerPharmacyModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/pharmacy/prescriptions', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/pharmacy/prescriptions', { preHandler: [authenticate, authorize('pharmacy.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -124,7 +125,7 @@ export async function registerPharmacyModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: presc.id, prescriptionNumber: presc.prescription_number }, 'Prescription created', 201);
   });
 
-  app.post('/api/v1/pharmacy/prescriptions/:id/dispense', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/pharmacy/prescriptions/:id/dispense', { preHandler: [authenticate, authorize('pharmacy.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };

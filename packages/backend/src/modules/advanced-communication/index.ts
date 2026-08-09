@@ -13,6 +13,8 @@ import {
 } from '../../services/chat.js';
 import { getEnv } from '@healthcare/shared/config';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
+import type { ChatPrincipal } from '../../services/chat.js';
 import { logAudit } from '../../services/audit.js';
 
 function getErrorMessage(error: unknown): string {
@@ -92,7 +94,7 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
   });
 
   // Send WhatsApp message
-  app.post('/api/v1/whatsapp/send', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/whatsapp/send', { preHandler: [authenticate, authorize('whatsapp.create')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const body = z.object({
       to: z.string().min(1),
@@ -127,7 +129,7 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
   });
 
   // List WhatsApp messages
-  app.get('/api/v1/whatsapp/messages', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/whatsapp/messages', { preHandler: [authenticate, authorize('whatsapp.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const query = z.object({
       page: z.coerce.number().optional().default(1),
@@ -145,14 +147,14 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
   });
 
   // WhatsApp stats
-  app.get('/api/v1/whatsapp/stats', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/whatsapp/stats', { preHandler: [authenticate, authorize('whatsapp.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const stats = await getWhatsAppStats(tenantId);
     return sendSuccess(reply, stats);
   });
 
   // WhatsApp templates
-  app.get('/api/v1/whatsapp/templates', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/whatsapp/templates', { preHandler: [authenticate, authorize('whatsapp.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const templates = await db('whatsapp_templates')
       .where(function () { this.whereNull('tenant_id').orWhere('tenant_id', tenantId); })
@@ -161,7 +163,7 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
     return sendSuccess(reply, templates);
   });
 
-  app.post('/api/v1/whatsapp/templates', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/whatsapp/templates', { preHandler: [authenticate, authorize('whatsapp.view')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const body = z.object({
       name: z.string().min(1),
@@ -197,7 +199,7 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
   // ==================== VOICE CALL ROUTES ====================
 
   // Make a voice call
-  app.post('/api/v1/voice/call', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/voice/call', { preHandler: [authenticate, authorize('voice_calls.create')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const body = z.object({
       toNumber: z.string().min(1),
@@ -232,7 +234,7 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
   });
 
   // Create conference call
-  app.post('/api/v1/voice/conference', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/voice/conference', { preHandler: [authenticate, authorize('voice_calls.create')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const body = z.object({
       roomName: z.string().optional(),
@@ -267,7 +269,7 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
   });
 
   // List voice calls
-  app.get('/api/v1/voice/calls', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/voice/calls', { preHandler: [authenticate, authorize('voice_calls.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const query = z.object({
       page: z.coerce.number().optional().default(1),
@@ -287,7 +289,7 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
   });
 
   // Voice stats
-  app.get('/api/v1/voice/stats', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/voice/stats', { preHandler: [authenticate, authorize('voice_calls.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const stats = await getVoiceStats(tenantId);
     return sendSuccess(reply, stats);
@@ -336,8 +338,13 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
   // Register WebSocket handlers for chat (if available)
   registerChatWsHandlers(app);
 
+  function chatPrincipal(request: FastifyRequest): ChatPrincipal {
+    const { principal } = getCtx(request);
+    return { kind: 'user', id: principal.id, tenantId: principal.tenantId, role: principal.roles?.[0] || 'staff' };
+  }
+
   // Create conversation
-  app.post('/api/v1/chat/conversations', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/chat/conversations', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep), authorize('chat.create')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const body = z.object({
       title: z.string().min(1).max(200),
@@ -346,6 +353,24 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
       patientId: z.string().uuid().optional(),
       appointmentId: z.string().uuid().optional(),
     }).parse(request.body);
+
+    // All participants must belong to this tenant (no cross-tenant conversations).
+    const participants = await db('users')
+      .whereIn('id', body.participantIds)
+      .andWhere({ tenant_id: tenantId })
+      .select('id');
+    if (participants.length !== body.participantIds.length) {
+      return reply.status(403).send({ success: false, error: 'One or more participants are not in this organization' });
+    }
+    if (body.patientId) {
+      const patient = await db('patients').where({ id: body.patientId, tenant_id: tenantId }).first();
+      if (!patient) {
+        return reply.status(404).send({ success: false, error: 'Patient not found in this organization' });
+      }
+    }
+    if (!body.participantIds.includes(userId)) {
+      return reply.status(403).send({ success: false, error: 'Conversation creator must be a participant' });
+    }
 
     const conversation = await createConversation({
       tenantId,
@@ -372,32 +397,31 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
   });
 
   // List conversations for current user
-  app.get('/api/v1/chat/conversations', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
-    const { tenantId, userId } = getCtx(request);
+  app.get('/api/v1/chat/conversations', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep), authorize('chat.view')] }, async (request, reply) => {
     const query = z.object({
       page: z.coerce.number().optional().default(1),
       limit: z.coerce.number().optional().default(20),
     }).parse(request.query);
 
-    const result = await getConversations(tenantId, userId, query.page, query.limit);
+    const result = await getConversations(chatPrincipal(request), query.page, query.limit);
     return sendPaginated(reply, result.data, result.total, query.page, query.limit);
   });
 
   // Get conversation messages
-  app.get('/api/v1/chat/conversations/:id/messages', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/chat/conversations/:id/messages', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep), authorize('chat.view')] }, async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const query = z.object({
       page: z.coerce.number().optional().default(1),
       limit: z.coerce.number().optional().default(50),
     }).parse(request.query);
 
-    const result = await getConversationMessages(id, query.page, query.limit);
+    const result = await getConversationMessages(id, chatPrincipal(request), query.page, query.limit);
     return sendPaginated(reply, result.data, result.total, query.page, query.limit);
   });
 
   // Send message to conversation (REST fallback)
-  app.post('/api/v1/chat/conversations/:id/messages', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
-    const { tenantId, userId, roles } = getCtx(request);
+  app.post('/api/v1/chat/conversations/:id/messages', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep), authorize('chat.create')] }, async (request, reply) => {
+    const { tenantId, userId } = getCtx(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const body = z.object({
       content: z.string().min(1),
@@ -405,15 +429,16 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
       metadata: z.unknown().optional(),
     }).parse(request.body);
 
+    const chatPrincipalRef = chatPrincipal(request);
     const msg = await sendChatMessage({
       tenantId,
       conversationId: id,
       senderId: userId,
-      senderRole: (roles?.[0] || 'staff') as "doctor" | "patient" | "staff" | "admin",
+      senderRole: chatPrincipalRef.role as "doctor" | "patient" | "staff" | "admin",
       messageType: body.messageType,
       content: body.content,
       metadata: (body.metadata as Record<string, unknown>) || null,
-    });
+    }, chatPrincipalRef);
 
     await logAudit({
       tenantId,
@@ -430,32 +455,31 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
   });
 
   // Mark conversation as read
-  app.post('/api/v1/chat/conversations/:id/read', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
-    const { userId } = getCtx(request);
+  app.post('/api/v1/chat/conversations/:id/read', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep), authorize('chat.view')] }, async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
 
-    await markConversationRead(id, userId);
+    await markConversationRead(id, chatPrincipal(request));
     return sendSuccess(reply, { read: true });
   });
 
   // Get unread count
-  app.get('/api/v1/chat/unread', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
-    const { tenantId, userId } = getCtx(request);
-    const count = await getUnreadCount(tenantId, userId);
+  app.get('/api/v1/chat/unread', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep), authorize('chat.view')] }, async (request, reply) => {
+    const count = await getUnreadCount(chatPrincipal(request));
     return sendSuccess(reply, { unreadCount: count });
   });
 
   // Get conversation participants
-  app.get('/api/v1/chat/conversations/:id/participants', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/chat/conversations/:id/participants', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep), authorize('chat.view')] }, async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-    const participants = await getConversationParticipants(id);
+    const participants = await getConversationParticipants(id, chatPrincipal(request));
     return sendSuccess(reply, participants);
   });
 
   // Get online users in a conversation
-  app.get('/api/v1/chat/conversations/:id/online', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/chat/conversations/:id/online', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep), authorize('chat.view')] }, async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-    const online = getOnlineUsers(id);
+    const online = await getOnlineUsers(id, chatPrincipal(request));
     return sendSuccess(reply, { onlineUsers: online });
   });
 }
+

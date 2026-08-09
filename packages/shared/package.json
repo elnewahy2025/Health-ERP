@@ -30,6 +30,10 @@
       "types": "./dist/utils/formatters.d.ts",
       "import": "./dist/utils/formatters.js"
     },
+    "./authz": {
+      "types": "./dist/authz/index.d.ts",
+      "import": "./dist/authz/index.js"
+    },
     "./middleware": {
       "types": "./dist/middleware/index.d.ts",
       "import": "./dist/middleware/index.js"

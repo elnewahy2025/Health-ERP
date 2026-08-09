@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
 
 interface InsuranceCompanyRow {
@@ -16,13 +17,13 @@ interface InsuranceCompanyRow {
 }
 
 export async function registerInsuranceModule(app: FastifyInstance) {
-  app.get('/api/v1/insurance/companies', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/insurance/companies', { preHandler: [authenticate, authorize('insurance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const companies = await db('insurance_companies').where({ tenant_id: tenantId, is_active: true }).orderBy('name');
     return sendSuccess(reply, companies.map((c: InsuranceCompanyRow) => ({ id: c.id, name: c.name, code: c.code, contractType: c.contract_type, discountRate: Number(c.discount_rate), coveragePlans: c.coverage_plans })));
   });
 
-  app.post('/api/v1/insurance/companies', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/insurance/companies', { preHandler: [authenticate, authorize('insurance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -33,7 +34,7 @@ export async function registerInsuranceModule(app: FastifyInstance) {
     return sendSuccess(reply, co, 'Insurance company added', 201);
   });
 
-  app.get('/api/v1/insurance/claims', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/insurance/claims', { preHandler: [authenticate, authorize('insurance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status } = request.query as { status?: string };
     let q = db('insurance_claims').where('insurance_claims.tenant_id', tenantId).whereNull('insurance_claims.deleted_at');
@@ -42,7 +43,7 @@ export async function registerInsuranceModule(app: FastifyInstance) {
     return sendSuccess(reply, claims);
   });
 
-  app.post('/api/v1/insurance/claims', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/insurance/claims', { preHandler: [authenticate, authorize('insurance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -54,7 +55,7 @@ export async function registerInsuranceModule(app: FastifyInstance) {
     return sendSuccess(reply, claim, 'Claim submitted', 201);
   });
 
-  app.put('/api/v1/insurance/claims/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/insurance/claims/:id', { preHandler: [authenticate, authorize('insurance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };

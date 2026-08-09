@@ -5,6 +5,7 @@ import { db } from '../../core/database.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { sendSuccess, sendPaginated, sendError } from '../../utils/response.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
 
 let queueWsClients = new Set<{ send(data: string): void; on(event: string, handler: (...args: unknown[]) => void): void }>();
@@ -57,7 +58,7 @@ export async function registerPatientExperienceModule(app: FastifyInstance) {
     return sendSuccess(reply, { ...checkin, patientsAhead: Number(ahead?.count || 0) });
   });
 
-  app.get('/api/v1/kiosk/checkins', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/kiosk/checkins', { preHandler: [authenticate, authorize('queue.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const query = z.object({ status: z.string().optional(), date: z.string().optional() }).parse(request.query);
     const today = query.date || new Date().toISOString().split('T')[0];
@@ -71,7 +72,7 @@ export async function registerPatientExperienceModule(app: FastifyInstance) {
     return sendSuccess(reply, data);
   });
 
-  app.put('/api/v1/kiosk/checkins/:id/status', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/kiosk/checkins/:id/status', { preHandler: [authenticate, authorize('queue.edit')] }, async (request, reply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const body = z.object({ status: z.enum(['checked_in', 'waiting', 'in_progress', 'completed', 'no_show', 'called']) }).parse(request.body);
     const updates: Record<string, unknown> = { status: body.status };
@@ -106,12 +107,12 @@ export async function registerPatientExperienceModule(app: FastifyInstance) {
 
   // ==================== SURVEYS ====================
 
-  app.get('/api/v1/surveys/active', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/surveys/active', { preHandler: [authenticate, authorize('crm.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     return sendSuccess(reply, await db('surveys').where({ tenant_id: tenantId, is_active: true }).orderBy('name'));
   });
 
-  app.post('/api/v1/surveys', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/surveys', { preHandler: [authenticate, authorize('crm.create')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const body = z.object({
       name: z.string().min(1), type: z.string().optional().default('satisfaction'),
@@ -149,7 +150,7 @@ export async function registerPatientExperienceModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: resp.id, score: resp.overall_score }, 'Survey submitted', 201);
   });
 
-  app.get('/api/v1/surveys/responses', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/surveys/responses', { preHandler: [authenticate, authorize('crm.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const query = z.object({ page: z.coerce.number().optional().default(1), limit: z.coerce.number().optional().default(20), surveyId: z.string().optional() }).parse(request.query);
     let qb = db('survey_responses').join('surveys', 'survey_responses.survey_id', 'surveys.id').leftJoin('patients', 'survey_responses.patient_id', 'patients.id').where('survey_responses.tenant_id', tenantId);
@@ -161,7 +162,7 @@ export async function registerPatientExperienceModule(app: FastifyInstance) {
     return sendPaginated(reply, data, Number(total?.count || 0), query.page, query.limit);
   });
 
-  app.get('/api/v1/surveys/stats', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/surveys/stats', { preHandler: [authenticate, authorize('crm.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const totalResponses = await db('survey_responses').where({ tenant_id: tenantId }).count('id as count').first();
     const avgScore = await db('survey_responses').where({ tenant_id: tenantId }).avg('overall_score as avg').first();

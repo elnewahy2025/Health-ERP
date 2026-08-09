@@ -5,11 +5,12 @@ import { getCtx } from '../../utils/route-helper.js';
 import { sendSuccess, sendPaginated } from '../../utils/response.js';
 import { sendNotification } from '../../services/notification.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 
 export async function registerCommunicationsModule(app: FastifyInstance) {
 
   // List notification templates
-  app.get('/api/v1/notification-templates', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/notification-templates', { preHandler: [authenticate, authorize('communications.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const templates = await db('notification_templates')
       .where(function () { this.whereNull('tenant_id').orWhere('tenant_id', tenantId); })
@@ -18,7 +19,7 @@ export async function registerCommunicationsModule(app: FastifyInstance) {
   });
 
   // Update a notification template (tenant-specific override)
-  app.put('/api/v1/notification-templates/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/notification-templates/:id', { preHandler: [authenticate, authorize('communications.edit')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const { subject, body, isActive } = z.object({
@@ -38,7 +39,7 @@ export async function registerCommunicationsModule(app: FastifyInstance) {
   });
 
   // Create a custom template (tenant-specific)
-  app.post('/api/v1/notification-templates', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/notification-templates', { preHandler: [authenticate, authorize('communications.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const body = z.object({
       key: z.string().min(2).max(100), channel: z.enum(['email', 'sms', 'both']),
@@ -55,7 +56,7 @@ export async function registerCommunicationsModule(app: FastifyInstance) {
   });
 
   // Send test notification
-  app.post('/api/v1/notification-templates/:id/test', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/notification-templates/:id/test', { preHandler: [authenticate, authorize('communications.manage')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const { recipient } = z.object({ recipient: z.string() }).parse(request.body);
@@ -74,7 +75,7 @@ export async function registerCommunicationsModule(app: FastifyInstance) {
   });
 
   // List notification logs
-  app.get('/api/v1/notification-logs', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/notification-logs', { preHandler: [authenticate, authorize('notifications.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const query = z.object({ page: z.coerce.number().optional().default(1), limit: z.coerce.number().optional().default(20) }).parse(request.query);
 

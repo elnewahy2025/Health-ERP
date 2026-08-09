@@ -22,6 +22,7 @@ import { registerCommonModule } from './modules/common/index.js';
 import { errorHandler } from './core/error-handler.js';
 import { db } from './core/database.js';
 import { redis } from './core/redis.js';
+import { loadUserPrincipal, uniquePermissionKeys } from './services/authorization.js';
 
 import { registerLaboratoryModule } from './modules/laboratory/index.js';
 import { registerRadiologyModule } from './modules/radiology/index.js';
@@ -76,6 +77,9 @@ import { registerPdfModule } from './modules/pdf-generator/index.js';
 import { registerDashboardWidgetsModule } from './modules/dashboard-widgets/index.js';
 import { registerPatientSchedulingModule } from './modules/patient-scheduling/index.js';
 import { registerRbacModule } from './modules/rbac/index.js';
+import { registerUsersModule } from './modules/users/index.js';
+import { registerDepartmentsModule } from './modules/departments/index.js';
+import { registerEmergencyAccessModule } from './modules/emergency-access/index.js';
 import { registerMedicalContentModule } from './modules/medical-content/index.js';
 import { registerMultiBranchModule } from './modules/multi-branch/index.js';
 import { startReminderService } from './services/reminder.service.js';
@@ -134,16 +138,23 @@ async function buildApp() {
       return;
     }
     const req = request as any;
-    const { tenantId, userId, roles, permissions, locale, branchId } = request.user as any;
+    const { tenantId, userId } = request.user as any;
+    const principal = await loadUserPrincipal(userId, tenantId);
+    if (!principal || principal.status !== 'active') {
+      reply.status(401).send({ success: false, error: "Account is not active" });
+      return;
+    }
     req.tenantId = tenantId;
     req.ctx = {
       tenantId,
       userId,
-      roles: roles || [],
-      permissions: permissions || [],
-      locale: locale || 'en',
-      branchId,
+      roles: principal.roles,
+      permissions: uniquePermissionKeys(principal.grants),
+      branches: principal.branches,
+      locale: principal.locale,
+      branchId: principal.branches[0],
       requestId: request.id,
+      principal,
     };
   });
 
@@ -239,6 +250,9 @@ await registerPatientExperienceModule(app);
 await registerDashboardWidgetsModule(app);
   await registerPatientSchedulingModule(app);
   await registerRbacModule(app);
+  await registerUsersModule(app);
+  await registerDepartmentsModule(app);
+  await registerEmergencyAccessModule(app);
   await registerMedicalContentModule(app);
   await registerMultiBranchModule(app);
   return app;

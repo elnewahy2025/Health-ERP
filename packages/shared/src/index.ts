@@ -28,6 +28,20 @@ export type {
 } from './types/multi-tenancy.js';
 
 export {
+  PERMISSION_ACTIONS,
+  PERMISSION_SCOPES,
+  PERMISSION_CATALOG,
+  PERMISSION_MODULES,
+  SEED_ROLES,
+  permissionKey,
+  allPermissionKeys,
+  expandGrantKey,
+  expandRoleGrants,
+  normalizeLegacyPermission,
+} from './authz/index.js';
+export type { PermissionAction, PermissionScope, Grant, RoleTemplate } from './authz/index.js';
+
+export {
   APP_NAME, APP_VERSION, PAGINATION, PASSWORD, JWT,
   DATE_FORMATS, CURRENCIES, BLOOD_TYPES, GENDERS, APPOINTMENT_TYPES,
 } from './config/constants.js';

@@ -15,6 +15,12 @@ import * as repo from './appointment.repository.js';
 import { mapAppointment, calculateEndTime, generateTelemedicineLink } from './appointment.mapper.js';
 import { sendAppointmentConfirmation } from '../../services/reminder.service.js';
 import { logAudit } from '../../services/audit.js';
+import {
+  hasPermission,
+  assignedPatientIds,
+  type Principal,
+} from '../../services/authorization.js';
+import { ForbiddenError } from '@healthcare/shared/errors';
 import type { AppointmentRow } from './types.js';
 
 // ── #5: Valid status transitions ──
@@ -36,6 +42,37 @@ function isWithinWorkingHours(time: string): boolean {
 }
 
 // ── #8: Cancellation policy — >24h free, <=24h requires reason ──
+/** Effective scope for appointment list/summary operations. */
+async function resolveAppointmentListScope(principal: Principal): Promise<{ branchIds?: string[]; patientIds?: string[] }> {
+  if (hasPermission(principal, 'appointments.view', 'system') || hasPermission(principal, 'appointments.view', 'tenant')) {
+    return {};
+  }
+  if (hasPermission(principal, 'appointments.view', 'branch') || hasPermission(principal, 'appointments.view', 'branches')) {
+    return { branchIds: principal.branches };
+  }
+  if (hasPermission(principal, 'appointments.view', 'assigned_patients') || hasPermission(principal, 'appointments.view', 'department')) {
+    return { patientIds: await assignedPatientIds(principal) };
+  }
+  return { patientIds: [] };
+}
+
+async function assertAppointmentAccess(
+  principal: Principal,
+  appointment: { tenant_id: string; branch_id?: string | null; patient_id?: string | null; doctor_id?: string | null },
+): Promise<void> {
+  if (principal.tenantId !== appointment.tenant_id) throw new ForbiddenError('You do not have access to this appointment');
+  if (hasPermission(principal, 'appointments.view', 'tenant') || hasPermission(principal, 'appointments.view', 'system')) return;
+  if ((hasPermission(principal, 'appointments.view', 'branch') || hasPermission(principal, 'appointments.view', 'branches')) && appointment.branch_id) {
+    if (principal.branches.includes(String(appointment.branch_id))) return;
+  }
+  if (hasPermission(principal, 'appointments.view', 'assigned_patients')) {
+    if (appointment.doctor_id === principal.id) return;
+    const ids = await assignedPatientIds(principal);
+    if (appointment.patient_id && ids.includes(String(appointment.patient_id))) return;
+  }
+  throw new ForbiddenError('You do not have access to this appointment');
+}
+
 function getCancellationPolicy(appointmentDate: string, startTime: string): { allowed: boolean; requiresReason: boolean } {
   const appointmentStart = new Date(`${appointmentDate}T${startTime}:00`);
   const now = new Date();
@@ -54,14 +91,17 @@ export async function listAppointments(request: FastifyRequest, reply: FastifyRe
   const query = paginationSchema.parse(request.query);
   const tenantId = getTenantId(request);
   const { date, status, doctorId, patientId, branchId } = request.query as Record<string, string | undefined>;
+  const { userId, principal } = getCtx(request);
+  const scope = await resolveAppointmentListScope(principal);
 
   const { appointments, total } = await repo.findAppointments(tenantId, {
     date, status, doctorId, patientId, branchId,
+    branchIds: scope.branchIds,
+    patientIds: scope.patientIds,
     sort: query.sort, order: query.order,
     limit: query.limit, offset: (query.page - 1) * query.limit,
   });
 
-  const { userId } = getCtx(request);
   try {
     await logAudit({ tenantId, userId, action: 'appointment.list', entityType: 'appointment' });
   } catch { /* audit failure should not block */ }
@@ -72,10 +112,11 @@ export async function listAppointments(request: FastifyRequest, reply: FastifyRe
 export async function getAppointment(request: FastifyRequest, reply: FastifyReply) {
   const { appointmentId } = request.params as { appointmentId: string };
   const tenantId = getTenantId(request);
-  const { userId } = getCtx(request);
+  const { userId, principal } = getCtx(request);
 
   const appointment = await repo.findAppointmentById(appointmentId, tenantId);
   if (!appointment) throw new AppointmentNotFoundError(appointmentId);
+  await assertAppointmentAccess(principal, appointment);
 
   try {
     await logAudit({ tenantId, userId, action: 'appointment.view', entityType: 'appointment', entityId: appointmentId });
@@ -98,6 +139,11 @@ export async function createAppointment(request: FastifyRequest, reply: FastifyR
   if (!doctor) throw new ValidationError('Doctor not found in this clinic');
   const branch = await repo.findBranchForTenant(body.branchId, tenantId);
   if (!branch) throw new ValidationError('Branch not found in this clinic');
+
+  const { principal } = getCtx(request);
+  if (hasPermission(principal, 'appointments.create', 'branch') && !principal.branches.includes(body.branchId)) {
+    throw new ForbiddenError('You can only create appointments in your assigned branches');
+  }
 
   // ── #7: Working hours validation ──
   if (!isWithinWorkingHours(body.startTime)) {
@@ -180,6 +226,7 @@ export async function updateAppointment(request: FastifyRequest, reply: FastifyR
 
   const existing = await repo.findAppointmentById(appointmentId, tenantId);
   if (!existing) throw new AppointmentNotFoundError(appointmentId);
+  await assertAppointmentAccess(getCtx(request).principal, existing);
 
   // ── #5: Status transition validation ──
   if (existing.status === 'completed' || existing.status === 'cancelled') {
@@ -262,6 +309,7 @@ export async function checkInAppointment(request: FastifyRequest, reply: Fastify
 
   const existing = await repo.findAppointmentById(appointmentId, tenantId);
   if (!existing) throw new AppointmentNotFoundError(appointmentId);
+  await assertAppointmentAccess(getCtx(request).principal, existing);
 
   // ── #5: Status transition validation ──
   if (!VALID_TRANSITIONS[existing.status]?.includes('checked_in')) {
@@ -286,6 +334,7 @@ export async function completeAppointment(request: FastifyRequest, reply: Fastif
 
   const existing = await repo.findAppointmentById(appointmentId, tenantId);
   if (!existing) throw new AppointmentNotFoundError(appointmentId);
+  await assertAppointmentAccess(getCtx(request).principal, existing);
 
   // ── #5: Status transition validation ──
   if (!VALID_TRANSITIONS[existing.status]?.includes('completed')) {
@@ -311,6 +360,7 @@ export async function cancelAppointment(request: FastifyRequest, reply: FastifyR
 
   const existing = await repo.findAppointmentById(appointmentId, tenantId);
   if (!existing) throw new AppointmentNotFoundError(appointmentId);
+  await assertAppointmentAccess(getCtx(request).principal, existing);
 
   // ── #5: Status transition validation ──
   if (!VALID_TRANSITIONS[existing.status]?.includes('cancelled')) {
@@ -346,10 +396,11 @@ export async function cancelAppointment(request: FastifyRequest, reply: FastifyR
 
 export async function todaySummary(request: FastifyRequest, reply: FastifyReply) {
   const tenantId = getTenantId(request);
-  const { userId } = getCtx(request);
+  const { userId, principal } = getCtx(request);
   const today = new Date().toISOString().split('T')[0];
+  const scope = await resolveAppointmentListScope(principal);
 
-  const appointments = await repo.findTodayAppointments(tenantId, today);
+  const appointments = await repo.findTodayAppointments(tenantId, today, scope.branchIds);
 
   try {
     await logAudit({ tenantId, userId, action: 'appointment.today_summary', entityType: 'appointment' });
@@ -475,7 +526,7 @@ export async function bulkCreateAppointments(request: FastifyRequest, reply: Fas
 
 export async function bulkCancelAppointments(request: FastifyRequest, reply: FastifyReply) {
   const tenantId = getTenantId(request);
-  const { userId } = getCtx(request);
+  const { userId, principal } = getCtx(request);
   const { appointmentIds, reason } = request.body as {
     appointmentIds: string[];
     reason?: string;
@@ -485,7 +536,8 @@ export async function bulkCancelAppointments(request: FastifyRequest, reply: Fas
     throw new ValidationError('appointmentIds array is required');
   }
 
-  const cancelled = await repo.bulkCancelAppointments(tenantId, appointmentIds, reason || 'Bulk cancellation');
+  const scope = await resolveAppointmentListScope(principal);
+  const cancelled = await repo.bulkCancelAppointments(tenantId, appointmentIds, reason || 'Bulk cancellation', scope);
 
   try {
     await logAudit({

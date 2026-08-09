@@ -5,9 +5,10 @@ import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import type { PaginationQuery, TelemedicineSessionRow } from "../types.js";
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 
 export async function registerTelemedicineModule(app: FastifyInstance) {
-  app.get('/api/v1/telemedicine/sessions', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/telemedicine/sessions', { preHandler: [authenticate, authorize('telemedicine.view')] }, async (request, reply) => {
     const ctx = getCtx(request); const tenantId = getTenantId(request);
     const { status } = request.query as PaginationQuery & { status?: string };
     let q = db('telemedicine_sessions').where('telemedicine_sessions.tenant_id', tenantId).whereNull('telemedicine_sessions.deleted_at');
@@ -28,7 +29,7 @@ export async function registerTelemedicineModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/telemedicine/sessions', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/telemedicine/sessions', { preHandler: [authenticate, authorize('telemedicine.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
     const sid = crypto.randomUUID();
     const roomName = 'room-' + sid.slice(0, 8);
@@ -43,7 +44,7 @@ export async function registerTelemedicineModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: session.id, sessionId: session.session_id, roomName: session.room_name, meetingLink: session.meeting_link }, 'Session created', 201);
   });
 
-  app.put('/api/v1/telemedicine/sessions/:id/status', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/telemedicine/sessions/:id/status', { preHandler: [authenticate, authorize('telemedicine.edit')] }, async (request, reply) => {
     const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const update: Record<string, unknown> = { status: body.status, updated_at: new Date() };
     if (body.status === 'active') update.started_at = new Date();

@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
 
 interface AiProviderRow {
@@ -66,7 +67,7 @@ interface AiCostLogRow {
 
 export async function registerAiHubModule(app: FastifyInstance) {
   // ── AI Providers ──
-  app.get('/api/v1/ai/providers', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/ai/providers', { preHandler: [authenticate, authorize('ai_hub.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const providers = await db('ai_providers').where({ tenant_id: tenantId }).orderBy('name');
     return sendSuccess(reply, providers.map((p: AiProviderRow) => ({
@@ -76,7 +77,7 @@ export async function registerAiHubModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/ai/providers', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/ai/providers', { preHandler: [authenticate, authorize('ai_hub.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -97,7 +98,7 @@ export async function registerAiHubModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: p.id, name: p.name }, 'AI provider added', 201);
   });
 
-  app.put('/api/v1/ai/providers/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/ai/providers/:id', { preHandler: [authenticate, authorize('ai_hub.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -121,7 +122,7 @@ export async function registerAiHubModule(app: FastifyInstance) {
   });
 
   // ── AI Models ──
-  app.get('/api/v1/ai/models', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/ai/models', { preHandler: [authenticate, authorize('ai_hub.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const models = await db('ai_models').where({ tenant_id: tenantId }).orderBy('model_name');
     return sendSuccess(reply, models.map((m: Record<string, unknown>) => ({
@@ -132,7 +133,7 @@ export async function registerAiHubModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/ai/models', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/ai/models', { preHandler: [authenticate, authorize('ai_hub.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -155,7 +156,7 @@ export async function registerAiHubModule(app: FastifyInstance) {
   });
 
   // ── AI Assistants ──
-  app.get('/api/v1/ai/assistants', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/ai/assistants', { preHandler: [authenticate, authorize('ai_hub.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { category } = request.query as { category?: string };
     let q = db('ai_assistants').where('ai_assistants.tenant_id', tenantId);
@@ -172,7 +173,7 @@ export async function registerAiHubModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/ai/assistants', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/ai/assistants', { preHandler: [authenticate, authorize('ai_hub.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -195,7 +196,7 @@ export async function registerAiHubModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: a.id, name: a.name, slug: a.slug }, 'Assistant created', 201);
   });
 
-  app.put('/api/v1/ai/assistants/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/ai/assistants/:id', { preHandler: [authenticate, authorize('ai_hub.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -221,7 +222,7 @@ export async function registerAiHubModule(app: FastifyInstance) {
   });
 
   // ── AI Request Log ──
-  app.get('/api/v1/ai/requests', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/ai/requests', { preHandler: [authenticate, authorize('ai_hub.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status, source, limit } = request.query as { limit?: string; source?: string; status?: string };
     let q = db('ai_requests').where('ai_requests.tenant_id', tenantId);
@@ -239,7 +240,7 @@ export async function registerAiHubModule(app: FastifyInstance) {
   });
 
   // ── AI Cost Tracking ──
-  app.get('/api/v1/ai/costs', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/ai/costs', { preHandler: [authenticate, authorize('ai_hub.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { days } = request.query as { days?: string };
     const since = new Date(Date.now() - (Number(days) || 30) * 86400000).toISOString().split('T')[0];
@@ -260,7 +261,7 @@ export async function registerAiHubModule(app: FastifyInstance) {
   });
 
   // ── Chat Completion (proxy stub) ──
-  app.post('/api/v1/ai/chat', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/ai/chat', { preHandler: [authenticate, authorize('ai_hub.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;

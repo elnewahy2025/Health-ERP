@@ -4,6 +4,7 @@ import { db } from '../../core/database.js';
 import { getCtx } from '../../utils/route-helper.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 
 const DEFAULT_WIDGETS: Record<string, string[]> = {
   admin: ['revenue', 'patients_total', 'appointments_today', 'staff_attendance', 'queue_status', 'recent_activity', 'ai_stats', 'system_health'],
@@ -14,7 +15,7 @@ const DEFAULT_WIDGETS: Record<string, string[]> = {
 
 export async function registerDashboardWidgetsModule(app: FastifyInstance) {
 
-  app.get('/api/v1/dashboard/widgets', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/dashboard/widgets', { preHandler: [authenticate, authorize('analytics_dashboard.view')] }, async (request, reply) => {
     const { tenantId, userId, roles } = getCtx(request);
     const primaryRole = roles?.[0] || 'admin';
     const saved = await db('dashboard_widgets').where({ tenant_id: tenantId, user_id: userId }).first();
@@ -25,7 +26,7 @@ export async function registerDashboardWidgetsModule(app: FastifyInstance) {
     return sendSuccess(reply, { layout: defaultLayout, preferences: {}, role: primaryRole });
   });
 
-  app.post('/api/v1/dashboard/widgets', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/dashboard/widgets', { preHandler: [authenticate, authorize('analytics_dashboard.view')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const body = z.object({
       layout: z.array(z.object({ id: z.string(), order: z.number(), visible: z.boolean(), size: z.enum(['small', 'medium', 'large']).optional() })),
@@ -40,7 +41,7 @@ export async function registerDashboardWidgetsModule(app: FastifyInstance) {
     return sendSuccess(reply, { saved: true }, 'Dashboard layout saved');
   });
 
-  app.get('/api/v1/dashboard/widgets/:widgetId/data', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/dashboard/widgets/:widgetId/data', { preHandler: [authenticate, authorize('analytics_dashboard.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const { widgetId } = z.object({ widgetId: z.string() }).parse(request.params);
     let data: Record<string, unknown> | null = null;

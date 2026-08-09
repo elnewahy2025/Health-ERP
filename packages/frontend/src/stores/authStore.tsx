@@ -33,6 +33,9 @@ export interface Tenant {
   };
 }
 
+export type PermissionScope =
+  | 'self' | 'assigned_patients' | 'department' | 'branch' | 'branches' | 'tenant' | 'system';
+
 interface AuthContextType {
   user: User | null;
   tenant: Tenant | null;
@@ -43,6 +46,9 @@ interface AuthContextType {
   logout: () => void;
   setLocale: (locale: 'ar' | 'en') => void;
   refreshUser: () => Promise<void>;
+  /** Centralized permission check. Server remains authoritative — this is the UX mirror only. */
+  can: (permission: string) => boolean;
+  canAny: (permissions: string[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -123,8 +129,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser((prev) => prev ? { ...prev, locale } : null);
   }, []);
 
+  const can = useCallback((permission: string) => canUse(user?.permissions || [], permission), [user]);
+  const canAny = useCallback((permissions: string[]) => canAnyUse(user?.permissions || [], permissions), [user]);
+
   return (
-    <AuthContext.Provider value={{ user, tenant, isAuthenticated, isLoading, login, register, logout, setLocale, refreshUser }}>
+    <AuthContext.Provider value={{ user, tenant, isAuthenticated, isLoading, login, register, logout, setLocale, refreshUser, can, canAny }}>
       {children}
     </AuthContext.Provider>
   );
@@ -134,4 +143,21 @@ export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
+}
+
+/**
+ * Pure helper shared by the store and components. A '*' grant (super_admin)
+ * passes everything; otherwise the exact `module.action` key must be present.
+ * The backend is the source of truth — this only mirrors effective permissions
+ * returned by /auth/me (which are derived server-side from role_permissions +
+ * user_permissions).
+ */
+export function canUse(permissions: string[], permission: string): boolean {
+  if (!permissions || permissions.length === 0) return false;
+  if (permissions.includes('*')) return true;
+  return permissions.includes(permission);
+}
+
+export function canAnyUse(permissions: string[], required: string[]): boolean {
+  return required.some((p) => canUse(permissions, p));
 }

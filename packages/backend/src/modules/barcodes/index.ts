@@ -4,6 +4,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
 
 interface BarcodeTemplateRow {
@@ -26,7 +27,7 @@ interface BarcodeTemplateRow {
 
 export async function registerBarcodesModule(app: FastifyInstance) {
   // ── Barcode Templates CRUD ──
-  app.get('/api/v1/barcodes/templates', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/barcodes/templates', { preHandler: [authenticate, authorize('barcodes.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { category, isActive } = request.query as { category?: string; isActive?: string };
     let q = db('barcode_templates').where({ tenant_id: tenantId });
@@ -43,7 +44,7 @@ export async function registerBarcodesModule(app: FastifyInstance) {
     })));
   });
 
-  app.get('/api/v1/barcodes/templates/:code', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/barcodes/templates/:code', { preHandler: [authenticate, authorize('barcodes.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { code } = request.params as { code: string };
     const t = await db('barcode_templates').where({ tenant_id: tenantId, code }).first();
@@ -57,7 +58,7 @@ export async function registerBarcodesModule(app: FastifyInstance) {
     });
   });
 
-  app.post('/api/v1/barcodes/templates', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/barcodes/templates', { preHandler: [authenticate, authorize('barcodes.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -90,7 +91,7 @@ export async function registerBarcodesModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: template.id, code: template.code }, 'Template created', 201);
   });
 
-  app.put('/api/v1/barcodes/templates/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/barcodes/templates/:id', { preHandler: [authenticate, authorize('barcodes.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -122,7 +123,7 @@ export async function registerBarcodesModule(app: FastifyInstance) {
     return sendSuccess(reply, null, 'Template updated');
   });
 
-  app.delete('/api/v1/barcodes/templates/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.delete('/api/v1/barcodes/templates/:id', { preHandler: [authenticate, authorize('barcodes.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -142,7 +143,7 @@ export async function registerBarcodesModule(app: FastifyInstance) {
   });
 
   // ── Generate Barcode Label ──
-  app.post('/api/v1/barcodes/generate', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/barcodes/generate', { preHandler: [authenticate, authorize('barcodes.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -181,7 +182,7 @@ export async function registerBarcodesModule(app: FastifyInstance) {
   });
 
   // ── List generated barcodes ──
-  app.get('/api/v1/barcodes/labels', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/barcodes/labels', { preHandler: [authenticate, authorize('barcodes.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { referenceType, referenceId, status, limit } = request.query as { limit?: string; referenceId?: string; referenceType?: string; status?: string };
     let q = db('barcode_labels').where('barcode_labels.tenant_id', tenantId);
@@ -203,7 +204,7 @@ export async function registerBarcodesModule(app: FastifyInstance) {
   });
 
   // ── Log a scan ──
-  app.post('/api/v1/barcodes/scan', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/barcodes/scan', { preHandler: [authenticate, authorize('barcodes.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -245,7 +246,7 @@ export async function registerBarcodesModule(app: FastifyInstance) {
   });
 
   // ── Scan logs ──
-  app.get('/api/v1/barcodes/scan-logs', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/barcodes/scan-logs', { preHandler: [authenticate, authorize('barcodes.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { action, status, limit } = request.query as { action?: string; limit?: string; status?: string };
     let q = db('barcode_scan_logs').where('barcode_scan_logs.tenant_id', tenantId);
@@ -267,7 +268,7 @@ export async function registerBarcodesModule(app: FastifyInstance) {
   });
 
   // ── Print count increment ──
-  app.post('/api/v1/barcodes/labels/:id/print', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/barcodes/labels/:id/print', { preHandler: [authenticate, authorize('barcodes.export')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };

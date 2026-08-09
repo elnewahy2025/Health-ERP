@@ -6,6 +6,7 @@ import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { uploadFile, getFile, deleteFile, isImage, isPdf } from '../../services/storage.js';
 import { logAudit } from '../../services/audit.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 
 const CATEGORIES = ['lab_report', 'radiology_report', 'prescription', 'consent', 'id_scan', 'insurance', 'medical_record', 'discharge_summary', 'referral', 'other'];
 
@@ -48,7 +49,7 @@ interface DmsDocumentVersionRow {
 export async function registerDmsModule(app: FastifyInstance) {
 
   // ==================== FILE UPLOAD (multipart) ====================
-  app.post('/api/v1/dms/upload', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/dms/upload', { preHandler: [authenticate, authorize('documents.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
 
@@ -96,7 +97,7 @@ export async function registerDmsModule(app: FastifyInstance) {
   });
 
   // ==================== LIST DOCUMENTS ====================
-  app.get('/api/v1/dms/documents', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/dms/documents', { preHandler: [authenticate, authorize('documents.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const query = z.object({
       page: z.coerce.number().optional().default(1),
@@ -127,7 +128,7 @@ export async function registerDmsModule(app: FastifyInstance) {
   });
 
   // ==================== GET SINGLE DOCUMENT ====================
-  app.get('/api/v1/dms/documents/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/dms/documents/:id', { preHandler: [authenticate, authorize('documents.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const doc = await db('documents').where({ id, tenant_id: tenantId }).whereNull('deleted_at').first();
@@ -146,7 +147,7 @@ export async function registerDmsModule(app: FastifyInstance) {
   });
 
   // ==================== DOWNLOAD / VIEW FILE ====================
-  app.get('/api/v1/dms/files/:id/download', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/dms/files/:id/download', { preHandler: [authenticate, authorize('documents.download')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const doc = await db('documents').where({ id, tenant_id: tenantId }).whereNull('deleted_at').first();
@@ -162,7 +163,7 @@ export async function registerDmsModule(app: FastifyInstance) {
   });
 
   // ==================== DOWNLOAD AS ATTACHMENT ====================
-  app.get('/api/v1/dms/files/:id/attachment', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/dms/files/:id/attachment', { preHandler: [authenticate, authorize('documents.download')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const doc = await db('documents').where({ id, tenant_id: tenantId }).whereNull('deleted_at').first();
@@ -177,7 +178,7 @@ export async function registerDmsModule(app: FastifyInstance) {
   });
 
   // ==================== UPDATE DOCUMENT ====================
-  app.put('/api/v1/dms/documents/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/dms/documents/:id', { preHandler: [authenticate, authorize('documents.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
@@ -201,7 +202,7 @@ export async function registerDmsModule(app: FastifyInstance) {
   });
 
   // ==================== DELETE DOCUMENT ====================
-  app.delete('/api/v1/dms/documents/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.delete('/api/v1/dms/documents/:id', { preHandler: [authenticate, authorize('documents.edit')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const doc = await db('documents').where({ id, tenant_id: tenantId }).first();
@@ -220,12 +221,12 @@ export async function registerDmsModule(app: FastifyInstance) {
   });
 
   // ==================== LIST CATEGORIES ====================
-  app.get('/api/v1/dms/categories', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/dms/categories', { preHandler: [authenticate, authorize('documents.view')] }, async (request, reply) => {
     return sendSuccess(reply, CATEGORIES.map(c => ({ key: c, label: c.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) })));
   });
 
   // ==================== PATIENT DOCUMENTS ====================
-  app.get('/api/v1/patients/:patientId/documents', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/patients/:patientId/documents', { preHandler: [authenticate, authorize('documents.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { patientId } = z.object({ patientId: z.string().uuid() }).parse(request.params);
     const docs = await db('documents').where({ tenant_id: tenantId, patient_id: patientId }).whereNull('deleted_at').orderBy('created_at', 'desc');

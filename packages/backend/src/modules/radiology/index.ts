@@ -4,10 +4,11 @@ import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { PatientNotFoundError } from '@healthcare/shared/errors';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
 
 export async function registerRadiologyModule(app: FastifyInstance) {
-  app.get('/api/v1/radiology/orders', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/radiology/orders', { preHandler: [authenticate, authorize('radiology.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status, patientId } = request.query as { patientId?: string; status?: string };
     let q = db('radiology_orders').where('radiology_orders.tenant_id', tenantId).whereNull('radiology_orders.deleted_at');
@@ -19,7 +20,7 @@ export async function registerRadiologyModule(app: FastifyInstance) {
     return sendSuccess(reply, orders.map(mapOrder));
   });
 
-  app.post('/api/v1/radiology/orders', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/radiology/orders', { preHandler: [authenticate, authorize('radiology.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -39,7 +40,7 @@ export async function registerRadiologyModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: order.id, orderNumber: order.order_number }, 'Radiology order created', 201);
   });
 
-  app.put('/api/v1/radiology/orders/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/radiology/orders/:id', { preHandler: [authenticate, authorize('radiology.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };

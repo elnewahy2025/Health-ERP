@@ -3,10 +3,11 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 
 export async function registerDataWarehouseModule(app: FastifyInstance) {
   // Refresh all DW stats for today
-  app.post('/api/v1/dw/refresh', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/dw/refresh', { preHandler: [authenticate, authorize('data_warehouse.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const today = new Date().toISOString().split('T')[0];
     const start = new Date(); start.setHours(0, 0, 0, 0);
@@ -57,7 +58,7 @@ export async function registerDataWarehouseModule(app: FastifyInstance) {
   });
 
   // Get DW stats
-  app.get('/api/v1/dw/appointments', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/dw/appointments', { preHandler: [authenticate, authorize('data_warehouse.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { days } = request.query as { days?: string };
     const since = new Date(Date.now() - (Number(days) || 30) * 86400000).toISOString().split('T')[0];
     const stats = await db('dw_appointment_stats').where({ tenant_id: tenantId }).where('date', '>=', since).orderBy('date');
@@ -66,7 +67,7 @@ export async function registerDataWarehouseModule(app: FastifyInstance) {
     return sendSuccess(reply, { daily: stats, totals });
   });
 
-  app.get('/api/v1/dw/revenue', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/dw/revenue', { preHandler: [authenticate, authorize('data_warehouse.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { days } = request.query as { days?: string };
     const since = new Date(Date.now() - (Number(days) || 30) * 86400000).toISOString().split('T')[0];
     const stats = await db('dw_revenue_stats').where({ tenant_id: tenantId }).where('date', '>=', since).orderBy('date');
@@ -75,7 +76,7 @@ export async function registerDataWarehouseModule(app: FastifyInstance) {
     return sendSuccess(reply, { daily: stats, totals });
   });
 
-  app.get('/api/v1/dw/patients', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/dw/patients', { preHandler: [authenticate, authorize('data_warehouse.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { days } = request.query as { days?: string };
     const since = new Date(Date.now() - (Number(days) || 30) * 86400000).toISOString().split('T')[0];
     const stats = await db('dw_patient_stats').where({ tenant_id: tenantId }).where('date', '>=', since).orderBy('date');

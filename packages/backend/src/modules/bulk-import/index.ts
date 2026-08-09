@@ -3,6 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import type { ImportJobRow } from "../types.js";
 
 const IMPORT_MODULES: Record<string, { table: string; columns: string[] }> = {
@@ -33,7 +34,7 @@ export async function registerBulkImportModule(app: FastifyInstance) {
   });
 
   // ── Start import job ──
-  app.post('/api/v1/import/start', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/import/start', { preHandler: [authenticate, authorize('bulk_import.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
     const { module, rows, columnMapping } = body;
 
@@ -91,7 +92,7 @@ export async function registerBulkImportModule(app: FastifyInstance) {
   });
 
   // ── Import job history ──
-  app.get('/api/v1/import/jobs', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/import/jobs', { preHandler: [authenticate, authorize('bulk_import.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { status, module } = request.query as { module?: string; status?: string };
     let q = db('import_jobs').where('import_jobs.tenant_id', tenantId);
     if (status) q = q.andWhere('status', status);

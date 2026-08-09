@@ -7,6 +7,8 @@ export async function findAppointments(tenantId: string, filters: {
   doctorId?: string;
   patientId?: string;
   branchId?: string;
+  branchIds?: string[];
+  patientIds?: string[];
   sort?: string;
   order?: string;
   limit: number;
@@ -23,6 +25,10 @@ export async function findAppointments(tenantId: string, filters: {
   if (filters.doctorId) query = query.andWhere('appointments.doctor_id', filters.doctorId);
   if (filters.patientId) query = query.andWhere('appointments.patient_id', filters.patientId);
   if (filters.branchId) query = query.andWhere('appointments.branch_id', filters.branchId);
+  if (filters.branchIds && filters.branchIds.length > 0) query = query.whereIn('appointments.branch_id', filters.branchIds);
+  if (filters.branchIds && filters.branchIds.length === 0) query = query.where(db.raw('false'));
+  if (filters.patientIds && filters.patientIds.length > 0) query = query.whereIn('appointments.patient_id', filters.patientIds);
+  if (filters.patientIds && filters.patientIds.length === 0) query = query.where(db.raw('false'));
 
   const total = await query.clone().count('appointments.id as count').first();
   const appointments = await query
@@ -62,13 +68,18 @@ export async function findAppointmentById(appointmentId: string, tenantId: strin
     .first();
 }
 
-export async function findTodayAppointments(tenantId: string, today: string): Promise<AppointmentRow[]> {
-  return db('appointments')
+export async function findTodayAppointments(tenantId: string, today: string, branchIds?: string[]): Promise<AppointmentRow[]> {
+  const query = db('appointments')
     .join('patients', 'appointments.patient_id', 'patients.id')
     .join('users', 'appointments.doctor_id', 'users.id')
     .where('appointments.tenant_id', tenantId)
     .where('appointments.appointment_date', today)
-    .whereNull('appointments.deleted_at')
+    .whereNull('appointments.deleted_at');
+
+  if (branchIds && branchIds.length > 0) query.whereIn('appointments.branch_id', branchIds);
+  if (branchIds && branchIds.length === 0) query.where(db.raw('false'));
+
+  return query
     .select(
       'appointments.*',
       'patients.first_name as patient_first_name',
@@ -162,15 +173,22 @@ export async function bulkCancelAppointments(
   tenantId: string,
   appointmentIds: string[],
   cancelReason: string,
+  scope?: { branchIds?: string[]; patientIds?: string[] },
 ): Promise<number> {
-  return db('appointments')
+  const query = db('appointments')
     .where('tenant_id', tenantId)
     .whereIn('id', appointmentIds)
-    .whereIn('status', ['scheduled', 'confirmed'])
-    .update({
-      status: 'cancelled',
-      cancelled_at: new Date().toISOString(),
-      cancel_reason: cancelReason,
-      updated_at: new Date(),
-    });
+    .whereIn('status', ['scheduled', 'confirmed']);
+
+  if (scope?.branchIds && scope.branchIds.length > 0) query.whereIn('branch_id', scope.branchIds);
+  if (scope?.branchIds && scope.branchIds.length === 0) query.where(db.raw('false'));
+  if (scope?.patientIds && scope.patientIds.length > 0) query.whereIn('patient_id', scope.patientIds);
+  if (scope?.patientIds && scope.patientIds.length === 0) query.where(db.raw('false'));
+
+  return query.update({
+    status: 'cancelled',
+    cancelled_at: new Date().toISOString(),
+    cancel_reason: cancelReason,
+    updated_at: new Date(),
+  });
 }

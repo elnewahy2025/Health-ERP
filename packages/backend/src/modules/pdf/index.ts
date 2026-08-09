@@ -4,11 +4,12 @@ import { getCtx } from '../../utils/route-helper.js';
 import { sendError, sendSuccess } from '../../utils/response.js';
 import { generateInvoicePdf, generatePrescriptionPdf, generateLabReportPdf } from '../../services/pdf.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 
 export async function registerPdfModule(app: FastifyInstance) {
 
   // Generate invoice PDF
-  app.get('/api/v1/pdf/invoice/:invoiceId-old', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/pdf/invoice/:invoiceId-old', { preHandler: [authenticate, authorize('billing.print')] }, async (request, reply) => {
     const { invoiceId } = z.object({ invoiceId: z.string().uuid() }).parse(request.params);
 
     const buffer = await generateInvoicePdf(invoiceId);
@@ -22,7 +23,7 @@ export async function registerPdfModule(app: FastifyInstance) {
   });
 
   // Generate prescription PDF
-  app.get('/api/v1/pdf/prescription/:prescriptionId-old', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/pdf/prescription/:prescriptionId-old', { preHandler: [authenticate, authorize('pharmacy.print')] }, async (request, reply) => {
     const { prescriptionId } = z.object({ prescriptionId: z.string().uuid() }).parse(request.params);
 
     const buffer = await generatePrescriptionPdf(prescriptionId);
@@ -35,7 +36,7 @@ export async function registerPdfModule(app: FastifyInstance) {
   });
 
   // Generate lab report PDF
-  app.get('/api/v1/pdf/lab-report/:labOrderId-old', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/pdf/lab-report/:labOrderId-old', { preHandler: [authenticate, authorize('laboratory.print')] }, async (request, reply) => {
     const { labOrderId } = z.object({ labOrderId: z.string().uuid() }).parse(request.params);
 
     const buffer = await generateLabReportPdf(labOrderId);

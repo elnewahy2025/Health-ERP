@@ -2,23 +2,55 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { sendSuccess, sendPaginated } from '../../utils/response.js';
 import { createPatientSchema, updatePatientSchema, paginationSchema } from '../../utils/validation.js';
-import { PatientNotFoundError } from '@healthcare/shared/errors';
+import { PatientNotFoundError, ForbiddenError } from '@healthcare/shared/errors';
 import { generateMedicalRecordNumber, encryptField } from '@healthcare/shared/utils';
 import { logAudit } from '../../services/audit.js';
+import {
+  hasPermission,
+  canAccessPatient,
+  assignedPatientIds,
+  type Principal,
+} from '../../services/authorization.js';
 import * as repo from './patient.repository.js';
 import { mapPatient } from './patient.mapper.js';
 import type { PatientRow, QuickSearchResult } from './types.js';
 
+/** Effective scope for list/search operations on patient data. */
+async function resolvePatientListScope(principal: Principal): Promise<{
+  branchIds?: string[];
+  patientIds?: string[];
+}> {
+  if (hasPermission(principal, 'patients.view', 'system') || hasPermission(principal, 'patients.view', 'tenant')) {
+    return {};
+  }
+  if (hasPermission(principal, 'patients.view', 'branch') || hasPermission(principal, 'patients.view', 'branches')) {
+    return { branchIds: principal.branches };
+  }
+  if (hasPermission(principal, 'patients.view', 'assigned_patients') || hasPermission(principal, 'patients.view', 'department')) {
+    return { patientIds: await assignedPatientIds(principal) };
+  }
+  return { patientIds: [] };
+}
+
+async function assertPatientAccess(principal: Principal, patient: { id: string; tenant_id: string; branch_id?: string | null }): Promise<void> {
+  if (!(await canAccessPatient(principal, patient))) {
+    throw new ForbiddenError('You do not have access to this patient');
+  }
+}
+
 export async function listPatients(request: FastifyRequest, reply: FastifyReply) {
   const query = paginationSchema.parse(request.query);
   const tenantId = getTenantId(request);
-  const { userId } = getCtx(request);
+  const { userId, principal } = getCtx(request);
   const search = (request.query as Record<string, unknown>).search as string | undefined;
   const status = (request.query as Record<string, unknown>).status as string | undefined;
+  const scope = await resolvePatientListScope(principal);
 
   const { patients, total } = await repo.findPatients(tenantId, {
     search, status, sort: query.sort, order: query.order,
     limit: query.limit, offset: (query.page - 1) * query.limit,
+    branchIds: scope.branchIds,
+    patientIds: scope.patientIds,
   });
 
   await logAudit({ tenantId, userId, action: 'patient.list', entityType: 'patients' });
@@ -29,10 +61,11 @@ export async function listPatients(request: FastifyRequest, reply: FastifyReply)
 export async function getPatient(request: FastifyRequest, reply: FastifyReply) {
   const { patientId } = request.params as { patientId: string };
   const tenantId = getTenantId(request);
-  const { userId } = getCtx(request);
+  const { userId, principal } = getCtx(request);
 
   const data = await repo.findPatientWithRelatedData(patientId, tenantId);
   if (!data) throw new PatientNotFoundError(patientId);
+  await assertPatientAccess(principal, data.patient);
 
   await logAudit({ tenantId, userId, action: 'patient.view', entityType: 'patients', entityId: patientId });
 
@@ -71,11 +104,12 @@ export async function updatePatient(request: FastifyRequest, reply: FastifyReply
   const { patientId } = request.params as { patientId: string };
   const body = updatePatientSchema.parse(request.body);
   const tenantId = getTenantId(request);
-  const { userId } = getCtx(request);
+  const { userId, principal } = getCtx(request);
   const expectedUpdatedAt = (body as Record<string, unknown>)._updatedAt as string | undefined;
 
   const existing = await repo.findPatientById(patientId, tenantId);
   if (!existing) throw new PatientNotFoundError(patientId);
+  await assertPatientAccess(principal, existing);
 
   // #14: Optimistic concurrency — if client sent _updatedAt, verify it matches
   // (compare at millisecond precision; pg truncates timestamp microseconds)
@@ -124,10 +158,11 @@ export async function updatePatient(request: FastifyRequest, reply: FastifyReply
 export async function deletePatient(request: FastifyRequest, reply: FastifyReply) {
   const { patientId } = request.params as { patientId: string };
   const tenantId = getTenantId(request);
-  const { userId } = getCtx(request);
+  const { userId, principal } = getCtx(request);
 
   const existing = await repo.findPatientById(patientId, tenantId);
   if (!existing) throw new PatientNotFoundError(patientId);
+  await assertPatientAccess(principal, existing);
 
   await repo.softDeletePatient(patientId, tenantId);
 
@@ -139,10 +174,15 @@ export async function deletePatient(request: FastifyRequest, reply: FastifyReply
 export async function quickSearch(request: FastifyRequest, reply: FastifyReply) {
   const { q } = request.query as { q?: string };
   const tenantId = getTenantId(request);
+  const { principal } = getCtx(request);
 
   if (!q || q.length < 2) return sendSuccess(reply, []);
+  const scope = await resolvePatientListScope(principal);
 
-  const patients = await repo.quickSearchPatients(tenantId, q);
+  const patients = await repo.quickSearchPatients(tenantId, q, {
+    branchIds: scope.branchIds,
+    patientIds: scope.patientIds,
+  });
   const results: QuickSearchResult[] = patients.map((p: PatientRow) => ({
     id: p.id,
     name: `${p.first_name} ${p.last_name}`,
@@ -159,7 +199,7 @@ export async function quickSearch(request: FastifyRequest, reply: FastifyReply) 
 export async function mergePatients(request: FastifyRequest, reply: FastifyReply) {
   const body = request.body as { primaryId: string; duplicateId: string };
   const tenantId = getTenantId(request);
-  const { userId } = getCtx(request);
+  const { userId, principal } = getCtx(request);
 
   if (!body.primaryId || !body.duplicateId) {
     return reply.status(400).send({ success: false, error: 'primaryId and duplicateId are required' });
@@ -168,6 +208,12 @@ export async function mergePatients(request: FastifyRequest, reply: FastifyReply
   if (body.primaryId === body.duplicateId) {
     return reply.status(400).send({ success: false, error: 'Cannot merge a patient with itself' });
   }
+
+  const primary = await repo.findPatientById(body.primaryId, tenantId);
+  const duplicate = await repo.findPatientById(body.duplicateId, tenantId);
+  if (!primary || !duplicate) throw new PatientNotFoundError(!primary ? body.primaryId : body.duplicateId);
+  await assertPatientAccess(principal, primary);
+  await assertPatientAccess(principal, duplicate);
 
   const result = await repo.mergePatients(body.primaryId, body.duplicateId, tenantId);
   if (!result.merged) {

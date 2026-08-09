@@ -10,6 +10,7 @@ import { generateSecret, verifyToken, generateQrCode } from '../../services/totp
 import { createAndSendOtp, verifyOtp, incrementOtpAttempt } from '../../services/otp.js';
 import { sendEmail } from '../../services/email.js';
 import { getEnv } from '@healthcare/shared/config';
+import { loadUserPrincipal, uniquePermissionKeys } from '../../services/authorization.js';
 import * as svc from './auth.service.js';
 import * as repo from './auth.repository.js';
 import {
@@ -234,11 +235,16 @@ export async function me(request: FastifyRequest, reply: FastifyReply) {
   const user = await repo.findUserByIdAndTenant(userId, tenantId);
   if (!user) throw new UnauthorizedError('User not found');
   const tenant = await repo.findTenantById(tenantId);
+  const principal = await loadUserPrincipal(userId, tenantId);
   return sendSuccess(reply, {
     user: {
       id: user.id, email: user.email, firstName: user.first_name, lastName: user.last_name,
-      roles: typeof user.roles === 'string' ? JSON.parse(user.roles) : user.roles,
-      permissions: typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions,
+      roles: principal?.roles || [],
+      permissions: principal ? uniquePermissionKeys(principal.grants) : [],
+      branches: principal?.branches || [],
+      employeeType: user.employee_type || 'staff',
+      departmentId: user.department_id || null,
+      position: user.position || null,
       locale: user.locale || 'en', status: user.status, mfaEnabled: user.mfa_enabled,
       passwordChangedAt: user.password_changed_at,
     },

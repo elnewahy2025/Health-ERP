@@ -5,10 +5,11 @@ import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { validateWebhookUrl } from '@healthcare/shared/utils';
 import type { IntegrationConnectionRow } from "../types.js";
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 
 export async function registerIntegrationsModule(app: FastifyInstance) {
   // ── Integration Definitions (system-wide catalog) ──
-  app.get('/api/v1/integrations/catalog', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/integrations/catalog', { preHandler: [authenticate, authorize('integrations.view')] }, async (request, reply) => {
     const defs = await db('integration_definitions').where({ is_active: true }).orderBy('name');
     return sendSuccess(reply, defs.map((d: Record<string, unknown>) => ({
       id: d.id, name: d.name, provider: d.provider, category: d.category,
@@ -18,7 +19,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
   });
 
   // ── Tenant Integration Connections ──
-  app.get('/api/v1/integrations/connections', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/integrations/connections', { preHandler: [authenticate, authorize('integrations.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const conns = await db('integration_connections').where({ tenant_id: tenantId })
       .leftJoin('integration_definitions', 'integration_connections.definition_id', 'integration_definitions.id')
@@ -34,7 +35,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/integrations/connections', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/integrations/connections', { preHandler: [authenticate, authorize('integrations.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const body = request.body as Record<string, unknown>;
     const [conn] = await db('integration_connections').insert({
       tenant_id: tenantId, definition_id: body.definitionId, name: body.name,
@@ -44,7 +45,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: conn.id, name: conn.name }, 'Integration connection created', 201);
   });
 
-  app.put('/api/v1/integrations/connections/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/integrations/connections/:id', { preHandler: [authenticate, authorize('integrations.edit')] }, async (request, reply) => {
     const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.name) update.name = body.name; if (body.config) update.config = JSON.stringify(body.config);
@@ -55,20 +56,20 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
     return sendSuccess(reply, null, 'Connection updated');
   });
 
-  app.post('/api/v1/integrations/connections/:id/test', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/integrations/connections/:id/test', { preHandler: [authenticate, authorize('integrations.manage')] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     await db('integration_connections').where({ id }).update({ status: 'connected', last_sync_at: new Date(), updated_at: new Date() });
     return sendSuccess(reply, { status: 'connected' }, 'Connection test successful');
   });
 
-  app.delete('/api/v1/integrations/connections/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.delete('/api/v1/integrations/connections/:id', { preHandler: [authenticate, authorize('integrations.edit')] }, async (request, reply) => {
     await db('webhooks').where({ integration_id: (request.params as { id: string }).id }).update({ status: 'disabled' });
     await db('integration_connections').where({ id: (request.params as { id: string }).id }).del();
     return sendSuccess(reply, null, 'Connection deleted');
   });
 
   // ── Webhooks ──
-  app.get('/api/v1/integrations/webhooks', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/integrations/webhooks', { preHandler: [authenticate, authorize('integrations.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const webhooks = await db('webhooks').where({ tenant_id: tenantId })
       .leftJoin('integration_connections', 'webhooks.integration_id', 'integration_connections.id')
@@ -83,7 +84,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/integrations/webhooks', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/integrations/webhooks', { preHandler: [authenticate, authorize('integrations.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const body = request.body as Record<string, unknown>;
     if (body.url) {
       const urlCheck = validateWebhookUrl(body.url as string);
@@ -99,7 +100,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: wh.id, name: wh.name }, 'Webhook created', 201);
   });
 
-  app.put('/api/v1/integrations/webhooks/:id', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/integrations/webhooks/:id', { preHandler: [authenticate, authorize('integrations.edit')] }, async (request, reply) => {
     const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.name) update.name = body.name;
@@ -117,7 +118,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
   });
 
   // ── Webhook Logs ──
-  app.get('/api/v1/integrations/webhooks/:id/logs', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/integrations/webhooks/:id/logs', { preHandler: [authenticate, authorize('integrations.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string };
     const logs = await db('webhook_logs').where({ tenant_id: tenantId, webhook_id: id }).orderBy('created_at', 'desc').limit(50);
     return sendSuccess(reply, logs.map((l: Record<string, unknown>) => ({

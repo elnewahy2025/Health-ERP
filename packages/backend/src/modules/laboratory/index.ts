@@ -4,6 +4,7 @@ import { sendSuccess, sendPaginated } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { PatientNotFoundError } from '@healthcare/shared/errors';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
 
 interface LabCatalogRow {
@@ -38,7 +39,7 @@ interface LabOrderRow {
 }
 
 export async function registerLaboratoryModule(app: FastifyInstance) {
-  app.get('/api/v1/lab/catalog', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/lab/catalog', { preHandler: [authenticate, authorize('laboratory.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const catalog = await db('lab_catalog').where({ tenant_id: tenantId, is_active: true }).orderBy('test_name');
     return sendSuccess(reply, catalog.map((c: LabCatalogRow) => ({
@@ -48,7 +49,7 @@ export async function registerLaboratoryModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/lab/catalog', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/lab/catalog', { preHandler: [authenticate, authorize('laboratory.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -63,7 +64,7 @@ export async function registerLaboratoryModule(app: FastifyInstance) {
     return sendSuccess(reply, item, 'Lab test added', 201);
   });
 
-  app.get('/api/v1/lab/orders', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.get('/api/v1/lab/orders', { preHandler: [authenticate, authorize('laboratory.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status, patientId } = request.query as { patientId?: string; status?: string };
     let q = db('lab_orders').where('lab_orders.tenant_id', tenantId).whereNull('lab_orders.deleted_at');
@@ -75,7 +76,7 @@ export async function registerLaboratoryModule(app: FastifyInstance) {
     return sendSuccess(reply, orders.map(mapLabOrder));
   });
 
-  app.post('/api/v1/lab/orders', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/lab/orders', { preHandler: [authenticate, authorize('laboratory.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -101,7 +102,7 @@ export async function registerLaboratoryModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: order.id, orderNumber: order.order_number }, 'Lab order created', 201);
   });
 
-  app.put('/api/v1/lab/orders/:id/status', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.put('/api/v1/lab/orders/:id/status', { preHandler: [authenticate, authorize('laboratory.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -117,7 +118,7 @@ export async function registerLaboratoryModule(app: FastifyInstance) {
     return sendSuccess(reply, null, "Lab order updated");
   });
 
-  app.post('/api/v1/lab/orders/:id/results', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)] }, async (request, reply) => {
+  app.post('/api/v1/lab/orders/:id/results', { preHandler: [authenticate, authorize('laboratory.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };

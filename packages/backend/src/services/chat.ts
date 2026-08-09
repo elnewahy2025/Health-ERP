@@ -1,6 +1,25 @@
 import { db } from '../core/database.js';
 import type { FastifyInstance } from 'fastify';
 import { getEnv } from '@healthcare/shared/config';
+import { ForbiddenError, NotFoundError } from '@healthcare/shared/errors';
+
+/**
+ * Secure real-time chat (see docs/engineering/AUTHORIZATION.md §6.1, Phase 7).
+ *
+ * Every access path — WebSocket handshake, history, send, read, participants,
+ * online list — verifies (a) the principal exists, (b) the conversation belongs
+ * to the principal's tenant, and (c) the principal is a participant recorded in
+ * chat_participants (staff via user_id, patients via principal_kind='patient' +
+ * patient_id). Membership is re-validated on every message insert; the client
+ * is never trusted to name a conversation or message sender.
+ */
+
+export interface ChatPrincipal {
+  kind: 'user' | 'patient';
+  id: string;
+  tenantId: string;
+  role: string;
+}
 
 interface ChatMessage {
   id?: string;
@@ -12,20 +31,6 @@ interface ChatMessage {
   content: string;
   metadata?: Record<string, unknown> | null;
   createdAt?: string;
-}
-
-interface Conversation {
-  id: string;
-  tenantId: string;
-  title: string;
-  participantIds: string[];
-  participantRoles: string[];
-  patientId?: string;
-  appointmentId?: string;
-  isActive: boolean;
-  lastMessageAt?: string;
-  unreadCount?: number;
-  createdAt: string;
 }
 
 interface ChatMessageRow {
@@ -57,7 +62,9 @@ interface ChatConversationRow {
 interface ChatParticipantRow {
   id: string;
   conversation_id: string;
-  user_id: string;
+  user_id: string | null;
+  patient_id: string | null;
+  principal_kind: string;
   tenant_id: string;
   role: string;
   unread_count: number;
@@ -66,9 +73,8 @@ interface ChatParticipantRow {
 }
 
 interface WsClient {
-  userId: string;
-  tenantId: string;
-  role: string;
+  principal: ChatPrincipal;
+  key: string;
   send: (data: Record<string, unknown>) => void;
 }
 
@@ -79,6 +85,56 @@ interface WsSocket {
 }
 
 const conversationRooms = new Map<string, Map<string, WsClient>>();
+
+/** True when `principal` is a recorded participant of `conversationId`. */
+export async function isConversationMember(conversationId: string, principal: ChatPrincipal): Promise<boolean> {
+  const conv = await db('chat_conversations').where({ id: conversationId, tenant_id: principal.tenantId }).first();
+  if (!conv) return false;
+  const q = db('chat_participants').where({ conversation_id: conversationId, tenant_id: principal.tenantId });
+  if (principal.kind === 'user') {
+    q.where({ user_id: principal.id });
+  } else {
+    q.where({ principal_kind: 'patient', patient_id: principal.id });
+  }
+  const member = await q.first();
+  return Boolean(member);
+}
+
+/** Throws ForbiddenError unless the principal may access the conversation. */
+export async function assertConversationAccess(conversationId: string, principal: ChatPrincipal): Promise<void> {
+  const conv = await db('chat_conversations').where({ id: conversationId, tenant_id: principal.tenantId }).first();
+  if (!conv) throw new NotFoundError('Conversation not found');
+  const member = await isConversationMember(conversationId, principal);
+  if (!member) throw new ForbiddenError('You are not a participant of this conversation');
+}
+
+/**
+ * Resolve a chat principal from a bearer token: staff JWTs first, then portal
+ * (OTP) session tokens for patient principals.
+ */
+export async function resolveChatPrincipal(app: FastifyInstance, token: string): Promise<ChatPrincipal | null> {
+  try {
+    const jwt = (app as unknown as Record<string, unknown>)['jwt'] as { verify: (t: string) => Record<string, unknown> };
+    const payload = jwt.verify(token);
+    const userId = String(payload.userId || '');
+    const tenantId = String(payload.tenantId || (payload.ctx as Record<string, unknown>)?.tenantId || '');
+    if (userId && tenantId) {
+      return { kind: 'user', id: userId, tenantId, role: String(payload.role || 'staff') };
+    }
+  } catch { /* not a staff JWT — fall through to portal session */ }
+
+  const session = await db('portal_sessions')
+    .where({ token })
+    .where('expires_at', '>', new Date())
+    .first();
+  if (session?.patient_id) {
+    const patient = await db('patients').where({ id: session.patient_id }).whereNull('deleted_at').first();
+    if (patient) {
+      return { kind: 'patient', id: String(patient.id), tenantId: String(patient.tenant_id), role: 'patient' };
+    }
+  }
+  return null;
+}
 
 export function registerChatWsHandlers(app: FastifyInstance): void {
   const env = getEnv();
@@ -95,12 +151,23 @@ export function registerChatWsHandlers(app: FastifyInstance): void {
       }
 
       try {
-        const jwt = (app as unknown as Record<string, unknown>)['jwt'] as { verify: (t: string) => Record<string, unknown> };
-        const payload = jwt.verify(token);
+        const principal = await resolveChatPrincipal(app, token);
+        if (!principal) {
+          socket.close(4001, 'Invalid token');
+          return;
+        }
+
+        // Membership + tenant verification before the client can join.
+        const member = await isConversationMember(conversationId, principal);
+        if (!member) {
+          socket.close(4003, 'Not a participant of this conversation');
+          return;
+        }
+
+        const clientKey = `${principal.kind}:${principal.id}`;
         const client: WsClient = {
-          userId: String(payload.userId || ''),
-          tenantId: String(payload.tenantId || (payload.ctx as Record<string, unknown>)?.tenantId || ''),
-          role: String(payload.role || 'staff'),
+          principal,
+          key: clientKey,
           send: (data: Record<string, unknown>) => {
             try { socket.send(JSON.stringify(data)); } catch { /* ignore */ }
           },
@@ -110,62 +177,65 @@ export function registerChatWsHandlers(app: FastifyInstance): void {
           conversationRooms.set(conversationId, new Map());
         }
         const room = conversationRooms.get(conversationId)!;
-        room.set(client.userId, client);
+        room.set(clientKey, client);
 
         broadcastToConversation(conversationId, {
           type: 'user_joined',
-          userId: client.userId,
-          role: client.role,
+          userId: principal.id,
+          role: principal.role,
           timestamp: new Date().toISOString(),
-        }, client.userId);
+        }, clientKey);
 
-        socket.on('message', async (...args: unknown[]) => { const raw = String(args[0]);
+        socket.on('message', async (...args: unknown[]) => {
+          const raw = String(args[0]);
           try {
             const msg = JSON.parse(raw) as Record<string, unknown>;
             if (msg.type === 'message' && msg.content) {
+              // Re-validate membership on every message insert (server-side).
               const saved = await sendChatMessage({
-                tenantId: client.tenantId,
+                tenantId: principal.tenantId,
                 conversationId,
-                senderId: client.userId,
-                senderRole: client.role as 'doctor' | 'patient' | 'staff' | 'admin',
+                senderId: principal.id,
+                senderRole: principal.role as 'doctor' | 'patient' | 'staff' | 'admin',
                 messageType: (msg.messageType as 'text' | 'image' | 'file') || 'text',
                 content: String(msg.content),
                 metadata: (msg.metadata as Record<string, unknown>) || null,
-              });
+              }, principal);
 
               broadcastToConversation(conversationId, {
                 type: 'new_message',
                 message: saved,
-              });
+              }, clientKey);
             }
           } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : String(err);
-            console.error('WS message error:', msg);
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            console.error('WS message error:', errorMsg);
           }
         });
 
         socket.on('close', (..._args: unknown[]) => {
           const room = conversationRooms.get(conversationId);
           if (room) {
-            room.delete(client.userId);
+            room.delete(clientKey);
             if (room.size === 0) conversationRooms.delete(conversationId);
           }
           broadcastToConversation(conversationId, {
             type: 'user_left',
-            userId: client.userId,
+            userId: principal.id,
             timestamp: new Date().toISOString(),
-          });
+          }, clientKey);
         });
 
-        const messages = await getConversationMessages(conversationId, 1, 50);
+        const messages = await getConversationMessages(conversationId, principal, 1, 50);
         socket.send(JSON.stringify({ type: 'history', messages: messages.data }));
 
-        socket.on('typing', (...args: unknown[]) => { const isTyping = Boolean(args[0]);
+        socket.on('typing', (...args: unknown[]) => {
+          const isTyping = Boolean(args[0]);
           broadcastToConversation(conversationId, {
             type: 'typing',
-            userId: client.userId,
+            userId: principal.id,
             isTyping,
-          }, client.userId);
+          }, clientKey);
         });
       } catch {
         socket.close(4001, 'Invalid token');
@@ -174,23 +244,27 @@ export function registerChatWsHandlers(app: FastifyInstance): void {
   }
 }
 
-function broadcastToConversation(conversationId: string, data: Record<string, unknown>, excludeUserId?: string): void {
+function broadcastToConversation(conversationId: string, data: Record<string, unknown>, excludeKey?: string): void {
   const room = conversationRooms.get(conversationId);
   if (!room) return;
-  for (const [uid, client] of room) {
-    if (uid !== excludeUserId) {
+  for (const [key, client] of room) {
+    if (key !== excludeKey) {
       client.send(data);
     }
   }
 }
 
-export function getOnlineUsers(conversationId: string): string[] {
+export async function getOnlineUsers(conversationId: string, principal: ChatPrincipal): Promise<string[]> {
+  await assertConversationAccess(conversationId, principal);
   const room = conversationRooms.get(conversationId);
   if (!room) return [];
-  return Array.from(room.keys());
+  return Array.from(room.values()).map((c) => c.principal.id);
 }
 
-export async function sendChatMessage(msg: ChatMessage): Promise<ChatMessageRow> {
+export async function sendChatMessage(msg: ChatMessage, principal: ChatPrincipal): Promise<ChatMessageRow> {
+  // Server-side re-validation: never trust the caller to name a conversation.
+  await assertConversationAccess(msg.conversationId, principal);
+
   const [saved] = await db('chat_messages').insert({
     id: msg.id || undefined,
     tenant_id: msg.tenantId,
@@ -206,10 +280,16 @@ export async function sendChatMessage(msg: ChatMessage): Promise<ChatMessageRow>
     .where({ id: msg.conversationId })
     .update({ last_message_at: db.fn.now(), is_active: true });
 
-  await db('chat_participants')
-    .where({ conversation_id: msg.conversationId })
-    .whereNot('user_id', msg.senderId)
-    .increment('unread_count', 1);
+  // Increment unread for every participant except the sender.
+  const participants = await db('chat_participants').where({ conversation_id: msg.conversationId });
+  for (const p of participants) {
+    const isSender = principal.kind === 'user'
+      ? String(p.user_id) === principal.id
+      : String(p.principal_kind) === 'patient' && String(p.patient_id) === principal.id;
+    if (!isSender) {
+      await db('chat_participants').where({ id: p.id }).increment('unread_count', 1);
+    }
+  }
 
   return saved as ChatMessageRow;
 }
@@ -231,12 +311,24 @@ export async function createConversation(data: {
     created_by: data.createdBy,
   }).returning('*');
 
-  const participants = data.participantIds.map((userId, i) => ({
+  const participants: Array<Record<string, unknown>> = data.participantIds.map((userId, i) => ({
     conversation_id: conv.id,
     user_id: userId,
+    principal_kind: 'user',
     role: data.participantRoles[i] || 'staff',
     tenant_id: data.tenantId,
   }));
+
+  if (data.patientId) {
+    participants.push({
+      conversation_id: conv.id,
+      user_id: null,
+      patient_id: data.patientId,
+      principal_kind: 'patient',
+      role: 'patient',
+      tenant_id: data.tenantId,
+    });
+  }
 
   await db('chat_participants').insert(participants);
 
@@ -253,15 +345,18 @@ export async function createConversation(data: {
 }
 
 export async function getConversations(
-  tenantId: string,
-  userId: string,
+  principal: ChatPrincipal,
   page = 1,
   limit = 20
 ): Promise<{ data: Array<ChatConversationRow & { unread_count: number; last_message: string | null }>; total: number }> {
   const baseQuery = db('chat_conversations as cc')
     .join('chat_participants as cp', 'cc.id', 'cp.conversation_id')
-    .where('cc.tenant_id', tenantId)
-    .where('cp.user_id', userId);
+    .where('cc.tenant_id', principal.tenantId);
+  if (principal.kind === 'user') {
+    baseQuery.where('cp.user_id', principal.id);
+  } else {
+    baseQuery.where('cp.principal_kind', 'patient').where('cp.patient_id', principal.id);
+  }
 
   const countQuery = baseQuery.clone();
   const total = await countQuery.countDistinct('cc.id as count').first();
@@ -289,9 +384,12 @@ export async function getConversations(
 
 export async function getConversationMessages(
   conversationId: string,
+  principal: ChatPrincipal,
   page = 1,
   limit = 50
 ): Promise<{ data: ChatMessageRow[]; total: number }> {
+  await assertConversationAccess(conversationId, principal);
+
   const total = await db('chat_messages')
     .where({ conversation_id: conversationId })
     .count('id as count').first();
@@ -307,28 +405,36 @@ export async function getConversationMessages(
 
 export async function markConversationRead(
   conversationId: string,
-  userId: string
+  principal: ChatPrincipal
 ): Promise<void> {
-  await db('chat_participants')
-    .where({ conversation_id: conversationId, user_id: userId })
-    .update({ unread_count: 0, last_read_at: db.fn.now() });
+  await assertConversationAccess(conversationId, principal);
+  const q = db('chat_participants').where({ conversation_id: conversationId, tenant_id: principal.tenantId });
+  if (principal.kind === 'user') {
+    q.where({ user_id: principal.id });
+  } else {
+    q.where({ principal_kind: 'patient', patient_id: principal.id });
+  }
+  await q.update({ unread_count: 0, last_read_at: db.fn.now() });
 }
 
-export async function getUnreadCount(
-  tenantId: string,
-  userId: string
-): Promise<number> {
-  const result = await db('chat_participants')
+export async function getUnreadCount(principal: ChatPrincipal): Promise<number> {
+  const q = db('chat_participants as cp')
     .join('chat_conversations', 'chat_participants.conversation_id', 'chat_conversations.id')
-    .where('chat_conversations.tenant_id', tenantId)
-    .where('chat_participants.user_id', userId)
-    .sum('chat_participants.unread_count as total')
-    .first();
-
+    .where('chat_conversations.tenant_id', principal.tenantId);
+  if (principal.kind === 'user') {
+    q.where('cp.user_id', principal.id);
+  } else {
+    q.where('cp.principal_kind', 'patient').where('cp.patient_id', principal.id);
+  }
+  const result = await q.sum('cp.unread_count as total').first();
   return Number(result?.total || 0);
 }
 
-export async function getConversationParticipants(conversationId: string): Promise<ChatParticipantRow[]> {
+export async function getConversationParticipants(
+  conversationId: string,
+  principal: ChatPrincipal
+): Promise<ChatParticipantRow[]> {
+  await assertConversationAccess(conversationId, principal);
   return db('chat_participants')
     .where({ conversation_id: conversationId })
     .select('*') as Promise<ChatParticipantRow[]>;

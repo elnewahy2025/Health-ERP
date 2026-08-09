@@ -32,6 +32,7 @@ Every document below contains production-quality content derived from the actual
 | [API-SPECIFICATION.md](engineering/API-SPECIFICATION.md) | REST API contract, auth, versioning, examples |
 | [DATABASE-SPECIFICATION.md](engineering/DATABASE-SPECIFICATION.md) | Schema, constraints, indexes, migration policy |
 | [SECURITY.md](engineering/SECURITY.md) | Security architecture, OWASP Top 10, secrets, backup/DR |
+| [AUTHORIZATION.md](engineering/AUTHORIZATION.md) | User Management, RBAC & authorization system — decisions, matrix, enforcement architecture, phases |
 | [TESTING.md](engineering/TESTING.md) | Test strategy, coverage, environments |
 | [DEPLOYMENT.md](engineering/DEPLOYMENT.md) | Environments, CI/CD, containers, rollback, scaling |
 | [ENVIRONMENT.md](engineering/ENVIRONMENT.md) | Infrastructure topology and services |

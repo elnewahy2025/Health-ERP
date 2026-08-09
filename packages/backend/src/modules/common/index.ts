@@ -3,12 +3,13 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { authenticate } from '../auth-guard.js';
+import { authorize } from '../../services/authorization.js';
 
 import type { RoleRow, AuditLogRow } from "../types.js";
 export async function registerCommonModule(app: FastifyInstance) {
   // Dashboard stats
   app.get('/api/v1/dashboard/stats', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('analytics_dashboard.view')],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const today = new Date().toISOString().split('T')[0];
@@ -69,7 +70,7 @@ export async function registerCommonModule(app: FastifyInstance) {
 
   // List doctors
   app.get('/api/v1/doctors', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('patients.view')],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
 
@@ -102,7 +103,7 @@ export async function registerCommonModule(app: FastifyInstance) {
 
   // Activity log (recent)
   app.get('/api/v1/activity', {
-    preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep)],
+    preHandler: [authenticate, authorize('audit.view')],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
 
