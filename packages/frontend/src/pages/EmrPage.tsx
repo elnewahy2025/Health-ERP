@@ -122,6 +122,7 @@ export default function EmrPage() {
     try {
       await emrApi.create({
         patientId: newEmr.patientId,
+        encounterDate: new Date().toISOString().split('T')[0],
         encounterType: newEmr.encounterType,
         chiefComplaint: newEmr.chiefComplaint,
         subjective: newEmr.subjective,

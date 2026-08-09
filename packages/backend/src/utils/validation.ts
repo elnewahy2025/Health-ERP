@@ -84,7 +84,7 @@ export const updateAppointmentSchema = createAppointmentSchema.partial();
 export const createEmrSchema = z.object({
   patientId: z.string().uuid(),
   appointmentId: z.string().uuid().optional(),
-  encounterDate: z.string(),
+  encounterDate: z.string().optional(),
   encounterType: z.enum(['new', 'followup', 'emergency', 'annual', 'preoperative', 'postoperative', 'telemedicine']),
   chiefComplaint: z.string().optional(),
   subjective: z.string().optional(),
