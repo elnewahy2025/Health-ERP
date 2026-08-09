@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { appointmentsApi, commonApi } from '../lib/api';
 import { isValidTime, isFutureDate } from '../lib/validators';
 import { Modal, Input, Select, PatientSearchField } from '../components/ui';
+import { confirmDialog } from '../components/ui';
 import { Plus, Loader2, CalendarCheck, CheckCircle2, Ban } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -132,10 +133,24 @@ export default function AppointmentsPage() {
   };
 
   const handleCancel = async (id: string) => {
-    const reason = prompt('Cancel reason:');
+    const reason = await confirmDialog({
+      title: 'Cancel appointment',
+      message: 'Appointments cancelled within 24 hours need a reason. You can cancel at any time.',
+      confirmLabel: 'Cancel appointment',
+      cancelLabel: 'Keep appointment',
+      inputLabel: 'Reason',
+      inputPlaceholder: 'e.g. Patient request, schedule conflict',
+      danger: true,
+    });
     if (reason === null) return;
-    try { await appointmentsApi.cancel(id, reason || undefined); toast.success('Cancelled'); loadAppointments(); }
-    catch { toast.error('Failed to cancel'); }
+    try {
+      await appointmentsApi.cancel(id, (reason as string) || undefined);
+      toast.success('Cancelled');
+      loadAppointments();
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string; message?: string } } };
+      toast.error(axiosErr?.response?.data?.message || axiosErr?.response?.data?.error || 'Failed to cancel');
+    }
   };
 
   const statusBadge = (status: string) => {

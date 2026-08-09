@@ -90,6 +90,7 @@ const AdvancedReportingPage = lazy(() => import('./pages/AdvancedReportingPage')
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const DeveloperPortalPage = lazy(() => import('./pages/DeveloperPortalPage'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -210,7 +211,7 @@ function AppContent() {
             <Route path="financial-reports" element={<FinancialReportsPage />} />
             <Route path="insurance-claims" element={<InsuranceClaimsPage />} />
             <Route path="patients/:patientId/timeline" element={<PatientTimelinePage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
     </ErrorBoundary>

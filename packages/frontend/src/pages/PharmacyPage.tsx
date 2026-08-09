@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { apiClient as api } from '../lib/api';
 import { Modal, Input, Select, PatientSearchField } from '../components/ui';
+import { confirmDialog } from '../components/ui';
 import { Plus, Package, ListChecks, Search, Loader2, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -153,7 +154,8 @@ interface Prescription {
   };
 
   const handleDispense = async (id: string) => {
-    if (!confirm('Confirm dispensing this prescription?')) return;
+    const confirmed = await confirmDialog({ title: 'Dispense prescription', message: 'Dispense this prescription now?', confirmLabel: 'Dispense', cancelLabel: 'Back', danger: true });
+    if (!confirmed) return;
     try {
       await api.post(`/pharmacy/prescriptions/${id}/dispense`, { items: [] });
       toast.success('Prescription dispensed');

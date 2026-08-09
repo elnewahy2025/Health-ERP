@@ -2682,5 +2682,18 @@
   "appointment.selectDoctor": "اختر الطبيب",
   "appointment.selectBranch": "اختر الفرع",
   "validate.selectDoctor": "يرجى اختيار الطبيب",
-  "validate.selectBranch": "يرجى اختيار الفرع"
+  "validate.selectBranch": "يرجى اختيار الفرع",
+  "notFound.badge": "خطأ 404",
+  "notFound.title": "يبدو أن هذه الصفحة غادرت العيادة مبكرًا.",
+  "notFound.subtitle": "لا تقلق — الأمر ليس خطأك. ربما يكون الرابط قديمًا، أو انتقلت الصفحة إلى مكان جديد.",
+  "notFound.guide": "إليك كيف تعود إلى المسار الصحيح:",
+  "notFound.dashboard": "العودة إلى لوحة التحكم",
+  "notFound.dashboardHint": "نظرة عامة ونشاط اليوم",
+  "notFound.patients": "عرض المرضى",
+  "notFound.patientsHint": "ابحث عن مريض أو سجّل مريضًا جديدًا",
+  "notFound.appointments": "حجز موعد",
+  "notFound.appointmentsHint": "جدولة زيارة",
+  "notFound.support": "تواصل مع الدعم",
+  "notFound.supportHint": "نحن هنا لمساعدتك في أي وقت",
+  "notFound.tip": "نصيحة: إذا كتبت العنوان يدويًا، تحقق من الإملاء."
 }

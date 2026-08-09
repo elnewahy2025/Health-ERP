@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { patientsApi } from '../lib/api';
 import { isValidEgyptianPhone, isValidEgyptianNationalId, isValidEmail, isValidName } from '../lib/validators';
 import { Modal, Input, Select, PatientSearchField } from '../components/ui';
+import { confirmDialog } from '../components/ui';
 import { Plus, Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -154,7 +155,14 @@ export default function PatientsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this patient?')) return;
+    const confirmed = await confirmDialog({
+      title: 'Delete patient',
+      message: 'Delete this patient? This action cannot be undone.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep patient',
+      danger: true,
+    });
+    if (!confirmed) return;
     try {
       await patientsApi.delete(id);
       toast.success('Patient deleted');

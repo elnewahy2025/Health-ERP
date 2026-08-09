@@ -12,6 +12,7 @@ import {
   EmptyState,
   PageLoader,
 } from '../components/ui';
+import { confirmDialog } from '../components/ui';
 import {
   Palette,
   Globe,
@@ -158,7 +159,8 @@ export default function WhiteLabelPage() {
   };
 
   const handleDeleteDomain = async (id: string) => {
-    if (!window.confirm(t('common.confirmDelete'))) return;
+    const confirmed = await confirmDialog({ title: t('common.delete'), message: t('common.confirmDelete'), confirmLabel: t('common.delete'), cancelLabel: t('common.cancel'), danger: true });
+    if (!confirmed) return;
     try {
       await whiteLabelApi.deleteDomain(id);
       toast.success(t('wl.domainDeleted'));

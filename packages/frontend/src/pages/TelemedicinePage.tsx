@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { apiClient as api } from '../lib/api';
 import { Modal, Input, Select, PatientSearchField } from '../components/ui';
+import { confirmDialog } from '../components/ui';
 import { Plus, ExternalLink, Video, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { AppointmentStatus } from '@healthcare/shared/types';
@@ -99,7 +100,8 @@ export default function TelemedicinePage() {
   };
 
   const handleStatus = async (id: string, status: string) => {
-    if (!confirm(`Start this session?`)) return;
+    const confirmed = await confirmDialog({ title: 'Start session', message: 'Start this session?', confirmLabel: 'Start', cancelLabel: 'Back' });
+    if (!confirmed) return;
     try {
       await api.put(`/telemedicine/sessions/${id}/status`, { status });
       toast.success('Session started');

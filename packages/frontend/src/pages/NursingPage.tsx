@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { apiClient as api } from '../lib/api';
 import { Modal, Input, Select, PatientSearchField } from '../components/ui';
+import { confirmDialog } from '../components/ui';
 import { Plus, Loader2, CheckCircle2, Play } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -82,7 +83,8 @@ export default function NursingPage() {
 
   const handleUpdateStatus = async (id: string, status: string) => {
     const msg = status === 'completed' ? 'Mark as completed?' : 'Start this task?';
-    if (!confirm(msg)) return;
+    const confirmed = await confirmDialog({ title: 'Update task', message: msg, confirmLabel: 'Yes', cancelLabel: 'No' });
+    if (!confirmed) return;
     setActionLoading(id);
     try {
       await api.put(`/nursing/tasks/${id}`, { status });

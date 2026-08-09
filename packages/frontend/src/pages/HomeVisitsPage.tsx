@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { apiClient as api } from '../lib/api';
 import { Modal, Input, Select, PatientSearchField } from '../components/ui';
+import { confirmDialog } from '../components/ui';
 import { Plus, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -78,7 +79,8 @@ export default function HomeVisitsPage() {
   };
 
   const handleUpdateStatus = async (id: string, status: string) => {
-    if (!confirm(`Mark visit as ${status}?`)) return;
+    const confirmed = await confirmDialog({ title: 'Update visit', message: `Mark visit as ${status}?`, confirmLabel: 'Yes', cancelLabel: 'No' });
+    if (!confirmed) return;
     try {
       await api.put(`/home-visits/${id}`, { status });
       toast.success(`Visit ${status}`);

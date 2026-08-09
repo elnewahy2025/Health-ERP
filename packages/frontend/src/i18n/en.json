@@ -2684,5 +2684,18 @@
   "appointment.selectDoctor": "Select Doctor",
   "appointment.selectBranch": "Select Branch",
   "validate.selectDoctor": "Please select a doctor",
-  "validate.selectBranch": "Please select a branch"
+  "validate.selectBranch": "Please select a branch",
+  "notFound.badge": "Error 404",
+  "notFound.title": "This page seems to have checked out early.",
+  "notFound.subtitle": "No worries — it's not on you. The link may be outdated, or the page may have moved to a new spot.",
+  "notFound.guide": "Here's how to get back on track:",
+  "notFound.dashboard": "Go to Dashboard",
+  "notFound.dashboardHint": "Overview and today's activity",
+  "notFound.patients": "View Patients",
+  "notFound.patientsHint": "Find or register a patient",
+  "notFound.appointments": "Book Appointment",
+  "notFound.appointmentsHint": "Schedule a visit",
+  "notFound.support": "Contact Support",
+  "notFound.supportHint": "We're here to help — reach out any time",
+  "notFound.tip": "Tip: If you typed the address by hand, double-check the spelling."
 }

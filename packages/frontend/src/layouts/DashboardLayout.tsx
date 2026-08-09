@@ -4,7 +4,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
 import MobileBottomNav from '../components/layout/MobileBottomNav';
-import { SkipToContent, PwaInstallPrompt, PageTransition, ErrorBoundary } from '../components/ui';
+import { SkipToContent, PageTransition, ErrorBoundary } from '../components/ui';
 
 export default function DashboardLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -27,7 +27,6 @@ export default function DashboardLayout() {
         </main>
       </div>
       <MobileBottomNav onMenuClick={() => setSidebarOpen(true)} />
-      <PwaInstallPrompt />
     </div>
   );
 }

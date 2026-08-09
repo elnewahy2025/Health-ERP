@@ -19,6 +19,7 @@ import {
   EmptyState,
   PageLoader,
 } from '../components/ui';
+import { confirmDialog } from '../components/ui';
 import {
   BarChart3,
   Plus,
@@ -177,7 +178,8 @@ export default function BiPage() {
   };
 
   const handleDeleteDashboard = async (id: string) => {
-    if (!window.confirm(t('common.confirmDelete'))) return;
+    const confirmed = await confirmDialog({ title: t('common.delete'), message: t('common.confirmDelete'), confirmLabel: t('common.delete'), cancelLabel: t('common.cancel'), danger: true });
+    if (!confirmed) return;
     try {
       await biApi.deleteDashboard(id);
       toast.success(t('common.deleted'));
@@ -216,7 +218,8 @@ export default function BiPage() {
   };
 
   const handleDeleteWidget = async (id: string) => {
-    if (!window.confirm(t('common.confirmDelete'))) return;
+    const confirmed = await confirmDialog({ title: t('common.delete'), message: t('common.confirmDelete'), confirmLabel: t('common.delete'), cancelLabel: t('common.cancel'), danger: true });
+    if (!confirmed) return;
     try {
       await biApi.deleteWidget(id);
       toast.success(t('common.deleted'));
