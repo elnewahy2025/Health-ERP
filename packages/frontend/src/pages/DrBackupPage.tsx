@@ -7,6 +7,7 @@ import {
   type DrConfig,
 } from '../lib/api';
 import { escapeHtml } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 import {
   Button,
   Badge,
@@ -204,7 +205,7 @@ export default function DrBackupPage() {
                     </td>
                     <td className="p-3"><Badge>{escapeHtml(b.trigger)}</Badge></td>
                     <td className="p-3 text-xs">
-                      {b.startedAt?.split('T')[0] ?? '-'}
+                      {formatDateTime(b.startedAt) || '-'}
                     </td>
                   </tr>
                 ))
@@ -240,7 +241,7 @@ export default function DrBackupPage() {
                       {t('dr.location')}: {escapeHtml(c.storageLocation)}
                     </p>
                     <p>
-                      {t('dr.lastBackup')}: {c.lastBackupAt?.split('T')[0] ?? t('dr.never')} ·{' '}
+                      {t('dr.lastBackup')}: {formatDateTime(c.lastBackupAt) || t('dr.never')} ·{' '}
                       <Badge variant={c.isActive ? 'success' : 'gray'}>
                         {c.isActive ? t('dr.active') : t('dr.inactive')}
                       </Badge>
@@ -309,7 +310,7 @@ export default function DrBackupPage() {
               <div>
                 <p className="text-gray-500">{t('dr.lastDrTest')}</p>
                 <p className="font-medium">
-                  {drConfig?.lastDrTestAt?.split('T')[0] ?? t('dr.never')}
+                  {formatDateTime(drConfig?.lastDrTestAt) || t('dr.never')}
                 </p>
               </div>
             </div>

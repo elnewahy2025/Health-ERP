@@ -4,6 +4,7 @@ import { crmApi, type CrmCampaign, type PatientFeedback } from '../lib/api';
 import { Modal, Input, Select, Button, Badge, EmptyState, PageLoader } from '../components/ui';
 import { Plus, BarChart3, MessageSquare } from 'lucide-react';
 import { sanitizeNumber, sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 import toast from 'react-hot-toast';
 
 type TabType = 'campaigns' | 'feedback';
@@ -228,7 +229,7 @@ export default function CrmPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-yellow-500">{renderStars(fb.rating)}</td>
                       <td className="px-6 py-4 whitespace-nowrap"><Badge>{fb.category}</Badge></td>
                       <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate">{fb.comment || '-'}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{fb.createdAt?.split('T')[0]}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDateTime(fb.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -4,6 +4,7 @@ import { Modal } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { Bell, CheckCheck, Loader2, CheckCircle2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatDateTime } from '../lib/format';
 
 interface Notification {
   id: string;
@@ -92,7 +93,7 @@ export default function NotificationsPage() {
                       {n.subject || t('notif.notification')}
                     </p>
                     <p className="text-xs text-gray-500 truncate">
-                      {n.channel} — {new Date(n.createdAt).toLocaleDateString()}
+                      {n.channel} — {formatDateTime(n.createdAt)}
                     </p>
                   </div>
                   {n.status === 'pending' && (
@@ -122,7 +123,7 @@ export default function NotificationsPage() {
               <p className="text-sm text-gray-700 whitespace-pre-wrap">{selectedNotif.body}</p>
             )}
             <p className="text-xs text-gray-400">
-              {new Date(selectedNotif.createdAt).toLocaleString()}
+              {formatDateTime(selectedNotif.createdAt)}
             </p>
           </div>
         )}

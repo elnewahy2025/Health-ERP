@@ -4,6 +4,7 @@ import { complianceApi, type CompliancePolicy, type ComplianceAudit, type Consen
 import { Modal, Input, Button, Badge, EmptyState, PageLoader } from '../components/ui';
 import { Shield, ScrollText, AlertTriangle, UserCheck, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatDateTime } from '../lib/format';
 
 type TabType = 'policies' | 'audits' | 'consents' | 'breaches';
 
@@ -188,7 +189,7 @@ export default function CompliancePage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Badge variant={consent.granted ? 'success' : 'danger'}>{consent.granted ? t('compliance.granted') : t('compliance.denied')}</Badge>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{consent.consentedAt?.split('T')[0]}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDateTime(consent.consentedAt)}</td>
                     </tr>
                   ))}
                 </tbody>

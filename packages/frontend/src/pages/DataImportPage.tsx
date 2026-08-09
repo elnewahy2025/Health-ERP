@@ -10,6 +10,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { escapeHtml } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -268,7 +269,7 @@ export default function DataImportPage() {
     {
       key: 'createdAt',
       header: t('dataImport.date'),
-      render: (item) => <span>{escapeHtml(item.createdAt?.split('T')[0] ?? '-')}</span>,
+      render: (item) => <span>{formatDateTime(item.createdAt) || '-'}</span>,
     },
   ];
 

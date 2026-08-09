@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
+import { formatDateTime } from '../lib/format';
 import {
   Smartphone,
   CalendarCheck,
@@ -355,7 +356,7 @@ export default function PatientMobileAppPage() {
                     className={`bg-white border rounded-xl p-4 ${n.read ? '' : 'border-l-4 border-l-blue-500'}`}
                   >
                     <p className="text-sm font-medium">{sanitizeString(n.message)}</p>
-                    <p className="text-xs text-gray-400 mt-1">{n.created_at}</p>
+                    <p className="text-xs text-gray-400 mt-1">{formatDateTime(n.created_at)}</p>
                   </div>
                 ))
               ) : (

@@ -9,6 +9,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { escapeHtml } from '../lib/sanitize';
+import { formatDate } from '../lib/format';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -153,7 +154,7 @@ export default function EtaInvoicingPage() {
       header: t('eta.created'),
       render: (item) => (
         <span className="text-sm text-gray-500">
-          {escapeHtml(new Date(item.created_at).toLocaleDateString())}
+          {formatDate(item.created_at)}
         </span>
       ),
     },

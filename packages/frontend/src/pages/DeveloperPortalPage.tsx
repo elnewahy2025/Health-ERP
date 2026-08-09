@@ -10,6 +10,7 @@ import {
   type Column,
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
+import { formatDateTime } from '../lib/format';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
@@ -259,7 +260,7 @@ export default function DeveloperPortalPage() {
     {
       key: 'lastUsedAt',
       header: t('devPortal.lastUsed'),
-      render: (item) => <span>{escapeHtml(item.lastUsedAt?.split('T')[0] ?? '-')}</span>,
+      render: (item) => <span>{formatDateTime(item.lastUsedAt) || '-'}</span>,
     },
     {
       key: 'isActive',

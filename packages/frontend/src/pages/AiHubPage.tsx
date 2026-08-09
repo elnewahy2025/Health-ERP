@@ -8,6 +8,7 @@ import {
   type AiCostData,
 } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 import {
   Modal,
   Input,
@@ -411,7 +412,7 @@ export default function AiHubPage() {
                       </Badge>
                     </td>
                     <td className="p-3 text-sm text-gray-500">
-                      {r.createdAt?.split('T')[0] ?? '-'}
+                      {formatDateTime(r.createdAt) || '-'}
                     </td>
                   </tr>
                 ))

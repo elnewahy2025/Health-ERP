@@ -7,6 +7,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 
 type BarcodeTab = 'templates' | 'labels' | 'scans';
 
@@ -233,7 +234,7 @@ export default function BarcodesPage() {
                   <td><Badge variant="gray">{sanitizeString(l.format)}</Badge></td>
                   <td><Badge variant={l.status === 'active' ? 'success' : l.status === 'expired' ? 'danger' : 'gray'}>{sanitizeString(l.status)}</Badge></td>
                   <td className="text-xs">{l.printCount ?? 0}</td>
-                  <td className="text-xs">{sanitizeString(l.createdAt?.split('T')[0] ?? '')}</td>
+                  <td className="text-xs">{formatDateTime(l.createdAt)}</td>
                   <td>
                     <Button variant="ghost" size="sm" onClick={() => handlePrint(l.id)}>
                       <Printer className="w-3 h-3" /> {t('barcodes.print')}
@@ -269,7 +270,7 @@ export default function BarcodesPage() {
                   <td><Badge variant={log.status === 'success' ? 'success' : 'danger'}>{sanitizeString(log.status)}</Badge></td>
                   <td className="text-xs">{sanitizeString(log.location ?? '-')}</td>
                   <td className="text-xs">{log.referenceType ? `${sanitizeString(log.referenceType)}:${sanitizeString(log.referenceId ?? '')}` : '-'}</td>
-                  <td className="text-xs">{sanitizeString(log.scannedAt?.split('T')[0] ?? '')}</td>
+                  <td className="text-xs">{formatDateTime(log.scannedAt)}</td>
                 </tr>
               ))}
             </tbody>

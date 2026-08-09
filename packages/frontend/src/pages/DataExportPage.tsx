@@ -7,6 +7,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 
 type ExportTab = 'export' | 'jobs' | 'definitions';
 
@@ -228,7 +229,7 @@ export default function DataExportPage() {
                       </Badge>
                     </td>
                     <td><Badge>{sanitizeString(j.trigger)}</Badge></td>
-                    <td className="text-xs">{sanitizeString(j.startedAt?.split('T')[0] ?? '')}</td>
+                    <td className="text-xs">{formatDateTime(j.startedAt)}</td>
                     <td>
                       {j.status === 'completed' && (
                         <Button variant="ghost" size="sm">

@@ -12,6 +12,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -294,7 +295,7 @@ export default function InsuranceClaimsLifecyclePage() {
     {
       key: 'createdAt',
       header: t('insClaims.date'),
-      render: (item) => <span>{escapeHtml(item.createdAt?.split('T')[0] ?? '-')}</span>,
+      render: (item) => <span>{formatDateTime(item.createdAt) || '-'}</span>,
     },
     {
       key: 'id',
@@ -655,7 +656,7 @@ export default function InsuranceClaimsLifecyclePage() {
               </div>
               <div>
                 <span className="text-gray-500">{t('insClaims.date')}</span>
-                <p className="font-medium">{escapeHtml(showDetail.createdAt?.split('T')[0] ?? '-')}</p>
+                <p className="font-medium">{formatDateTime(showDetail.createdAt) || '-'}</p>
               </div>
               {showDetail.denialReason && (
                 <div className="col-span-2">

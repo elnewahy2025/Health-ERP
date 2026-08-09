@@ -4,6 +4,7 @@ import { dmsApi, type DocumentItem, type DocumentCategory } from '../lib/api';
 import { FileUpload, ImageViewer, Button, Select, Modal, EmptyState, PageLoader } from '../components/ui';
 import { FileText, Search, Download, Trash2, Eye, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatDate } from '../lib/format';
 
 const CATEGORY_COLORS: Record<string, string> = {
   lab_report: 'bg-blue-100 text-blue-800',
@@ -196,7 +197,7 @@ export default function DmsPage() {
               </div>
 
               <p className="text-xs text-gray-400 mt-2">
-                {new Date(doc.createdAt).toLocaleDateString()}
+                {formatDate(doc.createdAt)}
               </p>
             </div>
           ))}

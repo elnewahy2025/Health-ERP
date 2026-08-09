@@ -12,6 +12,7 @@ import {
 import { apiClient as api } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
 import { isValidEgyptianPhone } from '../lib/validators';
+import { formatDateTime } from '../lib/format';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -247,7 +248,7 @@ export default function VoiceCallsPage() {
     {
       key: 'created_at',
       header: t('voice.date'),
-      render: (item) => <span className="text-sm">{escapeHtml(item.created_at?.split('T')[0] ?? '-')}</span>,
+      render: (item) => <span className="text-sm">{formatDateTime(item.created_at) || '-'}</span>,
     },
   ];
 

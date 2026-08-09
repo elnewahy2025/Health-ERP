@@ -7,6 +7,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
+import { formatDate } from '../lib/format';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -266,7 +267,7 @@ export default function ClinicalAIPage() {
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-xs font-medium text-indigo-600">{escapeHtml(n.note_type)}</span>
                         <span className="text-xs text-gray-400">
-                          {escapeHtml(new Date(n.created_at).toLocaleDateString())}
+                          {formatDate(n.created_at)}
                         </span>
                       </div>
                       <p className="text-sm text-gray-600 truncate">

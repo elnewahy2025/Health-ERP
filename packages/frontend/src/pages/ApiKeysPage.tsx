@@ -7,6 +7,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 
 interface ApiKey {
   id: string;
@@ -172,8 +173,8 @@ export default function ApiKeysPage() {
                       {k.isActive ? t('apiKeys.active') : t('apiKeys.inactive')}
                     </Badge>
                   </td>
-                  <td className="text-xs">{k.lastUsedAt?.split('T')[0] || t('apiKeys.never')}</td>
-                  <td className="text-xs">{k.expiresAt?.split('T')[0] || t('apiKeys.never')}</td>
+                  <td className="text-xs">{formatDateTime(k.lastUsedAt) || t('apiKeys.never')}</td>
+                  <td className="text-xs">{formatDateTime(k.expiresAt) || t('apiKeys.never')}</td>
                   <td>
                     <Button variant="ghost" size="sm" onClick={() => viewLogs(k)}>
                       <Activity className="w-3 h-3" />

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { apiClient as api } from '../lib/api';
 import { Modal, Input, Select, PatientSearchField } from '../components/ui';
 import { confirmDialog } from '../components/ui';
+import { formatDateTime } from '../lib/format';
 import { Plus, Loader2, CheckCircle2, Play } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -129,7 +130,7 @@ export default function NursingPage() {
                   <td><span className="badge-info">{t(`nursing.${task.category}`) || task.category}</span></td>
                   <td><span className={`badge ${task.priority === 'urgent' ? 'badge-danger' : task.priority === 'high' ? 'badge-warning' : 'badge-info'}`}>{t(`nursing.${task.priority}`) || task.priority}</span></td>
                   <td><span className={`badge ${task.status === 'completed' ? 'badge-success' : task.status === 'in_progress' ? 'badge-warning' : 'badge-gray'}`}>{task.status}</span></td>
-                  <td className="text-xs">{task.dueAt?.split('T')[0] || '-'}</td>
+                  <td className="text-xs">{formatDateTime(task.dueAt) || '-'}</td>
                   <td>
                     <div className="flex gap-1">
                       {task.status === 'pending' && <button onClick={() => handleUpdateStatus(task.id, 'in_progress')} disabled={actionLoading === task.id} className="btn-ghost btn-sm text-blue-600">

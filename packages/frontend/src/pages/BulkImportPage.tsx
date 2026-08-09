@@ -7,6 +7,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 
 type ImportTab = 'import' | 'history';
 
@@ -311,7 +312,7 @@ export default function BulkImportPage() {
                         {sanitizeString(j.status)}
                       </Badge>
                     </td>
-                    <td className="text-xs">{sanitizeString(j.createdAt?.split('T')[0] ?? '')}</td>
+                    <td className="text-xs">{formatDateTime(j.createdAt)}</td>
                     <td>
                       <Button variant="ghost" size="sm" onClick={() => setSelectedJob(j)}>
                         {t('bulkImport.details')}
@@ -340,10 +341,10 @@ export default function BulkImportPage() {
               <strong>{t('bulkImport.failed')}:</strong> {selectedJob.failedRows}
             </p>
             <p>
-              <strong>{t('bulkImport.started')}:</strong> {sanitizeString(selectedJob.startedAt?.split('T')[0] ?? '-')}
+              <strong>{t('bulkImport.started')}:</strong> {formatDateTime(selectedJob.startedAt) || '-'}
             </p>
             <p>
-              <strong>{t('bulkImport.completedDate')}:</strong> {sanitizeString(selectedJob.completedAt?.split('T')[0] ?? '-')}
+              <strong>{t('bulkImport.completedDate')}:</strong> {formatDateTime(selectedJob.completedAt) || '-'}
             </p>
             {selectedJob.errors?.length > 0 && (
               <div>

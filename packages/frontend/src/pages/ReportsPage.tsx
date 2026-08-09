@@ -7,6 +7,7 @@ import {
   type ReportExecution,
 } from '../lib/api';
 import { escapeHtml, sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 import {
   Modal,
   Input,
@@ -485,7 +486,7 @@ export default function ReportsPage() {
                     <td className="p-3 text-sm">{e.rowCount.toLocaleString()}</td>
                     <td className="p-3"><Badge>{escapeHtml(e.trigger)}</Badge></td>
                     <td className="p-3 text-sm text-gray-500">
-                      {e.startedAt?.split('T')[0] ?? '-'}
+                      {formatDateTime(e.startedAt) || '-'}
                     </td>
                     <td className="p-3">
                       {e.status === 'completed' ? (

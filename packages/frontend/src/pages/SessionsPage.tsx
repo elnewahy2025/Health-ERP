@@ -7,6 +7,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 
 interface Session {
   id: string;
@@ -89,7 +90,7 @@ export default function SessionsPage() {
 
   const formatDate = useCallback((dateStr: string) => {
     if (!dateStr) return t('sessions.na');
-    return sanitizeString(dateStr.split('T')[0]);
+    return formatDateTime(dateStr);
   }, [t]);
 
   if (loading) return <PageLoader message={t('common.loading')} />;

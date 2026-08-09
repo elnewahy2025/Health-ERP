@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { patientsApi, emrApi, billingApi } from '../lib/api';
+import { formatDate } from '../lib/format';
 import { isValidEgyptianPhone, isValidEgyptianNationalId, isValidEmail, isValidName } from '../lib/validators';
 import { Input, Select } from '../components/ui';
 import { ArrowLeft, Calendar, Receipt, Pencil, Eye, Loader2 } from 'lucide-react';
@@ -300,7 +301,7 @@ interface InvoiceSummary { id: string; total: number; status: string; createdAt:
                     <Calendar className="w-8 h-8 text-blue-500 bg-blue-50 p-1.5 rounded-lg" />
                     <div className="flex-1">
                       <p className="text-sm font-medium">{a.type}</p>
-                      <p className="text-xs text-gray-500">{(a.appointment_date || '').substring(0, 10)} {a.start_time}</p>
+                      <p className="text-xs text-gray-500">{formatDate(a.appointment_date)} {a.start_time}</p>
                     </div>
                     <span className={`badge ${
                       a.status === 'completed' ? 'badge-success' :

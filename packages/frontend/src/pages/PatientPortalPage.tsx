@@ -9,6 +9,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { formatDate, formatDateTime } from '../lib/format';
 
 type PortalTab = 'dashboard' | 'appointments' | 'bills' | 'messages';
 type LoginStep = 'phone' | 'otp';
@@ -370,7 +371,7 @@ export default function PatientPortalPage() {
                   <div key={b.id} className="flex items-center justify-between py-2 border-b last:border-0">
                     <div>
                       <p className="font-medium">{b.invoiceNumber}</p>
-                      <p className="text-xs text-gray-500">{t('portal.due')}: {b.dueDate}</p>
+                      <p className="text-xs text-gray-500">{t('portal.due')}: {formatDate(b.dueDate)}</p>
                     </div>
                     <p className="font-bold text-red-600">{Number(b.dueAmount).toFixed(2)} EGP</p>
                   </div>
@@ -481,7 +482,7 @@ export default function PatientPortalPage() {
                     </div>
                   </div>
                   <p className="text-sm text-gray-600">{sanitizeString(m.body)}</p>
-                  <p className="text-xs text-gray-400 mt-1">{sanitizeString(m.createdAt?.split('T')[0] ?? '')}</p>
+                  <p className="text-xs text-gray-400 mt-1">{formatDateTime(m.createdAt)}</p>
                 </CardBody>
               </Card>
             ))

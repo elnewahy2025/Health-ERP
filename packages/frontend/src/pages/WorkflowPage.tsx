@@ -4,6 +4,7 @@ import { workflowApi, type WorkflowDefinition, type WorkflowInstance } from '../
 import { Modal, Input, Select, Button, Badge, EmptyState, PageLoader } from '../components/ui';
 import { Plus, GitBranch, PlayCircle } from 'lucide-react';
 import { sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 import toast from 'react-hot-toast';
 
 type TabType = 'definitions' | 'instances';
@@ -217,7 +218,7 @@ export default function WorkflowPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Badge variant={inst.status === 'active' ? 'success' : inst.status === 'completed' ? 'info' : 'gray'}>{inst.status}</Badge>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{inst.startedAt?.split('T')[0]}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDateTime(inst.startedAt)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { emrApi } from '../lib/api';
+import { formatDate } from '../lib/format';
 import { Modal, Input, Select, PatientSearchField } from '../components/ui';
 import { Plus, FileText, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -188,7 +189,7 @@ export default function EmrPage() {
             ) : records.map(r => (
               <tr key={r.id} className="hover:bg-gray-50">
                 <td><p className="font-medium">{r.patientName}</p><p className="text-xs text-gray-500 font-mono">{r.patientMrn}</p></td>
-                <td>{r.encounterDate}</td>
+                <td>{formatDate(r.encounterDate) || '-'}</td>
                 <td><span className="badge-info">{r.encounterType}</span></td>
                 <td className="max-w-xs truncate">{r.chiefComplaint || '-'}</td>
                 <td>{r.assessment || '-'}</td>

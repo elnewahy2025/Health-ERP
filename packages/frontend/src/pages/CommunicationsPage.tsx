@@ -7,6 +7,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 
 type CommsTab = 'send' | 'history' | 'stats';
 
@@ -270,7 +271,7 @@ export default function CommunicationsPage() {
                         </Badge>
                       </td>
                       <td className="text-xs">
-                        {sanitizeString(log.sent_at?.split('T')[0] ?? log.created_at?.split('T')[0] ?? '')}
+                        {formatDateTime(log.sent_at || log.created_at)}
                       </td>
                     </tr>
                   ))

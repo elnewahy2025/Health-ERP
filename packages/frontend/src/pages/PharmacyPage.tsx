@@ -5,6 +5,7 @@ import { Modal, Input, Select, PatientSearchField } from '../components/ui';
 import { confirmDialog } from '../components/ui';
 import { Plus, Package, ListChecks, Search, Loader2, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatDateTime } from '../lib/format';
 
 interface DrugItem {
   drugName: string;
@@ -219,7 +220,7 @@ interface Prescription {
                     <td className="font-medium">{p.patientName}</td>
                     <td>{p.items?.length || 0} items</td>
                     <td><span className={`badge ${p.status === 'dispensed' ? 'badge-success' : 'badge-info'}`}>{p.status}</span></td>
-                    <td className="text-xs">{p.createdAt?.split('T')[0]}</td>
+                    <td className="text-xs">{formatDateTime(p.createdAt)}</td>
                     <td>{p.status !== 'dispensed' && <button onClick={() => handleDispense(p.id)} className="btn-ghost btn-sm text-green-600">{t('pharmacy.dispense')}</button>}</td>
                   </tr>
                 ))}

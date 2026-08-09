@@ -7,6 +7,7 @@ import { Modal, Input, Select, PatientSearchField } from '../components/ui';
 import { confirmDialog } from '../components/ui';
 import { Plus, Loader2, CalendarCheck, CheckCircle2, Ban } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatDate } from '../lib/format';
 
 interface AppointmentFormData {
   patientId: string;
@@ -211,7 +212,7 @@ export default function AppointmentsPage() {
             ) : appointments.map(a => (
               <tr key={a.id} className="hover:bg-gray-50">
                 <td><p className="font-medium">{a.patientName}</p><p className="text-xs text-gray-500 font-mono">{a.patientMrn}</p></td>
-                <td>{a.appointmentDate?.substring(0, 10)}</td><td>{a.startTime} - {a.endTime}</td>
+                <td>{formatDate(a.appointmentDate) || '-'}</td><td>{a.startTime} - {a.endTime}</td>
                 <td><span className="badge-info">{a.type}</span></td>
                 <td>{a.doctorName || '-'}</td>
                 <td><span className={statusBadge(a.status)}>{a.status}</span></td>

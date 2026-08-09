@@ -12,6 +12,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 import { isValidDate, isFutureDate } from '../lib/validators';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
@@ -453,7 +454,7 @@ export default function PatientSelfServicePage() {
     {
       key: 'issuedAt',
       header: t('selfService.invoiceDate'),
-      render: (item) => <span>{escapeHtml(item.issuedAt?.split('T')[0] ?? '-')}</span>,
+      render: (item) => <span>{formatDateTime(item.issuedAt) || '-'}</span>,
     },
   ];
 

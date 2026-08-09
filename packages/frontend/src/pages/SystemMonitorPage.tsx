@@ -10,6 +10,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 
 type MonitorTab = 'health' | 'alerts' | 'storage' | 'audit';
 
@@ -127,9 +128,7 @@ export default function SystemMonitorPage() {
 
   const formatTimestamp = useCallback((ts: string) => {
     if (!ts) return '';
-    const datePart = ts.split('T')[0];
-    const timePart = ts.split('T')[1]?.slice(0, 5);
-    return `${datePart} ${timePart}`;
+    return formatDateTime(ts);
   }, []);
 
   if (loading) return <PageLoader message={t('common.loading')} />;

@@ -9,6 +9,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 
 type AutomationTab = 'rules' | 'logs';
 
@@ -293,7 +294,7 @@ export default function AutomationPage() {
                           <div><span className="text-gray-500">{t('automation.trigger')}:</span> <span className="font-medium">{sanitizeString(rule.triggerType)}</span></div>
                           <div>
                             <span className="text-gray-500">{t('automation.lastTriggered')}:</span>{' '}
-                            <span className="font-medium">{rule.lastTriggeredAt ? sanitizeString(rule.lastTriggeredAt.split('T')[0]) : t('automation.never')}</span>
+                            <span className="font-medium">{rule.lastTriggeredAt ? formatDateTime(rule.lastTriggeredAt) : t('automation.never')}</span>
                           </div>
                           <div><span className="text-gray-500">{t('automation.cooldown')}:</span> <span className="font-medium">{rule.cooldownMinutes} min</span></div>
                         </div>
@@ -341,7 +342,7 @@ export default function AutomationPage() {
                       {log.errorMessage ? sanitizeString(log.errorMessage) : '-'}
                     </td>
                     <td className="text-xs">{log.durationMs ?? '-'}{log.durationMs ? 'ms' : ''}</td>
-                    <td className="text-xs">{sanitizeString(log.createdAt?.split('T')[0] ?? '')}</td>
+                    <td className="text-xs">{formatDateTime(log.createdAt)}</td>
                   </tr>
                 ))
               )}

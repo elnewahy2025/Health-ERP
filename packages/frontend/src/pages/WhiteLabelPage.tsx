@@ -5,6 +5,7 @@ import {
   type TenantDomain,
 } from '../lib/api';
 import { escapeHtml, sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 import {
   Input,
   Button,
@@ -417,7 +418,7 @@ export default function WhiteLabelPage() {
                         </Badge>
                       </td>
                       <td className="p-3 text-xs text-gray-500">
-                        {d.verifiedAt?.split('T')[0] ?? '-'}
+                        {formatDateTime(d.verifiedAt) || '-'}
                       </td>
                       <td className="p-3">
                         <div className="flex gap-1">

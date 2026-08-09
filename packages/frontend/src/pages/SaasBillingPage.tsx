@@ -8,6 +8,7 @@ import {
   type SaasUsageData,
 } from '../lib/api';
 import { escapeHtml } from '../lib/sanitize';
+import { formatDate, formatDateTime } from '../lib/format';
 import {
   Button,
   Badge,
@@ -175,12 +176,12 @@ export default function SaasBillingPage() {
               <div className="bg-white rounded-lg border p-4">
                 <p className="text-sm text-gray-500">{t('saas.period')}</p>
                 <p className="text-sm font-medium">
-                  {subscription.currentPeriodStart?.split('T')[0]} →{' '}
-                  {subscription.currentPeriodEnd?.split('T')[0]}
+                  {formatDate(subscription.currentPeriodStart)} →{' '}
+                  {formatDate(subscription.currentPeriodEnd)}
                 </p>
                 {subscription.trialEndsAt && (
                   <p className="text-xs text-orange-500">
-                    {t('saas.trialUntil')} {subscription.trialEndsAt?.split('T')[0]}
+                    {t('saas.trialUntil')} {formatDate(subscription.trialEndsAt)}
                   </p>
                 )}
               </div>
@@ -329,7 +330,7 @@ export default function SaasBillingPage() {
                       </Badge>
                     </td>
                     <td className="p-3 text-xs">
-                      {i.paidAt?.split('T')[0] ?? '-'}
+                      {formatDateTime(i.paidAt) || '-'}
                     </td>
                   </tr>
                 ))

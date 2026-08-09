@@ -7,6 +7,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 
 interface Conversation {
   patientId: string;
@@ -115,10 +116,7 @@ export default function PatientMessagesPage() {
 
   const formatTime = useCallback((dateStr: string) => {
     if (!dateStr) return '';
-    const date = new Date(dateStr);
-    const datePart = dateStr.split('T')[0];
-    const timePart = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-    return `${datePart} ${timePart}`;
+    return formatDateTime(dateStr);
   }, []);
 
   if (loading) return <PageLoader message={t('common.loading')} />;

@@ -9,6 +9,7 @@ import {
   type Baa,
 } from '../lib/api';
 import { escapeHtml } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 import {
   Modal,
   Button,
@@ -189,7 +190,7 @@ export default function ComplianceReportsPage() {
                       </Badge>
                     </td>
                     <td className="p-3 text-xs">
-                      {r.generatedAt?.split('T')[0] ?? '-'}
+                      {formatDateTime(r.generatedAt) || '-'}
                     </td>
                     <td className="p-3">
                       <Button
@@ -286,7 +287,7 @@ export default function ComplianceReportsPage() {
                       </td>
                       <td className="p-3 text-xs">{escapeHtml(l.ip || '-')}</td>
                       <td className="p-3 text-xs">
-                        {l.timestamp?.split('T')[0] ?? '-'}
+                        {formatDateTime(l.timestamp) || '-'}
                       </td>
                     </tr>
                   ))
@@ -335,7 +336,7 @@ export default function ComplianceReportsPage() {
                       </Badge>
                     </td>
                     <td className="p-3 text-xs">
-                      {p.lastCleanupAt?.split('T')[0] ?? t('compRep.never')}
+                      {formatDateTime(p.lastCleanupAt) || t('compRep.never')}
                     </td>
                   </tr>
                 ))

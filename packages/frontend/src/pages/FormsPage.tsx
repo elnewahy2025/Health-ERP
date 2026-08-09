@@ -4,6 +4,7 @@ import { formsApi, type FormDefinition, type FormSubmission } from '../lib/api';
 import { Modal, Input, Select, Button, Badge, EmptyState, PageLoader } from '../components/ui';
 import { Plus, ClipboardList, FileJson } from 'lucide-react';
 import { sanitizeString } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 import toast from 'react-hot-toast';
 
 type TabType = 'definitions' | 'submissions';
@@ -209,7 +210,7 @@ export default function FormsPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{sub.formName}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{sub.patientName || '-'}</td>
                       <td className="px-6 py-4 whitespace-nowrap"><Badge>{sub.status}</Badge></td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{sub.submittedAt?.split('T')[0]}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDateTime(sub.submittedAt)}</td>
                     </tr>
                   ))}
                 </tbody>

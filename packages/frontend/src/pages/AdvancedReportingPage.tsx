@@ -10,6 +10,7 @@ import {
   type Column,
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
+import { formatDateTime } from '../lib/format';
 import { escapeHtml } from '../lib/sanitize';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
@@ -268,7 +269,7 @@ export default function AdvancedReportingPage() {
     {
       key: 'createdAt',
       header: t('advRep.generated'),
-      render: (item) => <span>{escapeHtml(item.createdAt?.split('T')[0] ?? '-')}</span>,
+      render: (item) => <span>{formatDateTime(item.createdAt) || '-'}</span>,
     },
     {
       key: 'format',

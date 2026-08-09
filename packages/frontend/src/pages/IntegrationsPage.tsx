@@ -8,6 +8,7 @@ import {
   type WebhookLog,
 } from '../lib/api';
 import { escapeHtml } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 import {
   Input,
   Button,
@@ -215,7 +216,7 @@ export default function IntegrationsPage() {
                       </Badge>
                     </td>
                     <td className="p-3 text-xs text-gray-500">
-                      {c.lastSyncAt?.split('T')[0] ?? 'Never'}
+                      {formatDateTime(c.lastSyncAt) || 'Never'}
                     </td>
                     <td className="p-3">
                       <Button
@@ -274,7 +275,7 @@ export default function IntegrationsPage() {
                         </Badge>
                       </td>
                       <td className="p-3 text-xs text-gray-500">
-                        {w.lastTriggeredAt?.split('T')[0] ?? '-'}
+                        {formatDateTime(w.lastTriggeredAt) || '-'}
                       </td>
                       <td className="p-3">
                         <Button
@@ -348,7 +349,7 @@ export default function IntegrationsPage() {
                             {l.error ? escapeHtml(l.error) : '-'}
                           </td>
                           <td className="p-3 text-xs text-gray-500">
-                            {l.createdAt?.split('T')[0] ?? '-'}
+                            {formatDateTime(l.createdAt) || '-'}
                           </td>
                         </tr>
                       ))

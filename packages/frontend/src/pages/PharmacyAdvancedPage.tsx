@@ -12,6 +12,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
+import { formatDateTime } from '../lib/format';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -339,7 +340,7 @@ export default function PharmacyAdvancedPage() {
     {
       key: 'createdAt',
       header: t('pharmAdv.prescribedDate'),
-      render: (item) => <span>{escapeHtml(item.createdAt?.split('T')[0] ?? '-')}</span>,
+      render: (item) => <span>{formatDateTime(item.createdAt) || '-'}</span>,
     },
   ];
 
