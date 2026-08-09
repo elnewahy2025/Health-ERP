@@ -47,14 +47,19 @@ interface AnalyticsData {
 interface RawAppointment {
   date?: string;
   appointment_date?: string;
+  appointmentDate?: string;
   type?: string;
   doctor_name?: string;
   doctor?: string;
+  doctorName?: string;
   status?: string;
 }
 
 interface RawInvoice {
   created_at?: string;
+  createdAt?: string;
+  issued_at?: string;
+  issuedAt?: string;
   total_amount?: number;
   total?: number;
   status?: string;
@@ -83,9 +88,9 @@ export default function AnalyticsDashboardPage() {
   const fetchAnalytics = useCallback(async () => {
     try {
       const [apptsRes, billingRes, patientsRes] = await Promise.allSettled([
-        api.get('/appointments', { params: { limit: 500 } }),
-        api.get('/billing/invoices', { params: { limit: 500 } }),
-        api.get('/patients', { params: { limit: 500 } }),
+        api.get('/appointments', { params: { limit: 100 } }),
+        api.get('/invoices', { params: { limit: 100 } }),
+        api.get('/patients', { params: { limit: 100 } }),
       ]);
 
       const appts: RawAppointment[] = apptsRes.status === 'fulfilled'
@@ -103,7 +108,7 @@ export default function AnalyticsDashboardPage() {
         const d = subDays(new Date(), 6 - i);
         const dayStr = format(d, 'yyyy-MM-dd');
         const dayLabel = format(d, 'EEE');
-        const count = appts.filter((a) => (a.date ?? a.appointment_date)?.startsWith(dayStr)).length;
+        const count = appts.filter((a) => (a.appointmentDate ?? a.appointment_date ?? a.date)?.startsWith(dayStr)).length;
         return { name: dayLabel, appointments: count };
       });
 
@@ -113,7 +118,7 @@ export default function AnalyticsDashboardPage() {
         const dayStr = format(d, 'yyyy-MM-dd');
         const dayLabel = format(d, 'EEE');
         const rev = invoices
-          .filter((inv) => inv.created_at?.startsWith(dayStr) && inv.status === 'paid')
+          .filter((inv) => (inv.issuedAt ?? inv.createdAt ?? inv.created_at)?.startsWith(dayStr) && inv.status === 'paid')
           .reduce((sum, inv) => sum + (inv.total_amount ?? inv.total ?? 0), 0);
         return { name: dayLabel, revenue: rev };
       });
@@ -139,7 +144,7 @@ export default function AnalyticsDashboardPage() {
       // Doctor performance
       const docMap: Record<string, DoctorPerf> = {};
       appts.forEach((a) => {
-        const doc = a.doctor_name ?? a.doctor ?? t('analytics.unknown');
+        const doc = a.doctorName ?? a.doctor_name ?? a.doctor ?? t('analytics.unknown');
         if (!docMap[doc]) docMap[doc] = { name: doc, count: 0, revenue: 0 };
         docMap[doc].count++;
       });
@@ -159,7 +164,10 @@ export default function AnalyticsDashboardPage() {
         const mStart = format(new Date(d.getFullYear(), d.getMonth(), 1), 'yyyy-MM-dd');
         const mEnd = format(new Date(d.getFullYear(), d.getMonth() + 1, 0), 'yyyy-MM-dd');
         const rev = invoices
-          .filter((inv) => inv.created_at && inv.created_at >= mStart && inv.created_at <= mEnd && inv.status === 'paid')
+          .filter((inv) => {
+            const d2 = inv.issuedAt ?? inv.createdAt ?? inv.created_at;
+            return d2 && d2 >= mStart && d2 <= mEnd && inv.status === 'paid';
+          })
           .reduce((sum, inv) => sum + (inv.total_amount ?? inv.total ?? 0), 0);
         return { name: format(d, 'MMM'), revenue: rev };
       });
