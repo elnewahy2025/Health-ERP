@@ -277,7 +277,7 @@ interface InvoiceSummary { id: string; total: number; status: string; createdAt:
                 <InfoRow label={t('patient.registered')} value={patient.createdAt
                   ? new Date(patient.createdAt).toLocaleString(i18n.language, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                   : '-'} />
-                <InfoRow label={t('patient.dob')} value={patient.dateOfBirth} />
+                <InfoRow label={t('patient.dob')} value={(patient.dateOfBirth || '').substring(0, 10)} />
                 <InfoRow label={t('patient.gender')} value={patient.gender} />
                 <InfoRow label={t('patient.phone')} value={patient.phone} />
                 <InfoRow label={t('patient.email')} value={patient.email || '-'} />
@@ -300,7 +300,7 @@ interface InvoiceSummary { id: string; total: number; status: string; createdAt:
                     <Calendar className="w-8 h-8 text-blue-500 bg-blue-50 p-1.5 rounded-lg" />
                     <div className="flex-1">
                       <p className="text-sm font-medium">{a.type}</p>
-                      <p className="text-xs text-gray-500">{a.appointment_date} {a.start_time}</p>
+                      <p className="text-xs text-gray-500">{(a.appointment_date || '').substring(0, 10)} {a.start_time}</p>
                     </div>
                     <span className={`badge ${
                       a.status === 'completed' ? 'badge-success' :

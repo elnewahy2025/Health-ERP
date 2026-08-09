@@ -228,7 +228,7 @@ export default function PatientsPage() {
                   <td className="font-mono text-xs text-primary-600">{p.medicalRecordNumber}</td>
                   <td className="font-medium">{p.firstName}</td>
                   <td>{p.lastName}</td>
-                  <td>{p.dateOfBirth}</td>
+                  <td>{(p.dateOfBirth || '').substring(0, 10)}</td>
                   <td>{p.createdAt ? new Date(p.createdAt).toLocaleDateString(i18n.language, { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</td>
                   <td>{p.gender === 'male' ? t('patient.gender.male') : t('patient.gender.female')}</td>
                   <td dir="ltr" className="text-left">{p.phone}</td>

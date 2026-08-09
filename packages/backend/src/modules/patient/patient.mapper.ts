@@ -1,6 +1,12 @@
 import type { PatientRow, PatientResponse } from './types.js';
 import { decryptField } from '@healthcare/shared/utils';
 
+function formatDate(value: string | Date): string {
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value).substring(0, 10);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
 export function mapPatient(p: PatientRow): PatientResponse {
   let decryptedNationalId: string | null = null;
   if (p.national_id) {
@@ -18,7 +24,7 @@ export function mapPatient(p: PatientRow): PatientResponse {
     medicalRecordNumber: p.medical_record_number,
     firstName: p.first_name,
     lastName: p.last_name,
-    dateOfBirth: p.date_of_birth,
+    dateOfBirth: formatDate(p.date_of_birth),
     gender: p.gender,
     nationalId: decryptedNationalId,
     nationality: p.nationality,
