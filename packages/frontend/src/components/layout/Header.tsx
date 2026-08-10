@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../stores/authStore';
 import { useTheme } from '../../stores/themeStore';
 import QuickSearch from './QuickSearch';
@@ -10,6 +11,7 @@ import {
 
 export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const { user, tenant, logout, setLocale } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -133,15 +135,21 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
                   <p className="text-sm font-medium text-gray-900 truncate">{user?.firstName} {user?.lastName}</p>
                   <p className="text-xs text-gray-500 truncate">{user?.email}</p>
                 </div>
-                <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3">
-                  <User className="w-4 h-4" /> Profile
+                <button
+                  onClick={() => { setShowUserMenu(false); navigate('/user-preferences'); }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                >
+                  <User className="w-4 h-4" /> {t('nav.userPreferences')}
                 </button>
-                <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3">
-                  <Settings className="w-4 h-4" /> Settings
+                <button
+                  onClick={() => { setShowUserMenu(false); navigate('/settings'); }}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                >
+                  <Settings className="w-4 h-4" /> {t('nav.settings')}
                 </button>
                 <hr className="my-1" />
                 <button
-                  onClick={logout}
+                  onClick={() => { setShowUserMenu(false); logout(); }}
                   className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3"
                 >
                   <LogOut className="w-4 h-4" /> {t('auth.logout')}

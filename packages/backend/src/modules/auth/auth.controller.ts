@@ -145,7 +145,7 @@ export async function login(request: FastifyRequest, reply: FastifyReply) {
   });
   reply.setCookie('csrf_token', svc.hashCsrfToken(csrfToken), {
     httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
-    path: '/', maxAge: 3600,
+    path: '/', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
 
   const principal = await loadUserPrincipal(user.id, tenant.id);
@@ -194,7 +194,7 @@ export async function mfaVerify(request: FastifyRequest, reply: FastifyReply) {
   });
   reply.setCookie('csrf_token', svc.hashCsrfToken(csrfToken), {
     httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
-    path: '/', maxAge: 3600,
+    path: '/', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
 
   const principal = await loadUserPrincipal(user.id, tenant.id);
@@ -249,14 +249,18 @@ export async function refreshToken(request: FastifyRequest, reply: FastifyReply)
   });
   reply.setCookie('csrf_token', svc.hashCsrfToken(csrfToken), {
     httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
-    path: '/', maxAge: 3600,
+    path: '/', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
 
   return sendSuccess(reply, { accessToken, csrfToken, expiresIn: 3600 });
 }
 
 export async function logout(request: FastifyRequest, reply: FastifyReply) {
-  const { refreshToken: token } = logoutSchema.parse(request.body || {});
+  const body = (request.body ?? {}) as Record<string, unknown>;
+  const bodyToken = typeof body.refreshToken === 'string' ? body.refreshToken : undefined;
+  // Browsers cannot read the HttpOnly refresh_token cookie, so fall back to it
+  // when the body has no token — revoking it guarantees the session dies.
+  const token = bodyToken || request.cookies?.refresh_token;
   const { userId, tenantId } = getCtx(request);
   if (token) await revokeRefreshToken(token);
   const ip = request.ip ?? '127.0.0.1';
