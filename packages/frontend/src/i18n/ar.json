@@ -2538,6 +2538,7 @@
   "survey.feedbackPlaceholder": "ملاحظاتك...",
   "patientApp.title": " فيجن للرعاية الصحية",
   "patientApp.mobileNumber": "رقم المحمول",
+  "patientApp.countryCode": "رمز الدولة",
   "patientApp.mobilePlaceholder": "أدخل رقم محمولك",
   "patientApp.otpCode": "رمز التحقق",
   "patientApp.otpPlaceholder": "أدخل الرمز المرسل لهاتفك",

@@ -2540,6 +2540,7 @@
   "survey.feedbackPlaceholder": "Your feedback...",
   "patientApp.title": "Vision Healthcare",
   "patientApp.mobileNumber": "Mobile Number",
+  "patientApp.countryCode": "Country Code",
   "patientApp.mobilePlaceholder": "Enter your mobile number",
   "patientApp.otpCode": "OTP Code",
   "patientApp.otpPlaceholder": "Enter OTP sent to your phone",

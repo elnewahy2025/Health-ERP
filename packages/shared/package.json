@@ -30,6 +30,10 @@
       "types": "./dist/utils/formatters.d.ts",
       "import": "./dist/utils/formatters.js"
     },
+    "./utils/portal": {
+      "types": "./dist/utils/portal.d.ts",
+      "import": "./dist/utils/portal.js"
+    },
     "./authz": {
       "types": "./dist/authz/index.d.ts",
       "import": "./dist/authz/index.js"
@@ -37,7 +41,8 @@
     "./middleware": {
       "types": "./dist/middleware/index.d.ts",
       "import": "./dist/middleware/index.js"
-    }
+    },
+    ".//utils/portal": null
   },
   "scripts": {
     "build": "tsc",

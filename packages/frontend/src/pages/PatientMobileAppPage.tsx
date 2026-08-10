@@ -16,7 +16,8 @@ import {
 import { Button } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
-import { isValidEgyptianPhone } from '../lib/validators';
+import { isValidPortalPhone } from '@healthcare/shared/utils/portal';
+import { COUNTRY_CODES } from '../lib/countryCodes';
 
 type Page = 'home' | 'appointments' | 'records' | 'surveys' | 'notifications' | 'bills' | 'documents' | 'messages';
 
@@ -62,6 +63,7 @@ export default function PatientMobileAppPage() {
 
   const [page, setPage] = useState<Page>('home');
   const [mobileNum, setMobileNum] = useState('');
+  const [countryCode, setCountryCode] = useState('+20');
   const [otp, setOtp] = useState('');
   const [otpToken, setOtpToken] = useState('');
   const [loggedIn, setLoggedIn] = useState(false);
@@ -78,29 +80,27 @@ export default function PatientMobileAppPage() {
 
   const handleRequestOtp = useCallback(async () => {
     const sanitized = sanitizeString(mobileNum.trim());
-    if (!sanitized) {
+    if (!sanitized || !isValidPortalPhone(countryCode, sanitized)) {
       toast.error(t('patientApp.loginFailed'));
-      return;
-    }
-    if (!isValidEgyptianPhone(sanitized)) {
-      toast.error(t('validate.phone'));
       return;
     }
     setRequestingOtp(true);
     try {
       const slug = localStorage.getItem('tenantSlug') || 'demo';
-      const res = await api.post('/portal/login', {
+      const res = await api.post('/portal/otp/request', {
+        countryCode,
         phone: sanitized,
         tenantSlug: slug,
       });
       setOtpToken(res.data.data.token);
       setOtpStep('otp');
-    } catch {
-      toast.error(t('patientApp.loginFailed'));
+    } catch (err) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      toast.error(msg || t('patientApp.loginFailed'));
     } finally {
       setRequestingOtp(false);
     }
-  }, [mobileNum, t]);
+  }, [countryCode, mobileNum, t]);
 
   const handleVerifyOtp = useCallback(async () => {
     const sanitizedOtp = sanitizeString(otp.trim());
@@ -168,6 +168,16 @@ export default function PatientMobileAppPage() {
 
           {otpStep === 'phone' && (
             <>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                {t('patientApp.countryCode')}
+              </label>
+              <select
+                className="w-full p-3 border rounded-lg mb-3 text-base bg-white"
+                value={countryCode}
+                onChange={(e) => setCountryCode(e.target.value)}
+              >
+                {COUNTRY_CODES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+              </select>
               <input
                 className="w-full p-3 border rounded-lg mb-3 text-base"
                 placeholder={t('patientApp.mobilePlaceholder')}

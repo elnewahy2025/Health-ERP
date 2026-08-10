@@ -16,11 +16,28 @@ describe('portal phone helpers', () => {
     expect(normalizePortalPhone('+966', '966512345678')).toBe('+966512345678');
   });
 
+  it('normalizes Egyptian numbers from local, +, and 00 formats to one E.164', () => {
+    expect(normalizePortalPhone('+20', '01003438250')).toBe('+201003438250');
+    expect(normalizePortalPhone('+20', '+201003438250')).toBe('+201003438250');
+    expect(normalizePortalPhone('+20', '00201003438250')).toBe('+201003438250');
+    expect(normalizePortalPhone('20', '01003438250')).toBe('+201003438250');
+  });
+
+  it('normalizes Saudi numbers from local and + formats to one E.164', () => {
+    expect(normalizePortalPhone('+966', '05550000088')).toBe('+9665550000088');
+    expect(normalizePortalPhone('+966', '+966555000088')).toBe('+966555000088');
+    expect(normalizePortalPhone('+966', '5550000088')).toBe('+9665550000088');
+  });
+
   it('validates phone + country code combinations', () => {
     expect(isValidPortalPhone('+966', '512345678')).toBe(true);
     expect(isValidPortalPhone('+20', '1001234567')).toBe(true);
+    expect(isValidPortalPhone('+20', '01003438250')).toBe(true);
+    expect(isValidPortalPhone('+20', '00201003438250')).toBe(true);
+    expect(isValidPortalPhone('+20', '+201003438250')).toBe(true);
     expect(isValidPortalPhone('', '512345678')).toBe(false);
     expect(isValidPortalPhone('+966', '123')).toBe(false);
+    expect(isValidPortalPhone('+20', '123')).toBe(false);
   });
 
   it('validates 14-digit national IDs', () => {
