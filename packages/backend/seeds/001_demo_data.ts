@@ -4,6 +4,8 @@ import bcrypt from 'bcryptjs';
 
 export async function seed(knex: Knex): Promise<void> {
   await knex('audit_logs').del();
+  await knex('booking_requests').del();
+  await knex('booking_slots').del();
   await knex('payment_transactions').del();
   await knex('invoices').del();
   await knex('emr_records').del();
@@ -98,7 +100,7 @@ export async function seed(knex: Knex): Promise<void> {
     password_changed_at: new Date(),
   }).returning('*');
 
-  await knex('users').insert({
+  const [doctorUser] = await knex('users').insert({
     tenant_id: tenant.id,
     email: 'doctor@demo.com',
     password_hash: await bcrypt.hash('Doctor@123', 12),
@@ -115,7 +117,7 @@ export async function seed(knex: Knex): Promise<void> {
     status: 'active',
     mfa_enabled: false,
     password_changed_at: new Date(),
-  });
+  }).returning('*');
 
   await knex('users').insert({
     tenant_id: tenant.id,
@@ -136,14 +138,14 @@ export async function seed(knex: Knex): Promise<void> {
     password_changed_at: new Date(),
   });
 
-  await knex('branches').insert({
+  const [mainBranch] = await knex('branches').insert({
     tenant_id: tenant.id,
     name: 'Main Branch',
     code: 'MAIN',
     address: JSON.stringify({ street: '123 Healthcare St', city: 'Riyadh', country: 'Saudi Arabia' }),
     phone: '+966112345678',
     status: 'active',
-  });
+  }).returning('*');
 
   await knex('branches').insert({
     tenant_id: tenant.id,
@@ -153,6 +155,32 @@ export async function seed(knex: Knex): Promise<void> {
     phone: '+966112345679',
     status: 'active',
   });
+
+  // Booking slots for the demo doctor — next 7 days, 09:00–17:00 every 30 min
+  const slotRows: Array<Record<string, unknown>> = [];
+  const startMin = 9 * 60;
+  const endMin = 17 * 60;
+  const slotInterval = 30;
+  for (let d = 0; d < 7; d += 1) {
+    const date = new Date(Date.now() + d * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    for (let cur = startMin; cur + slotInterval <= endMin; cur += slotInterval) {
+      const h = Math.floor(cur / 60);
+      const m = cur % 60;
+      const nh = Math.floor((cur + slotInterval) / 60);
+      const nm = (cur + slotInterval) % 60;
+      slotRows.push({
+        tenant_id: tenant.id,
+        doctor_id: doctorUser.id,
+        branch_id: mainBranch.id,
+        date,
+        start_time: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`,
+        end_time: `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`,
+        is_available: true,
+        slot_type: 'consultation',
+      });
+    }
+  }
+  if (slotRows.length > 0) await knex('booking_slots').insert(slotRows);
 
   const patients = [
     { firstName: 'Mohammed', lastName: 'Al-Otaibi', dob: '1985-06-15', gender: 'male', phone: '+966501234567', bloodType: 'O+' },

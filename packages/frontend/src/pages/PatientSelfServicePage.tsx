@@ -277,9 +277,10 @@ export default function PatientSelfServicePage() {
       setSelectedSlotId('');
       setSlots([]);
       if (value && isValidDate(value) && isFutureDate(value)) {
+        const tenantSlug = localStorage.getItem('tenantSlug') || '';
         void api
           .get('/booking/slots', {
-            params: { doctorId: selectedDoctorId, date: value },
+            params: { doctorId: selectedDoctorId, date: value, tenantSlug },
           })
           .then(({ data }) => {
             setSlots((data.data ?? []) as TimeSlot[]);
