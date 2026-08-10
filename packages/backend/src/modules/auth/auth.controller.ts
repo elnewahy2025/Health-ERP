@@ -10,7 +10,7 @@ import { generateSecret, verifyToken, generateQrCode } from '../../services/totp
 import { createAndSendOtp, verifyOtp, incrementOtpAttempt } from '../../services/otp.js';
 import { sendEmail } from '../../services/email.js';
 import { getEnv } from '@healthcare/shared/config';
-import { loadUserPrincipal, uniquePermissionKeys } from '../../services/authorization.js';
+import { loadUserPrincipal, uniquePermissionKeys, type Principal } from '../../services/authorization.js';
 import * as svc from './auth.service.js';
 import * as repo from './auth.repository.js';
 import {
@@ -20,6 +20,43 @@ import {
   mfaEnableSchema, mfaDisableSchema, otpSendSchema, otpVerifySchema,
 } from './auth.schema.js';
 const env = getEnv();
+
+function parseRoles(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/**
+ * Canonical authenticated-user payload shared by login, MFA verify, and me().
+ * Permissions are the effective grants (roles + direct) derived server-side —
+ * the frontend must never receive a stale/legacy shape that hides grants.
+ */
+function buildUserResponse(user: Record<string, unknown>, principal: Principal | null) {
+  return {
+    id: user.id,
+    email: user.email,
+    firstName: user.first_name,
+    lastName: user.last_name,
+    roles: principal?.roles || parseRoles(user.roles),
+    permissions: principal ? uniquePermissionKeys(principal.grants) : [],
+    branches: principal?.branches || [],
+    employeeType: user.employee_type || 'staff',
+    departmentId: user.department_id || null,
+    position: user.position || null,
+    locale: user.locale || 'en',
+    status: user.status,
+    mfaEnabled: Boolean(user.mfa_enabled),
+    passwordChangedAt: user.password_changed_at || null,
+  };
+}
 
 export async function registerTenant(request: FastifyRequest, reply: FastifyReply) {
   const body = registerTenantSchema.parse(request.body);
@@ -111,10 +148,10 @@ export async function login(request: FastifyRequest, reply: FastifyReply) {
     path: '/', maxAge: 3600,
   });
 
+  const principal = await loadUserPrincipal(user.id, tenant.id);
   return sendSuccess(reply, {
     accessToken, csrfToken, expiresIn: 3600,
-    user: { id: user.id, email: user.email, firstName: user.first_name, lastName: user.last_name,
-      roles: typeof user.roles === 'string' ? JSON.parse(user.roles) : user.roles, locale: user.locale },
+    user: buildUserResponse(user, principal),
     tenant: {
       id: tenant.id, name: tenant.name, slug: tenant.slug,
       locale: tenant.locale, direction: tenant.settings?.direction || (tenant.locale === 'ar' ? 'rtl' : 'ltr'),
@@ -160,10 +197,10 @@ export async function mfaVerify(request: FastifyRequest, reply: FastifyReply) {
     path: '/', maxAge: 3600,
   });
 
+  const principal = await loadUserPrincipal(user.id, tenant.id);
   return sendSuccess(reply, {
     accessToken, csrfToken, expiresIn: 3600,
-    user: { id: user.id, email: user.email, firstName: user.first_name, lastName: user.last_name,
-      roles: typeof user.roles === 'string' ? JSON.parse(user.roles) : user.roles, locale: user.locale },
+    user: buildUserResponse(user, principal),
   });
 }
 
@@ -237,17 +274,7 @@ export async function me(request: FastifyRequest, reply: FastifyReply) {
   const tenant = await repo.findTenantById(tenantId);
   const principal = await loadUserPrincipal(userId, tenantId);
   return sendSuccess(reply, {
-    user: {
-      id: user.id, email: user.email, firstName: user.first_name, lastName: user.last_name,
-      roles: principal?.roles || [],
-      permissions: principal ? uniquePermissionKeys(principal.grants) : [],
-      branches: principal?.branches || [],
-      employeeType: user.employee_type || 'staff',
-      departmentId: user.department_id || null,
-      position: user.position || null,
-      locale: user.locale || 'en', status: user.status, mfaEnabled: user.mfa_enabled,
-      passwordChangedAt: user.password_changed_at,
-    },
+    user: buildUserResponse(user, principal),
     tenant: tenant ? {
       id: tenant.id, name: tenant.name, slug: tenant.slug,
       locale: tenant.locale, direction: tenant.settings?.direction || (tenant.locale === 'ar' ? 'rtl' : 'ltr'),

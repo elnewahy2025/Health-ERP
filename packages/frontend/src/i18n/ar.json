@@ -2571,6 +2571,8 @@
   "admin.title": "الإدارة",
   "admin.userManagement": "إدارة المستخدمين",
   "admin.userManagementDesc": "إدارة حسابات الموظفين والأدوار",
+  "admin.roles": "الأدوار والصلاحيات",
+  "admin.rolesDesc": "إنشاء الأدوار وتخصيص الصلاحيات بدقة",
   "admin.securitySettings": "إعدادات الأمان",
   "admin.securitySettingsDesc": "المصادقة والمصادقة الثنائية والتحكم في الوصول",
   "admin.systemMonitor": "مراقبة النظام",

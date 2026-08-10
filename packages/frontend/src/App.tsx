@@ -234,14 +234,13 @@ function AppContent() {
             <Route path="admin/roles" element={<RolesPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
-          
-            <Route path="security" element={<SecuritySettingsPage />} />
-            <Route path="audit-logs" element={<AuditLogsPage />} />
-            <Route path="notification-templates" element={<NotificationTemplatesPage />} />
-            <Route path="notification-logs" element={<NotificationLogsPage />} />
-            <Route path="financial-reports" element={<FinancialReportsPage />} />
-            <Route path="insurance-claims" element={<InsuranceClaimsPage />} />
-            <Route path="patients/:patientId/timeline" element={<PatientTimelinePage />} />
+          <Route path="security" element={<ProtectedRoute><SecuritySettingsPage /></ProtectedRoute>} />
+          <Route path="audit-logs" element={<ProtectedRoute><AuditLogsPage /></ProtectedRoute>} />
+          <Route path="notification-templates" element={<ProtectedRoute><NotificationTemplatesPage /></ProtectedRoute>} />
+          <Route path="notification-logs" element={<ProtectedRoute><NotificationLogsPage /></ProtectedRoute>} />
+          <Route path="financial-reports" element={<ProtectedRoute><FinancialReportsPage /></ProtectedRoute>} />
+          <Route path="insurance-claims" element={<ProtectedRoute><InsuranceClaimsPage /></ProtectedRoute>} />
+          <Route path="patients/:patientId/timeline" element={<ProtectedRoute><PatientTimelinePage /></ProtectedRoute>} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>

@@ -103,6 +103,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(data.user);
     setTenant(data.tenant);
     setIsAuthenticated(true);
+    // Pull the full principal (effective permissions/branches/employeeType)
+    // from the server so the UI mirror is never empty right after login.
+    authApi.me()
+      .then((fresh) => {
+        setUser(fresh.user);
+        setTenant(fresh.tenant);
+        localStorage.setItem('locale', fresh.user.locale);
+      })
+      .catch(() => {
+        // Session is already established; keep the login payload as fallback.
+      });
     return {};
   }, []);
 

@@ -2573,6 +2573,8 @@
   "admin.title": "Administration",
   "admin.userManagement": "User Management",
   "admin.userManagementDesc": "Manage staff accounts and roles",
+  "admin.roles": "Roles & Permissions",
+  "admin.rolesDesc": "Create roles and assign granular permissions",
   "admin.securitySettings": "Security Settings",
   "admin.securitySettingsDesc": "Authentication, 2FA, and access control",
   "admin.systemMonitor": "System Monitor",
