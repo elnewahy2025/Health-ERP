@@ -53,8 +53,8 @@ export default function UsersPage() {
         page, limit, search: search || undefined,
         status: statusFilter || undefined, employeeType: typeFilter || undefined,
       });
-      setUsers(data.items ?? []);
-      setTotal(data.total ?? 0);
+      setUsers(data.data ?? []);
+      setTotal(data.pagination?.total ?? 0);
     } catch {
       setError('Failed to load users');
     } finally {

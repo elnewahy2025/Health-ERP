@@ -54,7 +54,7 @@ export interface RoleItem {
 
 export const usersApi = {
   list: (params: Record<string, string | number | undefined>) =>
-    apiClient.get('/users', { params }).then((r) => r.data.data),
+    apiClient.get('/users', { params }).then((r) => r.data),
   get: (userId: string) => apiClient.get(`/users/${userId}`).then((r) => r.data.data),
   create: (payload: Record<string, unknown>) =>
     apiClient.post('/users', payload).then((r) => r.data.data),
