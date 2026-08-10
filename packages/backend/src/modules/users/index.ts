@@ -76,7 +76,7 @@ export async function registerUsersModule(app: FastifyInstance) {
     if (query.departmentId) base.andWhere('users.department_id', query.departmentId);
     if (query.status) base.andWhere('users.status', query.status);
 
-    const total = await base.clone().distinct('users.id').count('users.id as count').first();
+    const total = await base.clone().countDistinct('users.id as count').first();
     const users = await base
       .distinct('users.*')
       .orderBy(query.sort || 'users.created_at', query.order)
