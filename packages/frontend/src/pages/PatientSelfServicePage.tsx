@@ -15,6 +15,8 @@ import { sanitizeString, escapeHtml } from '../lib/sanitize';
 import { formatDateTime } from '../lib/format';
 import { isValidDate, isFutureDate } from '../lib/validators';
 
+const PHONE_REGEX = /^\+?[0-9]{10,15}$/;
+
 /* ── Types ─────────────────────────────────────────────────────────── */
 
 type SelfServiceTab = 'book' | 'appointments' | 'lab' | 'prescriptions' | 'invoices';
@@ -121,6 +123,9 @@ export default function PatientSelfServicePage() {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [patientName, setPatientName] = useState('');
+  const [patientPhone, setPatientPhone] = useState('');
+  const [patientEmail, setPatientEmail] = useState('');
 
   /* ── Data state ── */
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -294,19 +299,27 @@ export default function PatientSelfServicePage() {
   );
 
   const handleBookingConfirm = useCallback(async (): Promise<void> => {
-    if (!selectedDoctorId || !selectedDate || !selectedSlotId) {
+    if (!selectedDoctorId || !selectedDate || !selectedSlotId || !selectedSlot) {
       toast.error(t('selfService.completeAll'));
+      return;
+    }
+    if (!patientName.trim()) {
+      toast.error(t('selfService.invalidPatientName'));
+      return;
+    }
+    if (!PHONE_REGEX.test(patientPhone.replace(/\s/g, ''))) {
+      toast.error(t('selfService.invalidPatientPhone'));
       return;
     }
     setBookingLoading(true);
     try {
-      await api.post('/appointments', {
-        doctor_id: selectedDoctorId,
-        appointment_date: selectedDate,
-        start_time: selectedSlot?.startTime ?? '',
-        end_time: selectedSlot?.endTime ?? '',
-        appointment_type: appointmentType,
-        reason: sanitizeString(reason),
+      await api.post('/booking/request', {
+        slotId: selectedSlot.id,
+        patientName: sanitizeString(patientName),
+        patientPhone: sanitizeString(patientPhone),
+        patientEmail: patientEmail ? sanitizeString(patientEmail) : undefined,
+        reason: reason ? sanitizeString(reason) : undefined,
+        tenantSlug: localStorage.getItem('tenantSlug') || '',
       });
       setBookingSuccess(true);
       setShowConfirmModal(false);
@@ -319,7 +332,7 @@ export default function PatientSelfServicePage() {
     }
   }, [
     selectedDoctorId, selectedDate, selectedSlotId, selectedSlot,
-    appointmentType, reason, t, fetchAppointments,
+    appointmentType, reason, patientName, patientPhone, patientEmail, t, fetchAppointments,
   ]);
 
   const resetBooking = useCallback((): void => {
@@ -329,6 +342,9 @@ export default function PatientSelfServicePage() {
     setSelectedSlotId('');
     setAppointmentType('consultation');
     setReason('');
+    setPatientName('');
+    setPatientPhone('');
+    setPatientEmail('');
     setBookingSuccess(false);
     setSlots([]);
   }, []);
@@ -665,6 +681,34 @@ export default function PatientSelfServicePage() {
                           <h3 className="text-lg font-semibold">
                             {t('selfService.confirmBooking')}
                           </h3>
+
+                          <div className="space-y-3">
+                            <h4 className="text-sm font-medium text-gray-700">
+                              {t('selfService.patientInfo')}
+                            </h4>
+                            <Input
+                              label={t('selfService.patientName')}
+                              value={patientName}
+                              onChange={(e) => setPatientName(e.target.value)}
+                              placeholder={t('selfService.patientNamePlaceholder')}
+                              maxLength={120}
+                            />
+                            <Input
+                              label={t('selfService.patientPhone')}
+                              value={patientPhone}
+                              onChange={(e) => setPatientPhone(e.target.value)}
+                              placeholder={t('selfService.patientPhonePlaceholder')}
+                              maxLength={20}
+                            />
+                            <Input
+                              label={t('selfService.patientEmailOptional')}
+                              value={patientEmail}
+                              onChange={(e) => setPatientEmail(e.target.value)}
+                              placeholder={t('selfService.patientEmailPlaceholder')}
+                              type="email"
+                              maxLength={200}
+                            />
+                          </div>
 
                           <div className="bg-gray-50 rounded-xl p-6 space-y-4">
                             <div className="flex justify-between">

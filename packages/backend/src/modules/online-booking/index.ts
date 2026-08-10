@@ -23,7 +23,7 @@ export async function registerOnlineBookingModule(app: FastifyInstance) {
     return sendSuccess(reply, slots.map((s: Record<string, unknown>) => ({
       id: s.id, doctorId: s.doctor_id, branchId: s.branch_id,
       date: s.date, startTime: s.start_time, endTime: s.end_time,
-      slotType: s.slot_type,
+      slotType: s.slot_type, available: Boolean(s.is_available),
     })));
   });
 
