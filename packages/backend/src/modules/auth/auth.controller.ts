@@ -436,6 +436,7 @@ export async function csrfValidation(request: FastifyRequest, reply: FastifyRepl
     url.includes('/auth/otp/') ||
     url.includes('/portal/request-access') || url.includes('/portal/otp/request') ||
     url.includes('/portal/verify') ||
+    url.includes('/booking/request') ||
     (url.includes('/tenants') && method === 'POST')
   ) return;
 
