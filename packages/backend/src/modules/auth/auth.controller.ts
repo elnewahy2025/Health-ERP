@@ -429,7 +429,15 @@ export async function csrfValidation(request: FastifyRequest, reply: FastifyRepl
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return;
 
   const url = request.url;
-  if (url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/auth/forgot-password') || url.includes('/auth/verify-email') || url.includes('/auth/reset-password') || url.includes('/auth/resend-verification') || url.includes('/auth/otp/') || (url.includes('/tenants') && method === 'POST')) return;
+  if (
+    url.includes('/auth/login') || url.includes('/auth/refresh') ||
+    url.includes('/auth/forgot-password') || url.includes('/auth/verify-email') ||
+    url.includes('/auth/reset-password') || url.includes('/auth/resend-verification') ||
+    url.includes('/auth/otp/') ||
+    url.includes('/portal/request-access') || url.includes('/portal/otp/request') ||
+    url.includes('/portal/verify') ||
+    (url.includes('/tenants') && method === 'POST')
+  ) return;
 
   const csrfHeader = request.headers["x-csrf-token"];
   const cookies = request.cookies;
