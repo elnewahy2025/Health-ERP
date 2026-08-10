@@ -70,6 +70,7 @@ export type {
 export { paymentApi, egyptPaymentApi } from './payment';
 export { clinicalApi } from './clinical';
 export { authApi } from './auth';
+export { portalApi, staffPortalApi } from './portal';
 export { patientsApi } from './patients';
 export { appointmentsApi } from './appointments';
 export { emrApi } from './emr';

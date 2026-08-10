@@ -122,6 +122,9 @@ export default function LoginPage() {
           <p className="text-center text-sm text-gray-500">
             Don't have an account? <Link to="/register" className="text-primary-600 hover:underline font-medium">Register</Link>
           </p>
+          <p className="text-center text-sm text-gray-500 border-t border-gray-100 pt-3">
+            <Link to="/portal" className="text-primary-600 hover:underline font-medium">Patient portal →</Link>
+          </p>
         </form>
       </div>
     </div>

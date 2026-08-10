@@ -11,6 +11,7 @@ import { routePermissions } from './router';
 
 // Lazy-loaded page components
 const LoginPage = lazy(() => import('./pages/LoginPage'));
+const PublicPortalPage = lazy(() => import('./pages/PublicPortalPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const PatientsPage = lazy(() => import('./pages/PatientsPage'));
@@ -156,6 +157,7 @@ function AppContent() {
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" replace />} />
+          <Route path="/portal" element={<PublicPortalPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/register" element={!user ? <RegisterPage /> : <Navigate to="/" replace />} />

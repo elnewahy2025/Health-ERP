@@ -275,3 +275,35 @@ Every sensitive endpoint must have authorization tests covering at minimum:
 
 - None blocking. Confirm with product before changing: exact seed-role grant matrix per tenant type,
   and whether departments need hierarchy beyond a flat dictionary.
+
+---
+
+## 11. Patient portal access model (staff-verified OTP)
+
+The patient portal uses a **human-in-the-loop OTP** model while automated SMS/WhatsApp sending is
+not configured:
+
+1. **Access request (always required):** the patient opens the public `/portal` page, enters org
+   code, name, country code + phone, 14-digit national ID, DOB, gender (email optional). The request
+   is stored in `portal_enrollment_requests` (`status = pending`), tenant-scoped, audited
+   (`portal.enrollment_requested`). The national ID is encrypted at rest (`encryptField`, same key as
+   `patients.national_id`).
+2. **Staff approval:** receptionists with `patient_portal.view` see the pending queue
+   (`GET /api/v1/portal/enrollments`, `POST /:id/approve|reject`). On approval the request is linked
+   to the existing patient matching the national ID, or a minimal patient record is created
+   (MRN via `generateMedicalRecordNumber`). Audited (`portal.enrollment_approved|rejected`).
+3. **OTP request (every login):** `POST /api/v1/portal/otp/request` requires an approved enrollment.
+   A 6-digit OTP is generated, **encrypted** at rest in `portal_sessions.otp_encrypted`
+   (10-minute expiry, single-use), and enters the staff delivery queue
+   (`delivery_status = pending`). Reuses an active pending OTP for the same patient.
+4. **Staff delivers:** `GET /api/v1/portal/otp-queue` returns pending OTPs (decrypted for staff
+   relay), patient phone, and a pre-filled `wa.me` click-to-chat link. `POST /:id/sent` marks it
+   delivered. Audited (`portal.otp_requested`, `portal.otp_sent`).
+5. **Verify:** `POST /api/v1/portal/verify` exchanges the OTP for a 30-day portal session token
+   (token column is replaced; `delivery_status = verified`; audited `portal.otp_verified` /
+   `portal.otp_failed`). All portal data endpoints (`/dashboard`, `/appointments`, `/records`,
+   `/bills`, `/documents`, `/messages`) resolve the patient strictly from the session token —
+   no client-supplied patient ID. Rate limits: 5 access requests/min and 3 OTP requests/min per IP.
+
+Roles: portal endpoints are public by design; staff queue endpoints require `patient_portal.view`.
+Tenant isolation: every enrollment/session row carries `tenant_id` and every query is tenant-scoped.
