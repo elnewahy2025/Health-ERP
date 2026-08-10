@@ -141,7 +141,7 @@ export async function login(request: FastifyRequest, reply: FastifyReply) {
   const csrfToken = svc.generateCsrfToken();
   reply.setCookie('refresh_token', refreshToken, {
     httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
-    path: '/api/v1/auth/refresh', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
+    path: '/', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
   reply.setCookie('csrf_token', svc.hashCsrfToken(csrfToken), {
     httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
@@ -190,7 +190,7 @@ export async function mfaVerify(request: FastifyRequest, reply: FastifyReply) {
   const csrfToken = svc.generateCsrfToken();
   reply.setCookie('refresh_token', refreshToken, {
     httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
-    path: '/api/v1/auth/refresh', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
+    path: '/', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
   reply.setCookie('csrf_token', svc.hashCsrfToken(csrfToken), {
     httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
@@ -245,7 +245,7 @@ export async function refreshToken(request: FastifyRequest, reply: FastifyReply)
   const csrfToken = svc.generateCsrfToken();
   reply.setCookie('refresh_token', result.refreshToken, {
     httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
-    path: '/api/v1/auth/refresh', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
+    path: '/', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
   reply.setCookie('csrf_token', svc.hashCsrfToken(csrfToken), {
     httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
@@ -266,7 +266,7 @@ export async function logout(request: FastifyRequest, reply: FastifyReply) {
   const ip = request.ip ?? '127.0.0.1';
   await repo.deactivateSessionByIp(userId, tenantId, ip);
   await logAudit({ tenantId, userId, action: 'user.logout' });
-  reply.clearCookie('refresh_token', { path: '/api/v1/auth/refresh' });
+  reply.clearCookie('refresh_token', { path: '/' });
   reply.clearCookie('csrf_token', { path: '/' });
   return sendSuccess(reply, { message: 'Logged out successfully' });
 }
