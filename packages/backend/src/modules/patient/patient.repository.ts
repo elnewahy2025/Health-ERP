@@ -90,6 +90,17 @@ export async function findByNationalId(nationalId: string, tenantId: string): Pr
   return plaintextMatch;
 }
 
+/** Normalize a date value (JS Date from a date column, ISO string, or
+ * 'YYYY-MM-DD' string) to the 'YYYY-MM-DD' form Postgres date columns accept. */
+function toDateOnly(value: unknown): string {
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const d = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(d.getTime())) return String(value);
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
 export async function insertPatient(data: {
   tenantId: string;
   medicalRecordNumber: string;
@@ -108,13 +119,14 @@ export async function insertPatient(data: {
   userId: string;
 }): Promise<PatientRow> {
   const encryptedNationalId = data.nationalId ? encryptField(data.nationalId) : null;
+  const dateOfBirth = toDateOnly(data.dateOfBirth);
 
   const [patient] = await db('patients').insert({
     tenant_id: data.tenantId,
     medical_record_number: data.medicalRecordNumber,
     first_name: data.firstName,
     last_name: data.lastName,
-    date_of_birth: data.dateOfBirth,
+    date_of_birth: dateOfBirth,
     gender: data.gender,
     phone: data.phone,
     email: data.email,
