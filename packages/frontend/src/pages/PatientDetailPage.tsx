@@ -5,7 +5,7 @@ import { patientsApi, emrApi, billingApi } from '../lib/api';
 import { formatDate } from '../lib/format';
 import { isValidEgyptianPhone, isValidEgyptianNationalId, isValidEmail, isValidName } from '../lib/validators';
 import { Input, Select } from '../components/ui';
-import { ArrowLeft, Calendar, Receipt, Pencil, Eye, Loader2 } from 'lucide-react';
+import { ArrowLeft, Calendar, Eye, FileText, Loader2, Pencil, Receipt } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface PatientFormData {
@@ -23,8 +23,9 @@ interface PatientFormData {
 export default function PatientDetailPage() {
   const { id } = useParams();
   const { t, i18n } = useTranslation();
-  interface PatientDetail { id: string; firstName: string; lastName: string; email?: string; phone: string; gender: string; dateOfBirth: string; bloodType: string; nationality: string; status: string; medicalRecordNumber: string; nationalId?: string; createdAt?: string; updatedAt?: string; recentAppointments: AppointmentSummary[]; recentInvoices: InvoiceSummary[]; }
+  interface PatientDetail { id: string; firstName: string; lastName: string; email?: string; phone: string; gender: string; dateOfBirth: string; bloodType: string; nationality: string; status: string; medicalRecordNumber: string; nationalId?: string; createdAt?: string; updatedAt?: string; recentAppointments: AppointmentSummary[]; recentEmrRecords: EmrSummary[]; recentInvoices: InvoiceSummary[]; }
 interface AppointmentSummary { id: string; appointmentDate: string; appointment_date?: string; start_time?: string; status: string; type: string; doctorName?: string; }
+interface EmrSummary { id: string; encounter_date?: string; encounterDate?: string; encounter_type?: string; status: string; chief_complaint?: string; }
 interface InvoiceSummary { id: string; total: number; status: string; createdAt: string; invoice_number?: string; }
   const [patient, setPatient] = useState<PatientDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -307,6 +308,27 @@ interface InvoiceSummary { id: string; total: number; status: string; createdAt:
                       a.status === 'completed' ? 'badge-success' :
                       a.status === 'cancelled' ? 'badge-danger' : 'badge-warning'
                     }`}>{a.status}</span>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="text-sm text-gray-500">{t('common.noData')}</p>}
+          </div>
+        </div>
+
+        {/* Recent EMR Records */}
+        <div className="card">
+          <div className="card-header"><h2 className="font-semibold">Recent EMR Records</h2></div>
+          <div className="card-body">
+            {patient.recentEmrRecords?.length > 0 ? (
+              <div className="space-y-3">
+                {patient.recentEmrRecords.map((r: EmrSummary) => (
+                  <div key={r.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <FileText className="w-8 h-8 text-teal-500 bg-teal-50 p-1.5 rounded-lg" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium capitalize">{r.encounter_type || 'Encounter'}</p>
+                      <p className="text-xs text-gray-500">{formatDate(r.encounter_date || r.encounterDate || '')}{r.chief_complaint ? ` - ${r.chief_complaint}` : ''}</p>
+                    </div>
+                    <span className="badge">{r.status}</span>
                   </div>
                 ))}
               </div>

@@ -252,11 +252,19 @@ export async function canAccessPatient(
   patient: { id: string; tenant_id: string; branch_id?: string | null; department_id?: string | null },
 ): Promise<boolean> {
   if (principal.tenantId !== patient.tenant_id) return false;
-  if (
-    hasPermission(principal, 'patients.view', 'assigned_patients') &&
-    (await assignedPatientIds(principal)).includes(patient.id)
-  ) {
-    return true;
+  // An assigned_patients grant is narrow: it only covers patients assigned to
+  // this principal. patientAccessByScope deliberately returns true for the
+  // assigned_patients scope, so membership must be enforced here — unless a
+  // broader grant (branch/tenant/system) independently covers this patient.
+  if (hasPermission(principal, 'patients.view', 'assigned_patients')) {
+    const broader =
+      hasPermission(principal, 'patients.view', 'branch') ||
+      hasPermission(principal, 'patients.view', 'branches') ||
+      hasPermission(principal, 'patients.view', 'tenant') ||
+      hasPermission(principal, 'patients.view', 'system');
+    if (!broader && !(await assignedPatientIds(principal)).includes(patient.id)) {
+      return false;
+    }
   }
   if (patientAccessByScope(principal, patient)) return true;
   if (await hasEmergencyAccess(principal, patient.id)) return true;

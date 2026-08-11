@@ -128,6 +128,23 @@ export async function registerEmrModule(app: FastifyInstance) {
       .first();
     if (!patient) throw new PatientNotFoundError(body.patientId);
 
+    const { principal } = getCtx(request);
+    if (!(await canAccessPatient(principal, patient))) {
+      throw new ForbiddenError('You do not have access to this patient');
+    }
+
+    if (body.appointmentId) {
+      const appointment = await db('appointments')
+        .where({ id: body.appointmentId, tenant_id: tenantId })
+        .first();
+      if (!appointment || String(appointment.patient_id) !== String(body.patientId)) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Appointment does not belong to this patient',
+        });
+      }
+    }
+
     let vitalsData = null;
     let bmiValue = null;
     if (body.vitals) {
@@ -188,7 +205,15 @@ export async function registerEmrModule(app: FastifyInstance) {
     if (body.plan !== undefined) updateData.plan = body.plan;
     if (body.chiefComplaint !== undefined) updateData.chief_complaint = body.chiefComplaint;
     if (body.notes !== undefined) updateData.notes = body.notes;
-    if (body.status !== undefined) updateData.status = body.status;
+    if (body.status !== undefined) {
+      if (body.status === 'signed' && !hasPermission(getCtx(request).principal, 'emr.approve')) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Signing a record requires the emr.approve permission',
+        });
+      }
+      updateData.status = body.status;
+    }
     if (body.vitals) {
       const bmi = calculateBMI(Number((body.vitals as Record<string, unknown>).weight), Number((body.vitals as Record<string, unknown>).height));
       updateData.vitals = JSON.stringify({ ...body.vitals, bmi });
@@ -256,6 +281,7 @@ export async function registerEmrModule(app: FastifyInstance) {
     if (!existing) {
       return reply.status(404).send({ success: false, error: 'EMR record not found' });
     }
+    await assertEmrAccess(getCtx(request).principal, existing);
 
     const currentDiagnosis = existing.diagnosis
       ? (typeof existing.diagnosis === 'string' ? JSON.parse(existing.diagnosis) : existing.diagnosis)
@@ -280,6 +306,15 @@ export async function registerEmrModule(app: FastifyInstance) {
     preHandler: [authenticate, authorize('emr.edit')],
   }, async (request, reply) => {
     const { emrId } = request.params as { emrId: string };
+    const tenantId = getTenantId(request);
+    const existing = await db('emr_records')
+      .where({ id: emrId, tenant_id: tenantId })
+      .first();
+    if (!existing) {
+      return reply.status(404).send({ success: false, error: 'EMR record not found' });
+    }
+    await assertEmrAccess(getCtx(request).principal, existing);
+
     const body = z.object({
       drugName: z.string().min(1),
       dosage: z.string().min(1),
@@ -290,14 +325,6 @@ export async function registerEmrModule(app: FastifyInstance) {
       refills: z.number().int().min(0).default(0),
       instructions: z.string().optional(),
     }).parse(request.body);
-
-    const tenantId = getTenantId(request);
-    const existing = await db('emr_records')
-      .where({ id: emrId, tenant_id: tenantId })
-      .first();
-    if (!existing) {
-      return reply.status(404).send({ success: false, error: 'EMR record not found' });
-    }
 
     const currentMeds = existing.medications
       ? (typeof existing.medications === 'string' ? JSON.parse(existing.medications) : existing.medications)

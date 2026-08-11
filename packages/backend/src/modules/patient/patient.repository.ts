@@ -38,11 +38,19 @@ export async function findPatients(tenantId: string, options: {
     query = query.andWhere('status', options.status);
   }
 
-  if (options.branchIds && options.branchIds.length > 0) {
-    query = query.whereIn('branch_id', options.branchIds);
+  if (options.branchIds) {
+    if (options.branchIds.length === 0) {
+      query = query.where(false);
+    } else {
+      query = query.whereIn('branch_id', options.branchIds);
+    }
   }
-  if (options.patientIds && options.patientIds.length > 0) {
-    query = query.whereIn('id', options.patientIds);
+  if (options.patientIds) {
+    if (options.patientIds.length === 0) {
+      query = query.where(false);
+    } else {
+      query = query.whereIn('id', options.patientIds);
+    }
   }
 
   const total = await query.clone().count('id as count').first();
@@ -157,7 +165,7 @@ export async function updatePatientById(
     .where({ id: patientId, tenant_id: tenantId })
     // updated_at is stored with microsecond precision; truncate to ms so the
     // client's ISO timestamp (ms precision) matches exactly
-    .whereRaw("date_trunc('milliseconds', updated_at) = ?::timestamp", [expectedUpdatedAt])
+    .whereRaw("date_trunc('milliseconds', updated_at) = ?::timestamptz", [expectedUpdatedAt])
     .update(updateData)
     .returning('*');
   return updated;
@@ -180,11 +188,19 @@ export async function quickSearchPatients(tenantId: string, q: string, options?:
         .orWhere('phone', 'ilike', `%${q}%`)
         .orWhere('medical_record_number', 'ilike', `%${q}%`);
     });
-  if (options?.branchIds && options.branchIds.length > 0) {
-    query = query.whereIn('branch_id', options.branchIds);
+  if (options?.branchIds) {
+    if (options.branchIds.length === 0) {
+      query = query.where(false);
+    } else {
+      query = query.whereIn('branch_id', options.branchIds);
+    }
   }
-  if (options?.patientIds && options.patientIds.length > 0) {
-    query = query.whereIn('id', options.patientIds);
+  if (options?.patientIds) {
+    if (options.patientIds.length === 0) {
+      query = query.where(false);
+    } else {
+      query = query.whereIn('id', options.patientIds);
+    }
   }
   return query
     .select('id', 'first_name', 'last_name', 'medical_record_number', 'phone', 'date_of_birth', 'gender', 'branch_id')

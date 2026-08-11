@@ -2,9 +2,12 @@ import type { PatientRow, PatientResponse } from './types.js';
 import { decryptField } from '@healthcare/shared/utils';
 
 function formatDate(value: string | Date): string {
+  if (typeof value === 'string') return value.substring(0, 10);
   const d = new Date(value);
-  if (isNaN(d.getTime())) return String(value).substring(0, 10);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  if (isNaN(d.getTime())) return '';
+  // DATE columns are parsed by node-postgres as local midnight; use local
+  // components so the wall date survives any container timezone.
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export function mapPatient(p: PatientRow): PatientResponse {

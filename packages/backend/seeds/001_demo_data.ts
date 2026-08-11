@@ -1,6 +1,27 @@
 import crypto from "crypto";
 import type { Knex } from 'knex';
 import bcrypt from 'bcryptjs';
+import {
+  SEED_ROLES,
+  expandRoleGrants,
+  normalizeLegacyPermission,
+  expandGrantKey,
+  PERMISSION_CATALOG,
+} from '@healthcare/shared/authz';
+
+function parseJsonStringArray(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map(String);
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
 export async function seed(knex: Knex): Promise<void> {
   await knex('audit_logs').del();
@@ -78,6 +99,32 @@ export async function seed(knex: Knex): Promise<void> {
     is_system: true,
   }).returning('*');
 
+  // ── Normalized RBAC grants (role_permissions) + role metadata ──
+  // The legacy `permissions` JSON above is display-only; effective grants are
+  // stored in role_permissions/user_permissions and loaded by the
+  // authorization service (see docs/engineering/AUTHORIZATION.md).
+  const roleBySlug = new Map<string, { id: string }>([
+    ['super_admin', adminRole],
+    ['doctor', doctorRole],
+    ['receptionist', receptionistRole],
+  ]);
+  for (const [slug, role] of roleBySlug) {
+    const template = SEED_ROLES[slug];
+    if (!template) continue;
+    await knex('roles').where({ id: role.id }).update({
+      level: template.level,
+      scope_default: template.scopeDefault,
+    });
+    for (const grant of expandRoleGrants(template)) {
+      await knex('role_permissions').insert({
+        role_id: role.id,
+        tenant_id: tenant.id,
+        permission: grant.permission,
+        scope: grant.scope,
+      });
+    }
+  }
+
   const [adminUser] = await knex('users').insert({
     tenant_id: tenant.id,
     email: 'admin@demo.com',
@@ -119,7 +166,7 @@ export async function seed(knex: Knex): Promise<void> {
     password_changed_at: new Date(),
   }).returning('*');
 
-  await knex('users').insert({
+  const [receptionUser] = await knex('users').insert({
     tenant_id: tenant.id,
     email: 'reception@demo.com',
     password_hash: await bcrypt.hash('Recept@123', 12),
@@ -136,7 +183,36 @@ export async function seed(knex: Knex): Promise<void> {
     status: 'active',
     mfa_enabled: false,
     password_changed_at: new Date(),
-  });
+  }).returning('*');
+
+  // ── Normalized user grants (user_roles + user_permissions) ──
+  const seededUsers = [
+    { user: adminUser, role: adminRole },
+    { user: doctorUser, role: doctorRole },
+    { user: receptionUser, role: receptionistRole },
+  ];
+  for (const { user, role } of seededUsers) {
+    await knex('user_roles').insert({
+      user_id: user.id,
+      role_id: role.id,
+      tenant_id: tenant.id,
+      assigned_by: user.id,
+    });
+    for (const raw of parseJsonStringArray(user.permissions)) {
+      const normalized = normalizeLegacyPermission(raw);
+      const keys = normalized === '*' ? expandGrantKey('*') : expandGrantKey(normalized);
+      for (const permission of keys) {
+        if (normalized !== '*' && !PERMISSION_CATALOG[permission.split('.')[0]]) continue;
+        await knex('user_permissions').insert({
+          user_id: user.id,
+          tenant_id: tenant.id,
+          permission,
+          scope: 'tenant',
+          assigned_by: user.id,
+        });
+      }
+    }
+  }
 
   const [mainBranch] = await knex('branches').insert({
     tenant_id: tenant.id,
@@ -146,6 +222,16 @@ export async function seed(knex: Knex): Promise<void> {
     phone: '+966112345678',
     status: 'active',
   }).returning('*');
+
+  // Demo users are assigned to the main branch (normalized user_branches)
+  for (const user of [adminUser, doctorUser, receptionUser]) {
+    await knex('user_branches').insert({
+      user_id: user.id,
+      branch_id: mainBranch.id,
+      tenant_id: tenant.id,
+      is_primary: true,
+    });
+  }
 
   await knex('branches').insert({
     tenant_id: tenant.id,
@@ -201,6 +287,7 @@ export async function seed(knex: Knex): Promise<void> {
 
     const [patient] = await knex('patients').insert({
       tenant_id: tenant.id,
+      branch_id: mainBranch.id,
       medical_record_number: mrn,
       first_name: p.firstName,
       last_name: p.lastName,
@@ -227,7 +314,7 @@ export async function seed(knex: Knex): Promise<void> {
     await knex('appointments').insert({
       tenant_id: tenant.id,
       patient_id: patient.id,
-      doctor_id: adminUser.id,
+      doctor_id: doctorUser.id,
       appointment_date: i < 3 ? today : tomorrow,
       start_time: startTime,
       end_time: endTime,
