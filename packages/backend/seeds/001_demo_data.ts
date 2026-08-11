@@ -242,10 +242,10 @@ export async function seed(knex: Knex): Promise<void> {
     status: 'active',
   });
 
-  // Booking slots for the demo doctor — next 7 days, 09:00–17:00 every 30 min
+  // Booking slots for the demo doctor — next 7 days, 09:00–15:00 (6 working hours), 30-min slots
   const slotRows: Array<Record<string, unknown>> = [];
   const startMin = 9 * 60;
-  const endMin = 17 * 60;
+  const endMin = 15 * 60;
   const slotInterval = 30;
   for (let d = 0; d < 7; d += 1) {
     const date = new Date(Date.now() + d * 24 * 60 * 60 * 1000).toISOString().split('T')[0];

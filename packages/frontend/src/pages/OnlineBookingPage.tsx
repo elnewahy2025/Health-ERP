@@ -49,6 +49,7 @@ export default function OnlineBookingPage() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedDoctor, setSelectedDoctor] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
   const [selectedSlot, setSelectedSlot] = useState('');
   const [patientName, setPatientName] = useState('');
   const [patientPhone, setPatientPhone] = useState('');
@@ -74,16 +75,21 @@ export default function OnlineBookingPage() {
 
   const loadSlots = useCallback(async () => {
     if (!tenantSlug.trim() || !selectedDoctor) return;
+    if (!selectedDate) {
+      setErrors((prev) => ({ ...prev, date: t('booking.selectDate') }));
+      return;
+    }
     setLoading(true);
     try {
-      const r = await api.get('/booking/slots', { params: { tenantSlug: sanitizeString(tenantSlug), doctorId: selectedDoctor } });
+      const r = await api.get('/booking/slots', { params: { tenantSlug: sanitizeString(tenantSlug), doctorId: selectedDoctor, date: selectedDate } });
       setSlots((r.data?.data ?? []) as Slot[]);
+      setErrors((prev) => ({ ...prev, date: '' }));
     } catch {
       toast.error(t('booking.loadError'));
     } finally {
       setLoading(false);
     }
-  }, [tenantSlug, selectedDoctor, t]);
+  }, [tenantSlug, selectedDoctor, selectedDate, t]);
 
   useEffect(() => {
     if (tab === 'manage') {
@@ -154,6 +160,7 @@ export default function OnlineBookingPage() {
 
   const resetForm = useCallback(() => {
     setBookingSubmitted(false);
+    setSelectedDate('');
     setSelectedSlot('');
     setPatientName('');
     setPatientPhone('');
@@ -209,8 +216,16 @@ export default function OnlineBookingPage() {
                         label={t('booking.selectDoctor')}
                         options={doctorOptions}
                         value={selectedDoctor}
-                        onChange={(e) => { setSelectedDoctor(e.target.value); setSlots([]); setSelectedSlot(''); }}
+                        onChange={(e) => { setSelectedDoctor(e.target.value); setSlots([]); setSelectedSlot(''); setErrors((prev) => ({ ...prev, date: '' })); }}
                         placeholder={t('booking.chooseDoctor')}
+                      />
+                      <Input
+                        type="date"
+                        label={t('booking.selectDate')}
+                        value={selectedDate}
+                        onChange={(e) => { setSelectedDate(e.target.value); setSlots([]); setSelectedSlot(''); setErrors((prev) => ({ ...prev, date: '' })); }}
+                        min={new Date().toISOString().split('T')[0]}
+                        error={errors.date}
                       />
                       <Button onClick={loadSlots} disabled={!selectedDoctor} loading={loading}>
                         {t('booking.showSlots')}

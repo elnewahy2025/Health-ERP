@@ -1295,6 +1295,7 @@
   "booking.findDoctors": "Find Doctors",
   "booking.selectDoctor": "Select Doctor",
   "booking.chooseDoctor": "Choose a doctor...",
+  "booking.selectDate": "Select Date",
   "booking.showSlots": "Show Available Slots",
   "booking.availableSlots": "Available Slots",
   "booking.yourInformation": "Your Information",

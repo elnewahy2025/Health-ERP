@@ -20,11 +20,23 @@ export async function registerPatientSchedulingModule(app: FastifyInstance) {
       .where('status', '!=', 'cancelled').select('doctor_id', 'scheduled_date', 'end_time');
 
     const slots: unknown[] = [];
+    const startMin = 9 * 60;
+    const endMin = 15 * 60; // 6 working hours
+    const slotInterval = 30;
     for (const doctor of doctors) {
-      for (let hour = 9; hour < 17; hour++) {
-        const isBooked = existingApts.some((a: Record<string, unknown>) => a.doctor_id === doctor.id && new Date(a.scheduled_date as string).getHours() === hour);
+      for (let cur = startMin; cur + slotInterval <= endMin; cur += slotInterval) {
+        const h = Math.floor(cur / 60);
+        const m = cur % 60;
+        const nh = Math.floor((cur + slotInterval) / 60);
+        const nm = (cur + slotInterval) % 60;
+        const start = `${query.date}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+        const end = `${query.date}T${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}:00`;
+        const isBooked = existingApts.some((a: Record<string, unknown>) =>
+          a.doctor_id === doctor.id &&
+          new Date(a.scheduled_date as string).getHours() === h &&
+          new Date(a.scheduled_date as string).getMinutes() === m);
         if (!isBooked) {
-          slots.push({ doctorId: doctor.id, doctorName: `${doctor.first_name} ${doctor.last_name}`, start: `${query.date}T${String(hour).padStart(2, '0')}:00:00`, end: `${query.date}T${String(hour).padStart(2, '0')}:30:00` });
+          slots.push({ doctorId: doctor.id, doctorName: `${doctor.first_name} ${doctor.last_name}`, start, end });
         }
       }
     }

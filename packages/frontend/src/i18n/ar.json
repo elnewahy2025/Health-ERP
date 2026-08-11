@@ -1293,6 +1293,7 @@
   "booking.findDoctors": "البحث عن أطباء",
   "booking.selectDoctor": "اختر الطبيب",
   "booking.chooseDoctor": "اختر طبيباً...",
+  "booking.selectDate": "اختر التاريخ",
   "booking.showSlots": "عرض الأوقات المتاحة",
   "booking.availableSlots": "الأوقات المتاحة",
   "booking.yourInformation": "معلوماتك",
