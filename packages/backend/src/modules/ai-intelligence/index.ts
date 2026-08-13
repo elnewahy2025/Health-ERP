@@ -3,6 +3,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../core/database.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { findTenantRow } from '../../utils/tenant-scope.js';
 import { sendSuccess, sendPaginated, sendError } from '../../utils/response.js';
 import { logAudit } from '../../services/audit.js';
 import { authenticate } from '../auth-guard.js';
@@ -26,6 +27,8 @@ export async function registerAiIntelligenceModule(app: FastifyInstance) {
     }).parse(request.body);
 
     const patient = await db('patients').where({ id: body.patientId }).first();
+    const tenantPatient = await findTenantRow('patients', body.patientId, tenantId);
+    if (!tenantPatient) return reply.status(404).send({ success: false, error: 'Patient not found' });
     const allergies = await db('patient_allergies').where({ patient_id: body.patientId }).select('allergen', 'severity');
     const medications = await db('patient_medications').where({ patient_id: body.patientId }).where({ is_active: true }).select('medication_name', 'dosage', 'frequency').limit(10);
 
@@ -103,6 +106,8 @@ export async function registerAiIntelligenceModule(app: FastifyInstance) {
     }).parse(request.body);
 
     const patient = await db('patients').where({ id: body.patientId }).first();
+    const tenantPatient = await findTenantRow('patients', body.patientId, tenantId);
+    if (!tenantPatient) return reply.status(404).send({ success: false, error: 'Patient not found' });
     const allergies = await db('patient_allergies').where({ patient_id: body.patientId }).select('allergen');
     const encounters = await db('ai_clinical_notes').where({ patient_id: body.patientId }).orderBy('created_at', 'desc').limit(5).select('generated_note', 'note_type');
 

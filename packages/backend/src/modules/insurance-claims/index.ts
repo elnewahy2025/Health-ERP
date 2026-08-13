@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../../core/database.js';
 import { sendSuccess, sendPaginated } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { findTenantRow } from '../../utils/tenant-scope.js';
 import type { InsuranceCompanyRow, InsuranceClaimRow } from "../types.js";
 import { logAudit } from '../../services/audit.js';
 import { authenticate } from '../auth-guard.js';
@@ -48,37 +49,44 @@ export async function registerInsuranceClaimsModule(app: FastifyInstance) {
   app.post('/api/v1/insurance-claims', { preHandler: [authenticate, authorize('insurance_claims.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request);
     const body = z.object({ patientId: z.string().uuid(), invoiceId: z.string().uuid(), insuranceId: z.string().uuid(), claimedAmount: z.number().positive(), notes: z.string().optional() }).parse(request.body);
+    const patient = await findTenantRow('patients', body.patientId, tenantId);
+    if (!patient) return reply.status(404).send({ success: false, error: 'Patient not found' });
+    const invoice = await findTenantRow('invoices', body.invoiceId, tenantId);
+    if (!invoice) return reply.status(404).send({ success: false, error: 'Invoice not found' });
     const count = await db('insurance_claims').where({ tenant_id: tenantId }).count('id as c').first();
     const claimNumber = `CLM-${new Date().getFullYear()}-${String(Number((count as Record<string, unknown>)?.c || 0) + 1).padStart(5, '0')}`;
     const [claim] = await db('insurance_claims').insert({ tenant_id: tenantId, patient_id: body.patientId, invoice_id: body.invoiceId, insurance_id: body.insuranceId, claim_number: claimNumber, status: 'draft', claimed_amount: body.claimedAmount, notes: body.notes, created_by: ctx.userId }).returning('*');
-    await db('invoices').where({ id: body.invoiceId }).update({ insurance_claim: claimNumber });
+    await db('invoices').where({ id: body.invoiceId, tenant_id: tenantId }).update({ insurance_claim: claimNumber });
     await logAudit({ tenantId, userId: ctx.userId, action: 'claim.create', entityType: 'insurance_claim', entityId: claim.id });
     return sendSuccess(reply, { id: claim.id, claimNumber }, 'Claim created', 201);
   });
 
   app.post('/api/v1/insurance-claims/:id/submit', { preHandler: [authenticate, authorize('insurance_claims.approve')] }, async (request, reply) => {
+    const tenantId = getTenantId(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-    const claim = await db('insurance_claims').where({ id }).first();
+    const claim = await findTenantRow('insurance_claims', id, tenantId);
     if (!claim) return reply.code(404).send({ error: 'Not found' });
     if (claim.status !== 'draft') return reply.code(400).send({ error: 'Only draft claims can be submitted' });
-    await db('insurance_claims').where({ id }).update({ status: 'submitted', submission_date: new Date().toISOString().split('T')[0], updated_at: new Date() });
+    await db('insurance_claims').where({ id, tenant_id: tenantId }).update({ status: 'submitted', submission_date: new Date().toISOString().split('T')[0], updated_at: new Date() });
     return sendSuccess(reply, { message: 'Claim submitted' });
   });
 
   app.patch('/api/v1/insurance-claims/:id/status', { preHandler: [authenticate, authorize('insurance_claims.approve')] }, async (request, reply) => {
+    const tenantId = getTenantId(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const { status, approvedAmount, paidAmount, denialReason } = z.object({ status: z.enum(['acknowledged', 'in_review', 'approved', 'denied', 'paid']), approvedAmount: z.number().optional(), paidAmount: z.number().optional(), denialReason: z.string().optional() }).parse(request.body);
+    const existing = await findTenantRow('insurance_claims', id, tenantId);
+    if (!existing) return reply.code(404).send({ error: 'Not found' });
     const update: Record<string, unknown> = { status, updated_at: new Date() };
     if (approvedAmount !== undefined) update.approved_amount = approvedAmount;
     if (paidAmount !== undefined) update.paid_amount = paidAmount;
     if (denialReason) update.denial_reason = denialReason;
     if (['approved', 'denied'].includes(status)) update.response_date = new Date().toISOString().split('T')[0];
-    await db('insurance_claims').where({ id }).update(update);
+    await db('insurance_claims').where({ id, tenant_id: tenantId }).update(update);
     if (status === 'approved' && approvedAmount) {
-      const claim = await db('insurance_claims').where({ id }).first();
-      if (claim?.invoice_id) await db('invoices').where({ id: claim.invoice_id }).update({ paid: approvedAmount, due: db.raw('GREATEST(total - ?, 0)', [approvedAmount]), status: db.raw('CASE WHEN ? >= total THEN ? ELSE ? END', [approvedAmount, 'paid', 'partial']) });
+      if (existing.invoice_id) await db('invoices').where({ id: existing.invoice_id, tenant_id: tenantId }).update({ paid: approvedAmount, due: db.raw('GREATEST(total - ?, 0)', [approvedAmount]), status: db.raw('CASE WHEN ? >= total THEN ? ELSE ? END', [approvedAmount, 'paid', 'partial']) });
     }
-    await logAudit({ tenantId: (await db('insurance_claims').where({ id }).first()).tenant_id, action: `claim.${status}`, entityType: 'insurance_claim', entityId: id });
+    await logAudit({ tenantId, action: `claim.${status}`, entityType: 'insurance_claim', entityId: id });
     return sendSuccess(reply, { message: `Claim ${status}` });
   });
 

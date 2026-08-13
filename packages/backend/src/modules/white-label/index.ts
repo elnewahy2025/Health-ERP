@@ -3,6 +3,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { findTenantRow } from '../../utils/tenant-scope.js';
 import type { TenantDomainRow } from "../types.js";
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
@@ -77,13 +78,18 @@ export async function registerWhiteLabelModule(app: FastifyInstance) {
   });
 
   app.post('/api/v1/white-label/domains/:id/verify', { preHandler: [authenticate, authorize('white_label.manage')] }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    await db('tenant_domains').where({ id }).update({ is_verified: true, verified_at: new Date(), ssl_status: 'active', updated_at: new Date() });
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string };
+    const existing = await findTenantRow('tenant_domains', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Domain not found' });
+    await db('tenant_domains').where({ id, tenant_id: tenantId }).update({ is_verified: true, verified_at: new Date(), ssl_status: 'active', updated_at: new Date() });
     return sendSuccess(reply, null, 'Domain verified');
   });
 
   app.delete('/api/v1/white-label/domains/:id', { preHandler: [authenticate, authorize('white_label.manage')] }, async (request, reply) => {
-    await db('tenant_domains').where({ id: (request.params as { id: string }).id }).del();
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string };
+    const existing = await findTenantRow('tenant_domains', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Domain not found' });
+    await db('tenant_domains').where({ id, tenant_id: tenantId }).del();
     return sendSuccess(reply, null, 'Domain removed');
   });
 

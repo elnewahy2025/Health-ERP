@@ -1118,6 +1118,8 @@
   "sidebar.modules": "وحدة",
   "sidebar.expandAll": "توسيع الكل",
   "sidebar.collapseAll": "طي الكل",
+  "sidebar.favorites": "المفضلة",
+  "sidebar.recentPages": "الأخيرة",
   "navGroup.patientCare": "رعاية المرضى",
   "navGroup.clinical": "ال-clinical",
   "navGroup.financial": "المالية",

@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { findTenantRow } from '../../utils/tenant-scope.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
 import type { WorkflowDefinitionRow, WorkflowInstanceRow } from "../types.js";
@@ -32,14 +33,16 @@ export async function registerWorkflowModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/workflow/definitions/:id', { preHandler: [authenticate, authorize('workflow.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('workflow_definitions', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Workflow definition not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.name) update.name = body.name;
     if (body.category) update.category = body.category;
     if (body.steps) update.steps = JSON.stringify(body.steps);
     if (body.description !== undefined) update.description = body.description;
     if (body.isActive !== undefined) update.is_active = body.isActive;
-    await db('workflow_definitions').where({ id }).update(update);
+    await db('workflow_definitions').where({ id, tenant_id: tenantId }).update(update);
     return sendSuccess(reply, null, 'Workflow definition updated');
   });
 
@@ -75,14 +78,16 @@ export async function registerWorkflowModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/workflow/instances/:id/step', { preHandler: [authenticate, authorize('workflow.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('workflow_instances', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Workflow instance not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.currentStep !== undefined) update.current_step = body.currentStep;
     if (body.status) update.status = body.status;
     if (body.data) update.data = JSON.stringify(body.data);
     if (body.assignedTo !== undefined) update.assigned_to = body.assignedTo;
     if (body.status === 'completed' || body.status === 'cancelled') update.completed_at = new Date();
-    await db('workflow_instances').where({ id }).update(update);
+    await db('workflow_instances').where({ id, tenant_id: tenantId }).update(update);
     return sendSuccess(reply, null, 'Workflow step updated');
   });
 }

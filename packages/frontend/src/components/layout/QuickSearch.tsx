@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Users, CalendarCheck, UserRound, FileText, ArrowRight } from 'lucide-react';
+import { Search, Users, CalendarCheck, UserRound, FileText, ArrowRight, Stethoscope, Receipt, Package } from 'lucide-react';
 import { apiClient as api } from '../../lib/api';
 
 interface SearchResultItem { type: string; id: string; label: string; subtitle: string; link: string; }
@@ -8,6 +8,9 @@ interface SearchResult {
   patients: { type: string; id: string; label: string; subtitle: string; link: string }[];
   appointments: { type: string; id: string; label: string; subtitle: string; link: string }[];
   employees: { type: string; id: string; label: string; subtitle: string; link: string }[];
+  doctors: { type: string; id: string; label: string; subtitle: string; link: string }[];
+  invoices: { type: string; id: string; label: string; subtitle: string; link: string }[];
+  inventory: { type: string; id: string; label: string; subtitle: string; link: string }[];
 }
 
 export default function QuickSearch({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -19,7 +22,7 @@ export default function QuickSearch({ open, onClose }: { open: boolean; onClose:
   const navigate = useNavigate();
 
   const flatResults = results
-    ? [...results.patients, ...results.appointments, ...results.employees]
+    ? [...results.patients, ...results.appointments, ...results.employees, ...results.doctors, ...results.invoices, ...results.inventory]
     : [];
 
   useEffect(() => {
@@ -57,7 +60,7 @@ export default function QuickSearch({ open, onClose }: { open: boolean; onClose:
     if (e.key === 'Escape') { onClose(); }
   };
 
-  const typeIcons: Record<string, any> = { patient: Users, appointment: CalendarCheck, employee: UserRound };
+  const typeIcons: Record<string, any> = { patient: Users, appointment: CalendarCheck, employee: UserRound, doctor: Stethoscope, invoice: Receipt, inventory: Package };
 
   if (!open) return null;
 
@@ -74,7 +77,7 @@ export default function QuickSearch({ open, onClose }: { open: boolean; onClose:
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Search patients, appointments, employees..."
+              placeholder="Search patients, doctors, invoices, inventory..."
               className="flex-1 bg-transparent border-none outline-none text-sm placeholder-gray-400 dark:text-gray-200"
             />
             <span className="text-xs text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">ESC</span>
@@ -95,6 +98,15 @@ export default function QuickSearch({ open, onClose }: { open: boolean; onClose:
             ))}
             {results?.employees.map((item, i) => (
               <SearchItem key={item.id} item={item} icon={UserRound} selected={selectedIndex === i + (results?.patients?.length || 0) + (results?.appointments?.length || 0)} onSelect={() => handleSelect(item)} />
+            ))}
+            {results?.doctors.map((item, i) => (
+              <SearchItem key={item.id} item={item} icon={Stethoscope} selected={selectedIndex === i + (results?.patients?.length || 0) + (results?.appointments?.length || 0) + (results?.employees?.length || 0)} onSelect={() => handleSelect(item)} />
+            ))}
+            {results?.invoices.map((item, i) => (
+              <SearchItem key={item.id} item={item} icon={Receipt} selected={selectedIndex === i + (results?.patients?.length || 0) + (results?.appointments?.length || 0) + (results?.employees?.length || 0) + (results?.doctors?.length || 0)} onSelect={() => handleSelect(item)} />
+            ))}
+            {results?.inventory.map((item, i) => (
+              <SearchItem key={item.id} item={item} icon={Package} selected={selectedIndex === i + (results?.patients?.length || 0) + (results?.appointments?.length || 0) + (results?.employees?.length || 0) + (results?.doctors?.length || 0) + (results?.invoices?.length || 0)} onSelect={() => handleSelect(item)} />
             ))}
           </div>
 

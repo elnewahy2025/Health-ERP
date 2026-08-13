@@ -3,6 +3,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { findTenantRow } from '../../utils/tenant-scope.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
 import type { BackupConfigRow, BackupExecutionRow, PaginationQuery } from "../types.js";
@@ -34,12 +35,14 @@ export async function registerDrBackupModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/dr/backup-configs/:id', { preHandler: [authenticate, authorize('dr_backup.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('backup_configs', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Backup config not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.name) update.name = body.name; if (body.schedule) update.schedule = body.schedule;
     if (body.retentionDays) update.retention_days = body.retentionDays;
     if (body.isActive !== undefined) update.is_active = body.isActive;
-    await db('backup_configs').where({ id }).update(update);
+    await db('backup_configs').where({ id, tenant_id: tenantId }).update(update);
     return sendSuccess(reply, null, 'Backup config updated');
   });
 
@@ -61,8 +64,14 @@ export async function registerDrBackupModule(app: FastifyInstance) {
 
   app.post('/api/v1/dr/backups/run', { preHandler: [authenticate, authorize('dr_backup.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
+    let configId: string | null = null;
+    if (body.configId) {
+      const config = await findTenantRow('backup_configs', String(body.configId), tenantId);
+      if (!config) return reply.status(404).send({ success: false, error: 'Backup config not found' });
+      configId = String(body.configId);
+    }
     const [b] = await db('backup_executions').insert({
-      tenant_id: tenantId, config_id: body.configId || null,
+      tenant_id: tenantId, config_id: configId,
       type: body.type || 'full', status: 'running', trigger: 'manual',
       started_at: new Date()
     }).returning('*');
@@ -72,8 +81,8 @@ export async function registerDrBackupModule(app: FastifyInstance) {
         status: 'completed', size_bytes: crypto.randomInt(1000000, 1000000000),
         checksum: 'simulated-' + Date.now().toString(36), completed_at: new Date()
       });
-      if (body.configId) {
-        await db('backup_configs').where({ id: body.configId }).update({ last_backup_at: new Date() });
+      if (configId) {
+        await db('backup_configs').where({ id: configId, tenant_id: tenantId }).update({ last_backup_at: new Date() });
       }
     }, 100);
     return sendSuccess(reply, { id: b.id, status: 'running' }, 'Backup started', 201);

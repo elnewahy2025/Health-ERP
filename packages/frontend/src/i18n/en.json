@@ -1120,6 +1120,8 @@
   "sidebar.modules": "modules",
   "sidebar.expandAll": "Expand all",
   "sidebar.collapseAll": "Collapse all",
+  "sidebar.favorites": "Favorites",
+  "sidebar.recentPages": "Recent",
   "navGroup.patientCare": "Patient Care",
   "navGroup.clinical": "Clinical",
   "navGroup.financial": "Financial",

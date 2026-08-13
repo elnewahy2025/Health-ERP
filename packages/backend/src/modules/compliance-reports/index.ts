@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { findTenantRow } from '../../utils/tenant-scope.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
 import type { AuditLogRow } from "../types.js";
@@ -34,12 +35,14 @@ export async function registerComplianceReportsModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/compliance/reports/:id', { preHandler: [authenticate, authorize('compliance_reports.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('compliance_reports', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Report not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.status) update.status = body.status;
     if (body.findings !== undefined) update.findings = body.findings;
     if (body.recommendations !== undefined) update.recommendations = body.recommendations;
-    await db('compliance_reports').where({ id }).update(update);
+    await db('compliance_reports').where({ id, tenant_id: tenantId }).update(update);
     return sendSuccess(reply, null, 'Report updated');
   });
 
@@ -91,12 +94,14 @@ export async function registerComplianceReportsModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/compliance/retention-policies/:id', { preHandler: [authenticate, authorize('compliance_reports.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('data_retention_policies', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Retention policy not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.retentionDays) update.retention_days = body.retentionDays;
     if (body.action) update.action = body.action;
     if (body.isActive !== undefined) update.is_active = body.isActive;
-    await db('data_retention_policies').where({ id }).update(update);
+    await db('data_retention_policies').where({ id, tenant_id: tenantId }).update(update);
     return sendSuccess(reply, null, 'Policy updated');
   });
 
@@ -124,13 +129,15 @@ export async function registerComplianceReportsModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/compliance/baa/:id', { preHandler: [authenticate, authorize('compliance_reports.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('business_associate_agreements', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'BAA not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.status) update.status = body.status;
     if (body.scope) update.scope = body.scope;
     if (body.terms !== undefined) update.terms = body.terms;
     if (body.expiryDate) update.expiry_date = body.expiryDate;
-    await db('business_associate_agreements').where({ id }).update(update);
+    await db('business_associate_agreements').where({ id, tenant_id: tenantId }).update(update);
     return sendSuccess(reply, null, 'BAA updated');
   });
 }

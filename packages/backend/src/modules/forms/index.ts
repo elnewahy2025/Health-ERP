@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { findTenantRow } from '../../utils/tenant-scope.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
 import type { FormSubmissionRow } from "../types.js";
@@ -35,7 +36,9 @@ export async function registerFormsModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/forms/definitions/:id', { preHandler: [authenticate, authorize('forms.view')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('form_definitions', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Form definition not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.name) update.name = body.name;
     if (body.category) update.category = body.category;
@@ -43,7 +46,7 @@ export async function registerFormsModule(app: FastifyInstance) {
     if (body.uiSchema) update.ui_schema = JSON.stringify(body.uiSchema);
     if (body.description !== undefined) update.description = body.description;
     if (body.isActive !== undefined) update.is_active = body.isActive;
-    await db('form_definitions').where({ id }).update(update);
+    await db('form_definitions').where({ id, tenant_id: tenantId }).update(update);
     return sendSuccess(reply, null, 'Form definition updated');
   });
 

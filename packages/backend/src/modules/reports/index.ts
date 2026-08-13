@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { findTenantRow } from '../../utils/tenant-scope.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
 import type { ReportScheduleRow, ReportExecutionRow } from "../types.js";
@@ -37,7 +38,9 @@ export async function registerReportsModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/reports/:id', { preHandler: [authenticate, authorize('reports.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('report_definitions', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Report not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.name) update.name = body.name; if (body.description !== undefined) update.description = body.description;
     if (body.queryConfig) update.query_config = JSON.stringify(body.queryConfig);
@@ -45,15 +48,17 @@ export async function registerReportsModule(app: FastifyInstance) {
     if (body.filters) update.filters = JSON.stringify(body.filters);
     if (body.sorting) update.sorting = JSON.stringify(body.sorting);
     if (body.exportFormats) update.export_formats = JSON.stringify(body.exportFormats);
-    await db('report_definitions').where({ id }).update(update);
+    await db('report_definitions').where({ id, tenant_id: tenantId }).update(update);
     return sendSuccess(reply, null, 'Report updated');
   });
 
   app.delete('/api/v1/reports/:id', { preHandler: [authenticate, authorize('reports.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    await db('report_schedules').where({ report_id: id }).del();
-    await db('report_executions').where({ report_id: id }).del();
-    await db('report_definitions').where({ id }).del();
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string };
+    const existing = await findTenantRow('report_definitions', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Report not found' });
+    await db('report_schedules').where({ report_id: id, tenant_id: tenantId }).del();
+    await db('report_executions').where({ report_id: id, tenant_id: tenantId }).del();
+    await db('report_definitions').where({ id, tenant_id: tenantId }).del();
     return sendSuccess(reply, null, 'Report deleted');
   });
 
@@ -80,12 +85,14 @@ export async function registerReportsModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/reports/schedules/:id', { preHandler: [authenticate, authorize('reports.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('report_schedules', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Schedule not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.cron) update.cron = body.cron; if (body.recipients) update.recipients = JSON.stringify(body.recipients);
     if (body.format) update.format = body.format; if (body.isActive !== undefined) update.is_active = body.isActive;
     if (body.params) update.params = JSON.stringify(body.params);
-    await db('report_schedules').where({ id }).update(update);
+    await db('report_schedules').where({ id, tenant_id: tenantId }).update(update);
     return sendSuccess(reply, null, 'Schedule updated');
   });
 

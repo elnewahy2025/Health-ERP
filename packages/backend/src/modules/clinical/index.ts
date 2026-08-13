@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../../core/database.js';
 import { sendSuccess, sendPaginated } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { findTenantRow } from '../../utils/tenant-scope.js';
 import { logAudit } from '../../services/audit.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
@@ -33,7 +34,10 @@ export async function registerClinicalModule(app: FastifyInstance) {
   });
 
   app.get('/api/v1/patients/:patientId/allergies', { preHandler: [authenticate, authorize('emr.view')] }, async (request, reply) => {
+    const tenantId = getTenantId(request);
     const { patientId } = z.object({ patientId: z.string().uuid() }).parse(request.params);
+    const patient = await findTenantRow('patients', patientId, tenantId);
+    if (!patient) return reply.status(404).send({ success: false, error: 'Patient not found' });
     const allergies = await db('patient_allergies').where({ patient_id: patientId }).orderBy('created_at', 'desc');
     return sendSuccess(reply, allergies.map((a: Record<string, unknown>) => ({ id: a.id, allergen: a.allergen, severity: a.severity, reaction: a.reaction, notes: a.notes, createdAt: a.created_at })));
   });
@@ -43,6 +47,8 @@ export async function registerClinicalModule(app: FastifyInstance) {
     const ctx = getCtx(request);
     const { patientId } = z.object({ patientId: z.string().uuid() }).parse(request.params);
     const body = z.object({ allergen: z.string().min(1), severity: z.enum(['mild', 'moderate', 'severe', 'anaphylaxis']).optional().default('moderate'), reaction: z.string().optional(), notes: z.string().optional() }).parse(request.body);
+    const patient = await findTenantRow('patients', patientId, tenantId);
+    if (!patient) return reply.status(404).send({ success: false, error: 'Patient not found' });
     const [allergy] = await db('patient_allergies').insert({ tenant_id: tenantId, patient_id: patientId, allergen: body.allergen, severity: body.severity, reaction: body.reaction, notes: body.notes, recorded_by: ctx.userId }).returning('*');
 
     await logAudit({ tenantId, userId: ctx.userId, action: 'clinical.allergy_created', entityType: 'patient_allergy', entityId: allergy.id, metadata: { patientId, allergen: body.allergen }, ipAddress: request.ip, userAgent: request.headers['user-agent'] as string });
@@ -53,7 +59,9 @@ export async function registerClinicalModule(app: FastifyInstance) {
   app.delete('/api/v1/patients/:patientId/allergies/:id', { preHandler: [authenticate, authorize('emr.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
-    const { id } = z.object({ id: z.string().uuid(), patientId: z.string().uuid() }).parse(request.params);
+    const { id, patientId } = z.object({ id: z.string().uuid(), patientId: z.string().uuid() }).parse(request.params);
+    const patient = await findTenantRow('patients', patientId, tenantId);
+    if (!patient) return reply.status(404).send({ success: false, error: 'Patient not found' });
     await db('patient_allergies').where({ id, tenant_id: tenantId }).delete();
 
     await logAudit({ tenantId, userId: ctx.userId, action: 'clinical.allergy_deleted', entityType: 'patient_allergy', entityId: id, ipAddress: request.ip, userAgent: request.headers['user-agent'] as string });
@@ -62,7 +70,10 @@ export async function registerClinicalModule(app: FastifyInstance) {
   });
 
   app.get('/api/v1/patients/:patientId/allergy-check', { preHandler: [authenticate, authorize('emr.view')] }, async (request, reply) => {
+    const tenantId = getTenantId(request);
     const { patientId } = z.object({ patientId: z.string().uuid() }).parse(request.params);
+    const patient = await findTenantRow('patients', patientId, tenantId);
+    if (!patient) return reply.status(404).send({ success: false, error: 'Patient not found' });
     const { medication } = z.object({ medication: z.string().optional() }).parse(request.query);
     const allergies = await db('patient_allergies').where({ patient_id: patientId }).select('allergen', 'severity', 'reaction');
     if (!medication) return sendSuccess(reply, { allergies, alerts: [] });

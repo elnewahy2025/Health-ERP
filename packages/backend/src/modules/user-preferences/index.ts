@@ -78,7 +78,7 @@ export async function registerUserPreferencesModule(app: FastifyInstance) {
     if (!q || q.length < 2) return sendSuccess(reply, []);
 
     const term = `%${q}%`;
-    const [patients, appointments, employees] = await Promise.all([
+    const [patients, appointments, employees, doctors, invoices, inventory] = await Promise.all([
       db('patients').where({ tenant_id: tenantId }).whereNull('deleted_at')
         .where(function() { this.where('first_name', 'ilike', term).orWhere('last_name', 'ilike', term).orWhere('phone', 'ilike', term).orWhere('medical_record_number', 'ilike', term); })
         .select('id', 'first_name', 'last_name', 'medical_record_number', 'phone').limit(5),
@@ -90,12 +90,28 @@ export async function registerUserPreferencesModule(app: FastifyInstance) {
       db('employees').where({ tenant_id: tenantId }).whereNull('deleted_at')
         .where(function() { this.where('first_name', 'ilike', term).orWhere('last_name', 'ilike', term).orWhere('email', 'ilike', term); })
         .select('id', 'first_name', 'last_name', 'department', 'position').limit(5),
+      db('users').join('roles', 'users.role_id', 'roles.id')
+        .where('users.tenant_id', tenantId)
+        .where('users.status', 'active')
+        .where('roles.slug', 'doctor')
+        .where(function() { this.where('users.first_name', 'ilike', term).orWhere('users.last_name', 'ilike', term).orWhere('users.email', 'ilike', term); })
+        .select('users.id', 'users.first_name', 'users.last_name', 'users.email').limit(5),
+      db('invoices').where({ tenant_id: tenantId }).whereNull('deleted_at')
+        .join('patients', 'invoices.patient_id', 'patients.id')
+        .where(function() { this.where('invoices.invoice_number', 'ilike', term).orWhere('patients.first_name', 'ilike', term).orWhere('patients.last_name', 'ilike', term); })
+        .select('invoices.id', 'invoices.invoice_number', 'invoices.total', 'invoices.status', 'patients.first_name as pf', 'patients.last_name as pl').limit(5),
+      db('inventory_items').where({ tenant_id: tenantId }).whereNull('deleted_at')
+        .where(function() { this.where('name', 'ilike', term).orWhere('sku', 'ilike', term).orWhere('barcode', 'ilike', term); })
+        .select('id', 'name', 'sku', 'category').limit(5),
     ]);
 
     return sendSuccess(reply, {
       patients: patients.map((p: Record<string, unknown>) => ({ type: 'patient', id: p.id, label: `${p.first_name} ${p.last_name}`, subtitle: p.medical_record_number || p.phone, link: `/patients/${p.id}` })),
       appointments: appointments.map((a: Record<string, unknown>) => ({ type: 'appointment', id: a.id, label: `${a.pf} ${a.pl}`, subtitle: `${a.appointment_date} ${a.start_time || ''}`, link: `/appointments` })),
       employees: employees.map((e: Record<string, unknown>) => ({ type: 'employee', id: e.id, label: `${e.first_name} ${e.last_name}`, subtitle: `${e.department || ''} · ${e.position || ''}`, link: `/hr` })),
+      doctors: doctors.map((d: Record<string, unknown>) => ({ type: 'doctor', id: d.id, label: `${d.first_name} ${d.last_name}`, subtitle: d.email || 'Doctor', link: `/hr` })),
+      invoices: invoices.map((i: Record<string, unknown>) => ({ type: 'invoice', id: i.id, label: `${i.invoice_number || 'Invoice'} · ${i.pf} ${i.pl}`.trim(), subtitle: `${i.status || ''} · ${Number(i.total || 0).toFixed(2)}`, link: `/billing` })),
+      inventory: inventory.map((it: Record<string, unknown>) => ({ type: 'inventory', id: it.id, label: String(it.name || ''), subtitle: `${it.sku || ''} ${it.category ? `· ${it.category}` : ''}`.trim(), link: `/inventory` })),
     });
   });
 

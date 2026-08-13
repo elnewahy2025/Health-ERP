@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../stores/authStore';
@@ -17,10 +17,12 @@ import {
   Upload, UserCog,
   Printer, Send, Shield as ShieldIcon,
   Zap, Barcode, Database,
-  PhoneCall, MessageCircle,
+  PhoneCall, MessageCircle, Star, Clock,
   Wallet, Calendar, TrendingUp, UserCheck, Heart, Smartphone, Code, User, Bell,
   Search,
 } from 'lucide-react';
+import { navigationApi, type NavFavorite, type RecentPage } from '../../lib/api/navigation';
+import { resolveNavLabelKey } from '../../config/nav-labels';
 
 interface NavItem {
   path: string;
@@ -191,6 +193,8 @@ function SidebarGroup({
   t,
   location,
   onNavigate,
+  favorites,
+  onToggleFavorite,
 }: {
   group: NavGroup;
   isExpanded: boolean;
@@ -198,6 +202,8 @@ function SidebarGroup({
   t: (key: string) => string;
   location: ReturnType<typeof useLocation>;
   onNavigate: () => void;
+  favorites: NavFavorite[];
+  onToggleFavorite: (path: string, label: string) => void;
 }) {
   const hasActiveChild = group.items.some((item) =>
     location.pathname === item.path || location.pathname.startsWith(item.path + '/')
@@ -224,22 +230,35 @@ function SidebarGroup({
       {isExpanded && (
         <div className="ml-4 pl-3 border-l border-gray-200 mt-1 space-y-0.5">
           {group.items.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === '/'}
-              onClick={onNavigate}
-              className={({ isActive }) =>
-                `flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors min-h-[40px] ${
-                  isActive
-                    ? 'bg-primary-50 text-primary-700 font-medium'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }`
-              }
-            >
-              <item.icon className="w-4 h-4 shrink-0" />
-              <span className="truncate">{t(item.labelKey)}</span>
-            </NavLink>
+            <div key={item.path} className="group flex items-center rounded-lg">
+              <NavLink
+                to={item.path}
+                end={item.path === '/'}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  `flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors min-h-[40px] flex-1 min-w-0 ${
+                    isActive
+                      ? 'bg-primary-50 text-primary-700 font-medium'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                  }`
+                }
+              >
+                <item.icon className="w-4 h-4 shrink-0" />
+                <span className="truncate">{t(item.labelKey)}</span>
+              </NavLink>
+              <button
+                type="button"
+                aria-label={favorites.some((f) => f.path === item.path) ? 'Remove favorite' : 'Add favorite'}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(item.path, t(item.labelKey)); }}
+                className={`p-1.5 rounded-md shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity ${
+                  favorites.some((f) => f.path === item.path)
+                    ? 'text-amber-500 opacity-100'
+                    : 'text-gray-400 hover:text-amber-500'
+                }`}
+              >
+                <Star className={`w-3.5 h-3.5 ${favorites.some((f) => f.path === item.path) ? 'fill-current' : ''}`} />
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -285,6 +304,48 @@ export default function Sidebar({
 
   const [search, setSearch] = useState('');
   const [showSecondary, setShowSecondary] = useState(false);
+  const [favorites, setFavorites] = useState<NavFavorite[]>([]);
+  const [recent, setRecent] = useState<RecentPage[]>([]);
+
+  const allNavItems = useMemo(() => {
+    const map = new Map<string, NavItem>();
+    for (const group of navGroups) {
+      for (const item of group.items) map.set(item.path, item);
+    }
+    for (const item of secondaryItems) map.set(item.path, item);
+    return map;
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [favs, recentPages] = await Promise.all([navigationApi.favorites(), navigationApi.recentPages()]);
+        if (!cancelled) {
+          setFavorites(favs);
+          setRecent(recentPages);
+        }
+      } catch {
+        // Personalization is best-effort; the sidebar works without it.
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const toggleFavorite = useCallback((path: string, label: string) => {
+    const existing = favorites.find((f) => f.path === path);
+    if (existing) {
+      void navigationApi.removeFavorite(existing.id)
+        .then(() => setFavorites((prev) => prev.filter((f) => f.id !== existing.id)))
+        .catch(() => undefined);
+    } else {
+      void navigationApi.addFavorite(path, label)
+        .then(() => navigationApi.favorites())
+        .then(setFavorites)
+        .catch(() => undefined);
+    }
+  }, [favorites]);
 
   const toggleGroup = useCallback((id: string) => {
     setExpandedGroups((prev) => {
@@ -409,21 +470,97 @@ export default function Sidebar({
         <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 space-y-0.5">
           {/* Dashboard (standalone) */}
           {!search.trim() && (
-            <NavLink
-              to="/"
-              end
-              onClick={handleNavigate}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors min-h-[44px] ${
-                  isActive
-                    ? 'bg-primary-50 text-primary-700'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`
-              }
-            >
-              <LayoutDashboard className="w-5 h-5 shrink-0" />
-              <span>{t('nav.dashboard')}</span>
-            </NavLink>
+            <div className="group flex items-center">
+              <NavLink
+                to="/"
+                end
+                onClick={handleNavigate}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors min-h-[44px] flex-1 min-w-0 ${
+                    isActive
+                      ? 'bg-primary-50 text-primary-700'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`
+                }
+              >
+                <LayoutDashboard className="w-5 h-5 shrink-0" />
+                <span>{t('nav.dashboard')}</span>
+              </NavLink>
+              <button
+                type="button"
+                aria-label={favorites.some((f) => f.path === '/') ? 'Remove favorite' : 'Add favorite'}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFavorite('/', t('nav.dashboard')); }}
+                className={`p-1.5 rounded-md shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity ${
+                  favorites.some((f) => f.path === '/')
+                    ? 'text-amber-500 opacity-100'
+                    : 'text-gray-400 hover:text-amber-500'
+                }`}
+              >
+                <Star className={`w-3.5 h-3.5 ${favorites.some((f) => f.path === '/') ? 'fill-current' : ''}`} />
+              </button>
+            </div>
+          )}
+
+          {/* Favorites */}
+          {!search.trim() && favorites.length > 0 && (
+            <div className="pt-3 mt-1 border-t border-gray-100">
+              <p className="px-3 pb-1 text-xs font-medium text-gray-400 uppercase tracking-wide">{t('sidebar.favorites')}</p>
+              <div className="space-y-0.5">
+                {favorites.map((fav) => {
+                  const item = allNavItems.get(fav.path);
+                  const Icon = item?.icon ?? Star;
+                  return (
+                    <NavLink
+                      key={fav.id}
+                      to={fav.path}
+                      end={fav.path === '/'}
+                      onClick={handleNavigate}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors min-h-[40px] ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-700 font-medium'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`
+                      }
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className="truncate flex-1">{item ? t(item.labelKey) : fav.label}</span>
+                      <Star className="w-3 h-3 text-amber-500 fill-current shrink-0" />
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Recent pages */}
+          {!search.trim() && recent.length > 0 && (
+            <div className="pt-3 mt-1 border-t border-gray-100">
+              <p className="px-3 pb-1 text-xs font-medium text-gray-400 uppercase tracking-wide">{t('sidebar.recentPages')}</p>
+              <div className="space-y-0.5">
+                {recent.slice(0, 5).map((page) => {
+                  const item = allNavItems.get(page.path);
+                  const Icon = item?.icon ?? Clock;
+                  return (
+                    <NavLink
+                      key={page.path}
+                      to={page.path}
+                      onClick={handleNavigate}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors min-h-[40px] ${
+                          isActive
+                            ? 'bg-primary-50 text-primary-700 font-medium'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`
+                      }
+                    >
+                      <Icon className="w-4 h-4 shrink-0" />
+                      <span className="truncate">{item ? t(item.labelKey) : page.label}</span>
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
           )}
 
           {/* Grouped nav items */}
@@ -436,6 +573,8 @@ export default function Sidebar({
               t={t}
               location={location}
               onNavigate={handleNavigate}
+              favorites={favorites}
+              onToggleFavorite={toggleFavorite}
             />
           ))}
 
@@ -457,21 +596,34 @@ export default function Sidebar({
               {(showSecondary || !!search.trim()) && (
                 <div className="ml-4 pl-3 border-l border-gray-200 mt-1 space-y-0.5">
                   {filteredSecondary.map((item) => (
-                    <NavLink
-                      key={item.path}
-                      to={item.path}
-                      onClick={handleNavigate}
-                      className={({ isActive }) =>
-                        `flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors min-h-[40px] ${
-                          isActive
-                            ? 'bg-primary-50 text-primary-700 font-medium'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                        }`
-                      }
-                    >
-                      <item.icon className="w-4 h-4 shrink-0" />
-                      <span className="truncate">{t(item.labelKey)}</span>
-                    </NavLink>
+                    <div key={item.path} className="group flex items-center rounded-lg">
+                      <NavLink
+                        to={item.path}
+                        onClick={handleNavigate}
+                        className={({ isActive }) =>
+                          `flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors min-h-[40px] flex-1 min-w-0 ${
+                            isActive
+                              ? 'bg-primary-50 text-primary-700 font-medium'
+                              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                          }`
+                        }
+                      >
+                        <item.icon className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{t(item.labelKey)}</span>
+                      </NavLink>
+                      <button
+                        type="button"
+                        aria-label={favorites.some((f) => f.path === item.path) ? 'Remove favorite' : 'Add favorite'}
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFavorite(item.path, t(item.labelKey)); }}
+                        className={`p-1.5 rounded-md shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity ${
+                          favorites.some((f) => f.path === item.path)
+                            ? 'text-amber-500 opacity-100'
+                            : 'text-gray-400 hover:text-amber-500'
+                        }`}
+                      >
+                        <Star className={`w-3.5 h-3.5 ${favorites.some((f) => f.path === item.path) ? 'fill-current' : ''}`} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}

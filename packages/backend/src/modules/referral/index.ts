@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { findTenantRow } from '../../utils/tenant-scope.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
 
@@ -34,9 +35,24 @@ export async function registerReferralModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/referrals/:id/status', { preHandler: [authenticate, authorize('referrals.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
-    await db('referrals').where({ id }).update({ status: body.status, feedback: body.feedback || null, updated_at: new Date() });
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('referrals', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Referral not found' });
+    await db('referrals').where({ id, tenant_id: tenantId }).update({ status: body.status, feedback: body.feedback || null, updated_at: new Date() });
     return sendSuccess(reply, null, 'Referral updated');
+  });
+
+  app.get('/api/v1/referrals/:id', { preHandler: [authenticate, authorize('referrals.view')] }, async (request, reply) => {
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string };
+    const row = await db('referrals')
+      .where({ 'referrals.id': id, 'referrals.tenant_id': tenantId })
+      .whereNull('referrals.deleted_at')
+      .join('patients', 'referrals.patient_id', 'patients.id')
+      .leftJoin('users as doc', 'referrals.receiving_doctor_id', 'doc.id')
+      .select('referrals.*', 'patients.first_name as p_first', 'patients.last_name as p_last', 'doc.first_name as doc_first', 'doc.last_name as doc_last')
+      .first();
+    if (!row) return reply.status(404).send({ success: false, error: 'Referral not found' });
+    return sendSuccess(reply, mapRef(row));
   });
 }
 function mapRef(r: Record<string, unknown>) { return {

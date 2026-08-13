@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { findTenantRow } from '../../utils/tenant-scope.js';
 import { validateWebhookUrl } from '@healthcare/shared/utils';
 import type { IntegrationConnectionRow } from "../types.js";
 import { authenticate } from '../auth-guard.js';
@@ -46,25 +47,32 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/integrations/connections/:id', { preHandler: [authenticate, authorize('integrations.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('integration_connections', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Connection not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.name) update.name = body.name; if (body.config) update.config = JSON.stringify(body.config);
     if (body.credentials) update.credentials_encrypted = JSON.stringify(body.credentials);
     if (body.isActive !== undefined) update.is_active = body.isActive;
     if (body.status) update.status = body.status;
-    await db('integration_connections').where({ id }).update(update);
+    await db('integration_connections').where({ id, tenant_id: tenantId }).update(update);
     return sendSuccess(reply, null, 'Connection updated');
   });
 
   app.post('/api/v1/integrations/connections/:id/test', { preHandler: [authenticate, authorize('integrations.manage')] }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    await db('integration_connections').where({ id }).update({ status: 'connected', last_sync_at: new Date(), updated_at: new Date() });
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string };
+    const existing = await findTenantRow('integration_connections', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Connection not found' });
+    await db('integration_connections').where({ id, tenant_id: tenantId }).update({ status: 'connected', last_sync_at: new Date(), updated_at: new Date() });
     return sendSuccess(reply, { status: 'connected' }, 'Connection test successful');
   });
 
   app.delete('/api/v1/integrations/connections/:id', { preHandler: [authenticate, authorize('integrations.edit')] }, async (request, reply) => {
-    await db('webhooks').where({ integration_id: (request.params as { id: string }).id }).update({ status: 'disabled' });
-    await db('integration_connections').where({ id: (request.params as { id: string }).id }).del();
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string };
+    const existing = await findTenantRow('integration_connections', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Connection not found' });
+    await db('webhooks').where({ integration_id: id, tenant_id: tenantId }).update({ status: 'disabled' });
+    await db('integration_connections').where({ id, tenant_id: tenantId }).del();
     return sendSuccess(reply, null, 'Connection deleted');
   });
 
@@ -101,7 +109,9 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/integrations/webhooks/:id', { preHandler: [authenticate, authorize('integrations.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('webhooks', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Webhook not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.name) update.name = body.name;
     if (body.url) {
@@ -113,7 +123,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
     if (body.headers) update.headers = JSON.stringify(body.headers);
     if (body.status) update.status = body.status;
     if (body.retryCount) update.retry_count = body.retryCount;
-    await db('webhooks').where({ id }).update(update);
+    await db('webhooks').where({ id, tenant_id: tenantId }).update(update);
     return sendSuccess(reply, null, 'Webhook updated');
   });
 

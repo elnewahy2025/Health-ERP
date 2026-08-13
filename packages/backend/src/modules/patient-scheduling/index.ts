@@ -52,7 +52,7 @@ export async function registerPatientSchedulingModule(app: FastifyInstance) {
     const tenant = await db('tenants').where({ slug: body.tenantSlug }).first();
     if (!tenant) return sendError(reply, 'Clinic not found', 404);
 
-    const doctor = await db('users').where({ id: body.doctorId, role: 'doctor' }).first();
+    const doctor = await db('users').where({ id: body.doctorId, tenant_id: tenant.id, role: 'doctor' }).first();
     if (!doctor) return sendError(reply, 'Doctor not found', 404);
 
     // Check for conflict
@@ -61,7 +61,7 @@ export async function registerPatientSchedulingModule(app: FastifyInstance) {
       .where('status', '!=', 'cancelled').first();
     if (conflict) return sendError(reply, 'Slot already taken. Please choose another time.', 409);
 
-    const patient = await db('patients').where({ id: body.patientId }).first();
+    const patient = await db('patients').where({ id: body.patientId, tenant_id: tenant.id }).first();
     if (!patient) return sendError(reply, 'Patient not found', 404);
 
     const [apt] = await db('appointments').insert({

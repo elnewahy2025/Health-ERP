@@ -2,6 +2,8 @@ export { default, apiClient } from './client';
 export * from './types';
 
 export { securityApi } from './security';
+export { navigationApi } from './navigation';
+export type { NavFavorite, RecentPage } from './navigation';
 export { auditApi } from './audit';
 export { communicationsApi } from './communications';
 export { dmsApi } from './dms';

@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { findTenantRow } from '../../utils/tenant-scope.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
@@ -156,6 +157,8 @@ export async function registerAutomationModule(app: FastifyInstance) {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
+    const existing = await findTenantRow('automation_rules', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Rule not found' });
     await db('automation_rule_actions').where({ rule_id: id }).del();
     await db('automation_rules').where({ id, tenant_id: tenantId }).del();
 
@@ -174,7 +177,10 @@ export async function registerAutomationModule(app: FastifyInstance) {
 
   // ── Rule Actions ──
   app.get('/api/v1/automation/rules/:ruleId/actions', { preHandler: [authenticate, authorize('automation.view')] }, async (request, reply) => {
+    const tenantId = getTenantId(request);
     const { ruleId } = request.params as { ruleId: string };
+    const rule = await findTenantRow('automation_rules', ruleId, tenantId);
+    if (!rule) return reply.status(404).send({ success: false, error: 'Rule not found' });
     const actions = await db('automation_rule_actions').where({ rule_id: ruleId }).orderBy('step_order');
     return sendSuccess(reply, actions.map((a: AutomationRuleActionRow) => ({
       id: a.id, ruleId: a.rule_id, stepOrder: a.step_order,

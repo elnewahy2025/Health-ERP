@@ -2,6 +2,7 @@ import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { findTenantRow } from '../../utils/tenant-scope.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
 import type { DashboardWidgetRow } from "../types.js";
@@ -33,20 +34,24 @@ export async function registerBiModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/bi/dashboards/:id', { preHandler: [authenticate, authorize('bi.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('dashboard_definitions', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Dashboard not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.name) update.name = body.name; if (body.description !== undefined) update.description = body.description;
     if (body.layout) update.layout = JSON.stringify(body.layout);
     if (body.refreshInterval) update.refresh_interval = body.refreshInterval;
     if (body.isDefault !== undefined) update.is_default = body.isDefault;
-    await db('dashboard_definitions').where({ id }).update(update);
+    await db('dashboard_definitions').where({ id, tenant_id: tenantId }).update(update);
     return sendSuccess(reply, null, 'Dashboard updated');
   });
 
   app.delete('/api/v1/bi/dashboards/:id', { preHandler: [authenticate, authorize('bi.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    await db('dashboard_widgets').where({ dashboard_id: id }).del();
-    await db('dashboard_definitions').where({ id }).del();
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string };
+    const existing = await findTenantRow('dashboard_definitions', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Dashboard not found' });
+    await db('dashboard_widgets').where({ dashboard_id: id, tenant_id: tenantId }).del();
+    await db('dashboard_definitions').where({ id, tenant_id: tenantId }).del();
     return sendSuccess(reply, null, 'Dashboard deleted');
   });
 
@@ -63,6 +68,8 @@ export async function registerBiModule(app: FastifyInstance) {
 
   app.post('/api/v1/bi/dashboards/:id/widgets', { preHandler: [authenticate, authorize('bi.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const dashboard = await findTenantRow('dashboard_definitions', id, tenantId);
+    if (!dashboard) return reply.status(404).send({ success: false, error: 'Dashboard not found' });
     const [w] = await db('dashboard_widgets').insert({
       tenant_id: tenantId, dashboard_id: id, title: body.title,
       widget_type: body.widgetType || 'kpi', data_source: body.dataSource || 'appointments',
@@ -74,19 +81,24 @@ export async function registerBiModule(app: FastifyInstance) {
   });
 
   app.put('/api/v1/bi/widgets/:id', { preHandler: [authenticate, authorize('bi.edit')] }, async (request, reply) => {
-    const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const existing = await findTenantRow('dashboard_widgets', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Widget not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.title) update.title = body.title; if (body.config) update.config = JSON.stringify(body.config);
     if (body.query) update.query = JSON.stringify(body.query);
     if (body.width) update.width = body.width; if (body.height) update.height = body.height;
     if (body.positionX !== undefined) update.position_x = body.positionX;
     if (body.positionY !== undefined) update.position_y = body.positionY;
-    await db('dashboard_widgets').where({ id }).update(update);
+    await db('dashboard_widgets').where({ id, tenant_id: tenantId }).update(update);
     return sendSuccess(reply, null, 'Widget updated');
   });
 
   app.delete('/api/v1/bi/widgets/:id', { preHandler: [authenticate, authorize('bi.edit')] }, async (request, reply) => {
-    await db('dashboard_widgets').where({ id: (request.params as { id: string }).id }).del();
+    const tenantId = getTenantId(request); const { id } = request.params as { id: string };
+    const existing = await findTenantRow('dashboard_widgets', id, tenantId);
+    if (!existing) return reply.status(404).send({ success: false, error: 'Widget not found' });
+    await db('dashboard_widgets').where({ id, tenant_id: tenantId }).del();
     return sendSuccess(reply, null, 'Widget deleted');
   });
 

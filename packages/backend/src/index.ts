@@ -58,6 +58,7 @@ import { registerDataExportModule } from './modules/data-export/index.js';
 import { registerSystemMonitorModule } from './modules/system-monitor/index.js';
 import { registerBulkImportModule } from './modules/bulk-import/index.js';
 import { registerUserPreferencesModule } from './modules/user-preferences/index.js';
+import { registerNavigationModule } from './modules/navigation/index.js';
 import { registerPrintTemplatesModule } from './modules/print-templates/index.js';
 import { registerCommunicationsModule } from './modules/communications/index.js';
 import { registerAuditModule } from "./modules/audit/index.js";
@@ -232,6 +233,7 @@ async function buildApp() {
   await registerSystemMonitorModule(app);
   await registerBulkImportModule(app);
   await registerUserPreferencesModule(app);
+  await registerNavigationModule(app);
   await registerPrintTemplatesModule(app);
   await registerCommunicationsModule(app);
   await registerAuditModule(app);
