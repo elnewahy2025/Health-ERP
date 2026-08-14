@@ -230,6 +230,86 @@ npm run build -w packages/frontend
 
 ---
 
+## 💻 Production on Windows (backend on your PC, frontend on Vercel)
+
+This is the current production topology: the frontend is deployed on Vercel and
+the API is served from your Windows PC (database on Neon). Two options:
+
+### Option A — Automated (recommended)
+
+```powershell
+# From the repo root (or run anywhere - the script clones the repo if missing)
+powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1
+
+# First time on a fresh database: also seed the demo data
+powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1 -Seed
+
+# Start a tunnel at the end, then point Vercel at it:
+powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1 -StartTunnel
+powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1 -UpdateVercel -TunnelUrl https://xxxx.trycloudflare.com
+```
+
+The script checks Node/npm/Git, copies `.env.production` to `.env`, runs
+`npm install`, builds `shared` + `backend`, runs migrations, optionally seeds,
+and starts the backend. See `scripts/setup-windows.ps1` for all switches
+(`-SkipInstall`, `-SkipMigrate`, `-NoStart`, ...).
+
+### Option B — Manual
+
+```powershell
+# 1. Prerequisites: Node.js 20.19+ (winget install OpenJS.NodeJS.LTS), Git
+# 2. Get the code and the environment file
+git clone https://github.com/elnewahy2025/vision-healthcare-erp.git
+cd vision-healthcare-erp
+# Put the production .env.production (with the Neon URL, JWT/CSRF secrets,
+# CORS_ORIGIN=https://vision-healthcare-erp.vercel.app) in the repo root.
+
+# 3. Prepare env + install + build backend only (frontend is on Vercel)
+Copy-Item .env.production .env -Force
+npm install
+npm run build -w packages/shared
+npm run build -w packages/backend
+
+# 4. Database
+npm run migrate          # apply all migrations (037 included)
+npm run seed             # only the first time / when you want demo data
+
+# 5. Start the API
+cd packages\backend
+node dist/index.js       # listens on PORT (3000), uses root .env
+```
+
+### Expose the API to Vercel (tunnel)
+
+The Vercel frontend proxies `/api/*` to your PC, so the PC must be reachable
+over HTTPS:
+
+```powershell
+# Tailscale Funnel (easiest if you have Tailscale)
+tailscale funnel 3000
+
+# Or Cloudflare Tunnel (no account needed for quick tunnels)
+winget install --id Cloudflare.cloudflared
+cloudflared tunnel --url http://localhost:3000
+```
+
+Then update `vercel.json` (replace every `https://...railway.app` with your
+tunnel URL), commit and push — Vercel redeploys automatically:
+
+```powershell
+git add vercel.json && git commit -m "chore: point API rewrites at tunnel" && git push
+```
+
+**Notes**
+
+- The `.env` file at the repo root is gitignored — never commit secrets.
+- Redis/email/SMS/WhatsApp are optional: the backend degrades gracefully
+  (queue jobs, notifications and OTP sending need their own credentials).
+- Uploaded files are stored locally in `packages\backend\uploads\` unless
+  Supabase/MinIO storage credentials are configured.
+
+---
+
 ## 🐳 Production Deployment
 
 ### Windows 11 (PowerShell)
