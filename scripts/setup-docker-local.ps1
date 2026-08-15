@@ -24,7 +24,8 @@
 
 param(
     [switch]$SkipBuild,   # reuse existing images instead of rebuilding
-    [switch]$NoSeed       # skip seeding demo data
+    [switch]$NoSeed,      # skip seeding demo data
+    [string]$LanIp = ''   # optional: force the LAN IP (e.g. -LanIp 192.168.1.20)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -60,25 +61,43 @@ function Test-PrivateIp([string]$addr) {
 }
 
 $ip = $null
-# Prefer real (physical) adapters - Wi-Fi/Ethernet - over WSL/Hyper-V vEthernet
-$physical = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' -and $_.Physical }
-if ($physical) {
-    $ip = $physical |
-        ForEach-Object { Get-NetIPAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue } |
-        Where-Object { Test-PrivateIp $_.IPAddress } |
-        Select-Object -First 1
-}
-if (-not $ip) {
-    $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+if ($LanIp) {
+    $ip = [pscustomobject]@{ IPAddress = $LanIp; InterfaceAlias = 'manual' }
+    Write-Ok "Using forced LAN IP: $LanIp"
+} else {
+    # Prefer real (physical) adapters - Wi-Fi/Ethernet - over WSL/Hyper-V vEthernet
+    $virtualMatch = 'vEthernet|WSL|Hyper-V|Default Switch|Loopback|Bluetooth|Tailscale|ZeroTier|WireGuard|TAP|TUN'
+    $candidates = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
         Where-Object { $_.AddressState -eq 'Preferred' -and (Test-PrivateIp $_.IPAddress) } |
-        Select-Object -First 1
+        ForEach-Object {
+            $adapter = Get-NetAdapter -InterfaceIndex $_.InterfaceIndex -ErrorAction SilentlyContinue
+            [pscustomobject]@{
+                IPAddress = $_.IPAddress
+                InterfaceAlias = $_.InterfaceAlias
+                InterfaceDescription = if ($adapter) { $adapter.InterfaceDescription } else { '' }
+                Physical = if ($adapter) { $adapter.Physical } else { $false }
+            }
+        }
+    $ip = $candidates | Where-Object {
+        $_.Physical -and $_.InterfaceAlias -notmatch $virtualMatch -and $_.InterfaceDescription -notmatch $virtualMatch
+    } | Select-Object -First 1
+    if (-not $ip) {
+        $ip = $candidates | Where-Object {
+            $_.InterfaceAlias -notmatch $virtualMatch -and $_.InterfaceDescription -notmatch $virtualMatch
+        } | Select-Object -First 1
+    }
+    if (-not $ip) { $ip = $candidates | Select-Object -First 1 }
+    if (-not $ip) {
+        throw "No private LAN IPv4 address found. Connect your PC to Wi-Fi or Ethernet, then re-run. (Or pass -LanIp 192.168.x.x)"
+    }
+    if ($ip.InterfaceAlias -match $virtualMatch -or $ip.InterfaceDescription -match $virtualMatch) {
+        Write-Warn "Only virtual adapters found ($($ip.InterfaceAlias)). The phone needs your real Wi-Fi IP."
+        Write-Warn "Run 'ipconfig' and re-run with: -LanIp <your-Wi-Fi-IPv4>"
+    }
 }
 
-if (-not $ip) {
-    throw "No private LAN IPv4 address found. Connect your PC to Wi-Fi or Ethernet, then re-run."
-}
 $LAN_IP = $ip.IPAddress
-Write-Ok "PC LAN IP: $LAN_IP (your phone must be on the same network)"
+Write-Ok "PC LAN IP: $LAN_IP  ($($ip.InterfaceAlias)) — phone must be on the same network"
 
 # --- 3. Secrets (reuse existing .env values so the DB volume stays valid) -
 Write-Step "Preparing secrets..."
