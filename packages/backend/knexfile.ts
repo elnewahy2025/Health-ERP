@@ -29,7 +29,7 @@ const knexConfig: Record<string, Knex.Config> = {
       database: process.env.DB_NAME,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
-      ssl: { rejectUnauthorized: false },
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
     },
     migrations: {
       directory: './migrations',

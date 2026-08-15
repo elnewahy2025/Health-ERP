@@ -17,7 +17,7 @@ async function runSeeds() {
       database: process.env.DB_NAME || 'healthcare',
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || 'postgres',
-      ...(process.env.NODE_ENV === 'production' ? { ssl: { rejectUnauthorized: false } } : {}),
+      ...(process.env.DB_SSL === 'true' ? { ssl: { rejectUnauthorized: false } } : {}),
     },
     seeds: {
       directory: path.resolve(__dirname, '../../seeds'),

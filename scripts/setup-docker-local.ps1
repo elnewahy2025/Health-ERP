@@ -165,6 +165,8 @@ DB_PORT=$POSTGRES_PORT
 DB_NAME=vision_erp
 DB_USER=postgres
 DB_PASSWORD=$DB_PASSWORD
+# True only for managed Postgres that requires SSL (e.g. Neon/Railway).
+DB_SSL=false
 
 # Redis
 REDIS_PASSWORD=$REDIS_PASSWORD
