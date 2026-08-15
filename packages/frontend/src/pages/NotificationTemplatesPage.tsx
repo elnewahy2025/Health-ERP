@@ -1,16 +1,16 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import { MessageSquare, Plus, Send, Edit3, X, Check } from 'lucide-react';
-import { Button, Input, PageLoader, EmptyState, Badge } from '../components/ui';
+import { Button, Input, PageLoader, EmptyState, Badge, Modal, Select } from '../components/ui';
 import { communicationsApi } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
 
 interface NotificationTemplate {
   id: string;
-  key: string;
+  code: string;
+  name: string;
   channel: string;
-  locale: string;
   subject?: string;
   body: string;
   tenant_id: string | null;
@@ -28,6 +28,13 @@ export default function NotificationTemplatesPage() {
   const [testRecipient, setTestRecipient] = useState('');
   const [testRecipientError, setTestRecipientError] = useState('');
   const [testing, setTesting] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newCode, setNewCode] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newChannel, setNewChannel] = useState('email');
+  const [newSubject, setNewSubject] = useState('');
+  const [newBody, setNewBody] = useState('');
+  const [creating, setCreating] = useState(false);
 
   const loadTemplates = useCallback(async () => {
     setLoading(true);
@@ -40,6 +47,10 @@ export default function NotificationTemplatesPage() {
       setLoading(false);
     }
   }, [t]);
+
+  useEffect(() => {
+    void loadTemplates();
+  }, [loadTemplates]);
 
   const handleLoad = useCallback(() => {
     loadTemplates();
@@ -96,6 +107,40 @@ export default function NotificationTemplatesPage() {
     setEditBody('');
   }, []);
 
+  const openCreate = useCallback(() => {
+    setNewCode('');
+    setNewName('');
+    setNewChannel('email');
+    setNewSubject('');
+    setNewBody('');
+    setShowCreate(true);
+  }, []);
+
+  const handleCreate = useCallback(async () => {
+    const code = newCode.trim().toLowerCase().replace(/\s+/g, '.');
+    if (!code || !newName.trim() || !newBody.trim()) {
+      toast.error(t('notifTmpl.failedSave'));
+      return;
+    }
+    setCreating(true);
+    try {
+      await communicationsApi.createTemplate({
+        code,
+        name: sanitizeString(newName.trim()),
+        channel: newChannel,
+        subject: newSubject.trim() ? sanitizeString(newSubject.trim()) : undefined,
+        body: sanitizeString(newBody),
+      });
+      toast.success(t('notifTmpl.templateCreated'));
+      setShowCreate(false);
+      await loadTemplates();
+    } catch {
+      toast.error(t('notifTmpl.failedSave'));
+    } finally {
+      setCreating(false);
+    }
+  }, [newCode, newName, newChannel, newSubject, newBody, t, loadTemplates]);
+
   if (loading) {
     return <PageLoader message={t('notifTmpl.loadingTemplates')} />;
   }
@@ -111,7 +156,7 @@ export default function NotificationTemplatesPage() {
             {t('notifTmpl.templateCount', { count: templates.length })}
           </p>
         </div>
-        <Button onClick={handleLoad} icon={<Plus className="w-4 h-4" />}>
+        <Button onClick={openCreate} icon={<Plus className="w-4 h-4" />}>
           {t('notifTmpl.newTemplate')}
         </Button>
       </div>
@@ -130,12 +175,14 @@ export default function NotificationTemplatesPage() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-mono text-sm font-medium text-gray-900">
-                      {sanitizeString(tmpl.key)}
+                      {sanitizeString(tmpl.code)}
                     </span>
+                    {tmpl.name && (
+                      <span className="text-sm text-gray-500">{sanitizeString(tmpl.name)}</span>
+                    )}
                     <Badge variant={tmpl.channel === 'email' ? 'info' : 'success'}>
                       {tmpl.channel}
                     </Badge>
-                    <Badge variant="gray">{tmpl.locale}</Badge>
                     {!tmpl.tenant_id && (
                       <Badge variant="gray">{t('notifTmpl.system')}</Badge>
                     )}
@@ -224,6 +271,66 @@ export default function NotificationTemplatesPage() {
           ))}
         </div>
       )}
+
+      <Modal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title={t('notifTmpl.newTemplate')}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowCreate(false)}>
+              {t('notifTmpl.cancel')}
+            </Button>
+            <Button onClick={handleCreate} loading={creating} icon={<Check className="w-4 h-4" />}>
+              {t('notifTmpl.save')}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Input
+            label={t('notifTmpl.code')}
+            value={newCode}
+            onChange={(e) => setNewCode(e.target.value)}
+            placeholder="appointment.reminder"
+            helpText={t('notifTmpl.codeHelp')}
+          />
+          <Input
+            label={t('notifTmpl.name')}
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            maxLength={200}
+          />
+          <Select
+            label={t('notifTmpl.channel')}
+            value={newChannel}
+            onChange={(e) => setNewChannel(e.target.value)}
+            options={[
+              { value: 'email', label: 'Email' },
+              { value: 'sms', label: 'SMS' },
+              { value: 'both', label: 'Both' },
+            ]}
+          />
+          {newChannel !== 'sms' && (
+            <Input
+              label={t('notifTmpl.subject')}
+              value={newSubject}
+              onChange={(e) => setNewSubject(e.target.value)}
+            />
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('notifTmpl.templateBody')}
+            </label>
+            <textarea
+              className="w-full border rounded-lg p-3 min-h-[120px] font-mono text-sm"
+              value={newBody}
+              onChange={(e) => setNewBody(e.target.value)}
+              placeholder={t('notifTmpl.templateBody')}
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

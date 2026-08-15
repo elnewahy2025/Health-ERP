@@ -275,6 +275,27 @@ for ($i = 0; $i -lt 12; $i++) {
 }
 Write-Ok "Frontend reachable on this PC: $frontUrl"
 
+# --- 8b. Phone reachability: port binding + Windows Firewall --------------
+Write-Step "Preparing phone access (port binding + firewall)..."
+$published = docker compose port frontend 80 2>&1
+if ("$published" -match '0\.0\.0\.0:') {
+    Write-Ok "Port $FRONTEND_PORT is published on all interfaces ($published)"
+} else {
+    Write-Warn "Port $FRONTEND_PORT is NOT published on all interfaces."
+    Write-Warn "Found: $published . The phone cannot reach the app until this is fixed."
+}
+
+# Allow inbound TCP on the frontend port. Needs an elevated PowerShell; if this
+# fails we print the exact command so the user can run it once as Administrator.
+try {
+    New-NetFirewallRule -DisplayName 'Vision ERP frontend' -Direction Inbound -Protocol TCP -LocalPort $FRONTEND_PORT -Action Allow -ErrorAction Stop | Out-Null
+    Write-Ok "Firewall rule added: inbound TCP $FRONTEND_PORT allowed"
+} catch {
+    Write-Warn "Could not add the firewall rule (needs an Administrator PowerShell)."
+    Write-Warn "Run this once as Administrator, then retry from the phone:"
+    Write-Host "    New-NetFirewallRule -DisplayName 'Vision ERP frontend' -Direction Inbound -Protocol TCP -LocalPort $FRONTEND_PORT -Action Allow" -ForegroundColor Yellow
+}
+
 # --- 9. Seed demo data ---------------------------------------------------
 if (-not $NoSeed) {
     Write-Step "Seeding demo data (admin / doctor / receptionist)..."
@@ -298,8 +319,9 @@ Write-Host "    Admin:        admin@demo.com / Admin@123"
 Write-Host "    Doctor:       doctor@demo.com / Doctor@123"
 Write-Host "    Receptionist: reception@demo.com / Recept@123"
 Write-Host ""
-Write-Warn "Firewall: if the phone cannot open the page, run this once (admin PowerShell):"
-Write-Host "    New-NetFirewallRule -DisplayName 'Vision ERP' -Direction Inbound -Protocol TCP -LocalPort $FRONTEND_PORT -Action Allow"
+Write-Warn "If the phone still cannot open the page: check that it is on the SAME Wi-Fi network,"
+Write-Warn "and that Windows marked your network as Private (Settings > Network & Internet >"
+Write-Warn "Properties). Then re-run the script once as Administrator to add the firewall rule."
 Write-Warn "Stop the stack anytime:  docker compose down   (data stays in named volumes)"
 Write-Warn "Stop and delete all data: docker compose down -v"
 Write-Warn "For internet access later (HTTPS): set COOKIE_SECURE=true and add a tunnel (e.g. Cloudflare Tunnel)."

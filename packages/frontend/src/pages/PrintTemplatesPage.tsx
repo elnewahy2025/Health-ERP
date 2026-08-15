@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import { FileText } from 'lucide-react';
 import {
-  PageLoader, EmptyState, Card, CardBody, Button, Badge, Input,
+  PageLoader, EmptyState, Card, CardBody, Button, Badge, Input, Select, Modal,
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
@@ -25,6 +25,12 @@ export default function PrintTemplatesPage() {
   const [templates, setTemplates] = useState<PrintTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({
+    name: '', code: '', category: 'clinical',
+    documentType: '', paperSize: 'A4', contentHtml: '',
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +72,38 @@ export default function PrintTemplatesPage() {
     setSearch('');
   }, []);
 
+  const openCreate = useCallback(() => {
+    setForm({ name: '', code: '', category: 'clinical', documentType: '', paperSize: 'A4', contentHtml: '' });
+    setShowCreate(true);
+  }, []);
+
+  const handleCreate = useCallback(async () => {
+    if (!form.name.trim() || !form.code.trim() || !form.documentType.trim()) {
+      toast.error(t('printTemplates.loadError'));
+      return;
+    }
+    setCreating(true);
+    try {
+      await api.post('/print/templates', {
+        name: sanitizeString(form.name.trim()),
+        code: sanitizeString(form.code.trim().toLowerCase().replace(/\s+/g, '_')),
+        category: sanitizeString(form.category),
+        documentType: sanitizeString(form.documentType.trim().toLowerCase().replace(/\s+/g, '_')),
+        paperSize: form.paperSize,
+        contentHtml: form.contentHtml.trim() ? form.contentHtml : undefined,
+        variables: [],
+      });
+      toast.success(t('notifTmpl.templateCreated'));
+      setShowCreate(false);
+      const r = await api.get('/print/templates');
+      setTemplates((r.data?.data ?? []) as PrintTemplate[]);
+    } catch {
+      toast.error(t('printTemplates.loadError'));
+    } finally {
+      setCreating(false);
+    }
+  }, [form, t]);
+
   if (loading) return <PageLoader message={t('common.loading')} />;
 
   return (
@@ -77,7 +115,7 @@ export default function PrintTemplatesPage() {
             {t('printTemplates.templateCount', { count: templates.length })}
           </p>
         </div>
-        <Button>
+        <Button onClick={openCreate}>
           <FileText className="w-4 h-4" /> {t('printTemplates.newTemplate')}
         </Button>
       </div>
@@ -146,6 +184,78 @@ export default function PrintTemplatesPage() {
           ))
         )}
       </div>
+
+      <Modal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title={t('printTemplates.newTemplate')}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowCreate(false)}>
+              {t('notifTmpl.cancel')}
+            </Button>
+            <Button onClick={handleCreate} loading={creating}>
+              {t('notifTmpl.save')}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Input
+            label={t('printTemplates.name')}
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            maxLength={120}
+          />
+          <Input
+            label={t('printTemplates.code')}
+            value={form.code}
+            onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+            placeholder="invoice_default"
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label={t('printTemplates.category')}
+              value={form.category}
+              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+              options={[
+                { value: 'clinical', label: 'Clinical' },
+                { value: 'financial', label: 'Financial' },
+                { value: 'administrative', label: 'Administrative' },
+              ]}
+            />
+            <Input
+              label={t('printTemplates.documentType')}
+              value={form.documentType}
+              onChange={(e) => setForm((f) => ({ ...f, documentType: e.target.value }))}
+              placeholder="invoice"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label={t('printTemplates.paper')}
+              value={form.paperSize}
+              onChange={(e) => setForm((f) => ({ ...f, paperSize: e.target.value }))}
+              options={[
+                { value: 'A4', label: 'A4' },
+                { value: 'A5', label: 'A5' },
+                { value: 'Letter', label: 'Letter' },
+              ]}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('printTemplates.preview')} (HTML)
+            </label>
+            <textarea
+              className="w-full border rounded-lg p-3 min-h-[120px] font-mono text-sm"
+              value={form.contentHtml}
+              onChange={(e) => setForm((f) => ({ ...f, contentHtml: e.target.value }))}
+              placeholder="<h1>{{patientName}}</h1>"
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

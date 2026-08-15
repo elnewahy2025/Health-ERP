@@ -13,7 +13,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   app.post('/api/v1/auth/login', { preHandler: [loginRateLimit] }, login);
   app.post('/api/v1/auth/mfa/verify', mfaVerify);
   app.post('/api/v1/auth/refresh', { preHandler: [refreshRateLimit] }, refreshToken);
-  app.post('/api/v1/auth/logout', { preHandler: [authenticate] }, logout);
+  // Logout must work even when the short-lived access token has expired - the
+  // handler resolves the session from the refresh token itself.
+  app.post('/api/v1/auth/logout', logout);
   app.get('/api/v1/auth/me', { preHandler: [authenticate] }, me);
   app.get('/api/v1/auth/sessions', { preHandler: [authenticate] }, listSessions);
   app.delete('/api/v1/auth/sessions/:sessionId', { preHandler: [authenticate] }, revokeSession);

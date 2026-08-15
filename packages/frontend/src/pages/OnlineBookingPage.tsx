@@ -24,6 +24,7 @@ interface Slot {
   startTime: string;
   endTime: string;
   slotType: string;
+  available: boolean;
 }
 
 interface BookingRequest {
@@ -41,6 +42,17 @@ interface BookingRequest {
 }
 
 const PHONE_REGEX = /^\+?[0-9]{10,15}$/;
+
+/** "09:30" -> "9:30 AM" (24h stays as-is when it cannot be parsed). */
+function formatTime(value: string): string {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  if (!m) return value;
+  const h = Number(m[1]);
+  const mm = m[2];
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${mm} ${period}`;
+}
 
 export default function OnlineBookingPage() {
   const { t } = useTranslation();
@@ -235,25 +247,36 @@ export default function OnlineBookingPage() {
 
                   {slots.length > 0 && (
                     <div>
-                      <label className="text-sm font-medium mb-2 block">{t('booking.availableSlots')}</label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-medium">{t('booking.availableSlots')}</label>
+                        {slots[0]?.date && (
+                          <span className="text-sm text-gray-500">
+                            {sanitizeString(slots[0].date)}
+                          </span>
+                        )}
+                      </div>
                       {errors.slot && <p className="text-xs text-red-600 mb-1">{errors.slot}</p>}
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2">
                         {slots.map((s) => (
                           <button
                             key={s.id}
-                            className={`p-2 text-xs rounded-lg border text-center transition-all ${
-                              selectedSlot === s.id
-                                ? 'bg-primary-600 text-white border-primary-600'
-                                : 'bg-white border-gray-200 hover:border-primary-300'
+                            disabled={!s.available}
+                            className={`py-3 px-2 rounded-xl border-2 text-center text-sm font-medium transition-all ${
+                              !s.available
+                                ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed'
+                                : selectedSlot === s.id
+                                  ? 'border-primary-600 bg-primary-50 text-primary-700 shadow-md'
+                                  : 'border-gray-200 hover:border-primary-300 text-gray-700'
                             }`}
                             onClick={() => setSelectedSlot(s.id)}
                           >
-                            <div className="font-medium">{sanitizeString(s.date)}</div>
-                            <div>{sanitizeString(s.startTime)}</div>
-                            <Badge variant="gray">{sanitizeString(s.slotType)}</Badge>
+                            {formatTime(s.startTime)}
                           </button>
                         ))}
                       </div>
+                      <p className="text-xs text-gray-400 mt-2">
+                        {t('booking.slotDuration')}
+                      </p>
                     </div>
                   )}
 

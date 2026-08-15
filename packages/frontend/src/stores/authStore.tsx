@@ -122,9 +122,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
-    authApi.logout().catch(() => {
-      // Ignore errors — clear local state regardless
-    });
+    // Ask the backend to revoke the refresh token and clear the HttpOnly
+    // cookies BEFORE navigating (capped at 2s so a dead server never hangs the
+    // UI). Without this the login page's session-restore would silently
+    // re-authenticate and bounce straight back to the dashboard.
+    void (async () => {
+      try {
+        await Promise.race([
+          authApi.logout(),
+          new Promise((resolve) => setTimeout(resolve, 2000)),
+        ]);
+      } catch {
+        // Backend unreachable — continue clearing local state.
+      }
+    })();
     setAccessToken(null);
     setCsrfToken(null);
     localStorage.removeItem('tenantSlug');

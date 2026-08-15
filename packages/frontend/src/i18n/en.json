@@ -2742,5 +2742,10 @@
   "nav.pharmacyAdvanced": "Pharmacy Advanced",
   "nav.claimsLifecycle": "Claims Lifecycle",
   "nav.userManagement": "User Management",
-  "nav.roleManagement": "Roles & Permissions"
+  "nav.roleManagement": "Roles & Permissions",
+  "notifTmpl.code": "Template code",
+  "notifTmpl.codeHelp": "Unique key used by the system (e.g. appointment.reminder). Lowercase letters, digits and dots.",
+  "notifTmpl.name": "Template name",
+  "printTemplates.name": "Template name",
+  "booking.slotDuration": "Each slot is 30 minutes"
 }

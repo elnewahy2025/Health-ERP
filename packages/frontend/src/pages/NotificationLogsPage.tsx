@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MessageSquare, ChevronLeft, ChevronRight, CheckCircle, XCircle } from 'lucide-react';
 import { Button, PageLoader, EmptyState, Badge } from '../components/ui';
@@ -46,6 +46,10 @@ export default function NotificationLogsPage() {
     },
     [loadLogs],
   );
+
+  useEffect(() => {
+    void loadLogs(1);
+  }, [loadLogs]);
 
   const handleLoad = useCallback(() => {
     loadLogs(currentPage);

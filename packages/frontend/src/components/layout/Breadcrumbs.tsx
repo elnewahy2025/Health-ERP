@@ -21,7 +21,7 @@ export default function Breadcrumbs() {
 
   return (
     <nav aria-label="Breadcrumb" className="mb-4">
-      <ol className="flex items-center gap-1.5 text-sm text-gray-500 flex-wrap">
+      <ol className="flex items-center gap-1.5 text-sm text-gray-500 flex-wrap dark:text-gray-400">
         <li>
           <Link to="/" className="hover:text-primary-600">
             {t('nav.dashboard')}
@@ -36,7 +36,7 @@ export default function Breadcrumbs() {
               </Link>
             </li>
             {chevron}
-            <li aria-current="page" className="font-medium text-gray-900">
+            <li aria-current="page" className="font-medium text-gray-900 dark:text-gray-100">
               {t('common.view')}
             </li>
           </>

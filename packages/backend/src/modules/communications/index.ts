@@ -14,8 +14,12 @@ export async function registerCommunicationsModule(app: FastifyInstance) {
     const { tenantId } = getCtx(request);
     const templates = await db('notification_templates')
       .where(function () { this.whereNull('tenant_id').orWhere('tenant_id', tenantId); })
-      .orderBy('key');
-    return sendSuccess(reply, templates);
+      .orderBy('code');
+    return sendSuccess(reply, templates.map((t: Record<string, unknown>) => ({
+      id: t.id, code: t.code, name: t.name, channel: t.channel,
+      subject: t.subject, body: t.body_template, variables: t.variables,
+      tenant_id: t.tenant_id, is_active: t.is_active,
+    })));
   });
 
   // Update a notification template (tenant-specific override)
@@ -30,7 +34,7 @@ export async function registerCommunicationsModule(app: FastifyInstance) {
     if (!existing) return reply.code(404).send({ error: 'Template not found' });
     if (existing.tenant_id && existing.tenant_id !== tenantId) return reply.code(403).send({ error: 'Forbidden' });
 
-    const update: Record<string, unknown> = { body, updated_at: new Date() };
+    const update: Record<string, unknown> = { body_template: body, updated_at: new Date() };
     if (subject !== undefined) update.subject = subject;
     if (isActive !== undefined) update.is_active = isActive;
 
@@ -42,17 +46,21 @@ export async function registerCommunicationsModule(app: FastifyInstance) {
   app.post('/api/v1/notification-templates', { preHandler: [authenticate, authorize('communications.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const body = z.object({
-      key: z.string().min(2).max(100), channel: z.enum(['email', 'sms', 'both']),
-      locale: z.enum(['en', 'ar']).default('en'),
+      code: z.string().min(2).max(100), name: z.string().min(1).max(200),
+      channel: z.enum(['email', 'sms', 'both']),
       subject: z.string().optional(), body: z.string(),
     }).parse(request.body);
 
     const [template] = await db('notification_templates').insert({
-      tenant_id: tenantId, key: body.key, channel: body.channel,
-      locale: body.locale, subject: body.subject || null, body: body.body, is_active: true,
+      tenant_id: tenantId, code: body.code, name: body.name, channel: body.channel,
+      subject: body.subject || null, body_template: body.body, is_active: true,
     }).returning('*');
 
-    return sendSuccess(reply, template, 'Template created', 201);
+    return sendSuccess(reply, {
+      id: template.id, code: template.code, name: template.name, channel: template.channel,
+      subject: template.subject, body: template.body_template,
+      tenant_id: template.tenant_id, is_active: template.is_active,
+    }, 'Template created', 201);
   });
 
   // Send test notification
@@ -66,7 +74,7 @@ export async function registerCommunicationsModule(app: FastifyInstance) {
 
     const sent = await sendNotification({
       tenantId, channel: template.channel as 'email' | 'sms',
-      recipient, templateKey: template.key,
+      recipient, templateKey: template.code,
       variables: { testName: 'Test User', date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString() },
       locale: template.locale,
     });

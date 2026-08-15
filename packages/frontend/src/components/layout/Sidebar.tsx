@@ -215,8 +215,8 @@ function SidebarGroup({
         onClick={onToggle}
         className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors min-h-[44px] ${
           hasActiveChild && !isExpanded
-            ? 'bg-primary-50 text-primary-700'
-            : 'text-gray-700 hover:bg-gray-100'
+            ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+            : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
         }`}
       >
         <group.icon className="w-5 h-5 shrink-0" />
@@ -228,7 +228,7 @@ function SidebarGroup({
         />
       </button>
       {isExpanded && (
-        <div className="ml-4 pl-3 border-l border-gray-200 mt-1 space-y-0.5">
+        <div className="ml-4 pl-3 border-l border-gray-200 mt-1 space-y-0.5 dark:border-gray-800">
           {group.items.map((item) => (
             <div key={item.path} className="group flex items-center rounded-lg">
               <NavLink
@@ -238,8 +238,8 @@ function SidebarGroup({
                 className={({ isActive }) =>
                   `flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors min-h-[40px] flex-1 min-w-0 ${
                     isActive
-                      ? 'bg-primary-50 text-primary-700 font-medium'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                      ? 'bg-primary-50 text-primary-700 font-medium dark:bg-primary-900/30 dark:text-primary-300'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
                   }`
                 }
               >
@@ -408,7 +408,7 @@ export default function Sidebar({
 
       <aside
         className={`
-          fixed top-0 bottom-0 z-50 w-64 bg-white border-gray-200
+          fixed top-0 bottom-0 z-50 w-64 bg-white border-gray-200 dark:bg-gray-900 dark:border-gray-800
           flex flex-col
           transform transition-transform duration-200 ease-in-out
           lg:translate-x-0 lg:z-40
@@ -418,12 +418,12 @@ export default function Sidebar({
         aria-label="Sidebar navigation"
       >
         {/* Header */}
-        <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 shrink-0">
+        <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 shrink-0 dark:border-gray-800">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center shrink-0">
               <Stethoscope className="w-5 h-5 text-white" />
             </div>
-            <span className="font-bold text-gray-900 truncate text-sm">
+            <span className="font-bold text-gray-900 truncate text-sm dark:text-gray-100">
               {tenant?.settings?.theme?.brandName || t('app.name')}
             </span>
           </div>
@@ -432,20 +432,20 @@ export default function Sidebar({
             className="lg:hidden p-2 rounded-lg hover:bg-gray-100 min-w-[44px] min-h-[44px] flex items-center justify-center"
             aria-label="Close sidebar"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
           </button>
         </div>
 
         {/* Search */}
-        <div className="px-3 py-2.5 border-b border-gray-100 shrink-0">
+        <div className="px-3 py-2.5 border-b border-gray-100 shrink-0 dark:border-gray-800">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
             <input
               type="text"
               placeholder={t('sidebar.search')}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 placeholder-gray-400"
+              className="w-full pl-8 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 placeholder-gray-400 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
             />
           </div>
           <div className="flex items-center justify-between mt-1.5 px-1">
@@ -478,8 +478,8 @@ export default function Sidebar({
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors min-h-[44px] flex-1 min-w-0 ${
                     isActive
-                      ? 'bg-primary-50 text-primary-700'
-                      : 'text-gray-700 hover:bg-gray-100'
+                      ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                      : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
                   }`
                 }
               >
@@ -518,8 +518,8 @@ export default function Sidebar({
                       className={({ isActive }) =>
                         `flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors min-h-[40px] ${
                           isActive
-                            ? 'bg-primary-50 text-primary-700 font-medium'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                            ? 'bg-primary-50 text-primary-700 font-medium dark:bg-primary-900/30 dark:text-primary-300'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
                         }`
                       }
                     >
@@ -549,8 +549,8 @@ export default function Sidebar({
                       className={({ isActive }) =>
                         `flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors min-h-[40px] ${
                           isActive
-                            ? 'bg-primary-50 text-primary-700 font-medium'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                            ? 'bg-primary-50 text-primary-700 font-medium dark:bg-primary-900/30 dark:text-primary-300'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
                         }`
                       }
                     >
@@ -594,7 +594,7 @@ export default function Sidebar({
                 />
               </button>
               {(showSecondary || !!search.trim()) && (
-                <div className="ml-4 pl-3 border-l border-gray-200 mt-1 space-y-0.5">
+                <div className="ml-4 pl-3 border-l border-gray-200 mt-1 space-y-0.5 dark:border-gray-800">
                   {filteredSecondary.map((item) => (
                     <div key={item.path} className="group flex items-center rounded-lg">
                       <NavLink
@@ -603,8 +603,8 @@ export default function Sidebar({
                         className={({ isActive }) =>
                           `flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors min-h-[40px] flex-1 min-w-0 ${
                             isActive
-                              ? 'bg-primary-50 text-primary-700 font-medium'
-                              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                              ? 'bg-primary-50 text-primary-700 font-medium dark:bg-primary-900/30 dark:text-primary-300'
+                              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
                           }`
                         }
                       >

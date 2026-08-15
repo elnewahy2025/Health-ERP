@@ -24,7 +24,7 @@ export default function DashboardLayout() {
   }, [location.pathname, t]);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-16 lg:pb-0">
+    <div className="min-h-screen bg-gray-50 pb-16 lg:pb-0 dark:bg-gray-950">
       <SkipToContent />
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className={`${isRtl ? "lg:mr-64" : "lg:ml-64"} relative flex flex-col min-h-screen`}>

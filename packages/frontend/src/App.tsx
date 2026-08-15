@@ -235,11 +235,11 @@ function AppContent() {
             <Route path="admin/users" element={<UsersPage />} />
             <Route path="admin/roles" element={<RolesPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="security" element={<SecuritySettingsPage />} />
+            <Route path="notification-templates" element={<NotificationTemplatesPage />} />
+            <Route path="notification-logs" element={<NotificationLogsPage />} />
           </Route>
-          <Route path="security" element={<ProtectedRoute><SecuritySettingsPage /></ProtectedRoute>} />
           <Route path="audit-logs" element={<ProtectedRoute><AuditLogsPage /></ProtectedRoute>} />
-          <Route path="notification-templates" element={<ProtectedRoute><NotificationTemplatesPage /></ProtectedRoute>} />
-          <Route path="notification-logs" element={<ProtectedRoute><NotificationLogsPage /></ProtectedRoute>} />
           <Route path="financial-reports" element={<ProtectedRoute><FinancialReportsPage /></ProtectedRoute>} />
           <Route path="insurance-claims" element={<ProtectedRoute><InsuranceClaimsPage /></ProtectedRoute>} />
           <Route path="patients/:patientId/timeline" element={<ProtectedRoute><PatientTimelinePage /></ProtectedRoute>} />

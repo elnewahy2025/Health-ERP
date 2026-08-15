@@ -256,16 +256,23 @@ export async function refreshToken(request: FastifyRequest, reply: FastifyReply)
 }
 
 export async function logout(request: FastifyRequest, reply: FastifyReply) {
+  // Never fail logout just because the access token expired: resolve the session
+  // from the refresh token itself, and always clear the cookies.
   const body = (request.body ?? {}) as Record<string, unknown>;
   const bodyToken = typeof body.refreshToken === 'string' ? body.refreshToken : undefined;
-  // Browsers cannot read the HttpOnly refresh_token cookie, so fall back to it
-  // when the body has no token — revoking it guarantees the session dies.
   const token = bodyToken || request.cookies?.refresh_token;
-  const { userId, tenantId } = getCtx(request);
-  if (token) await revokeRefreshToken(token);
   const ip = request.ip ?? '127.0.0.1';
-  await repo.deactivateSessionByIp(userId, tenantId, ip);
-  await logAudit({ tenantId, userId, action: 'user.logout' });
+
+  if (token) {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const record = await repo.findRefreshTokenByHash(tokenHash);
+    if (record) {
+      await revokeRefreshToken(token);
+      await repo.deactivateSessionByIp(record.user_id, record.tenant_id, ip);
+      await logAudit({ tenantId: record.tenant_id, userId: record.user_id, action: 'user.logout' });
+    }
+  }
+
   reply.clearCookie('refresh_token', { path: '/' });
   reply.clearCookie('csrf_token', { path: '/' });
   return sendSuccess(reply, { message: 'Logged out successfully' });
@@ -435,6 +442,7 @@ export async function csrfValidation(request: FastifyRequest, reply: FastifyRepl
   const url = request.url;
   if (
     url.includes('/auth/login') || url.includes('/auth/refresh') ||
+    url.includes('/auth/logout') ||
     url.includes('/auth/forgot-password') || url.includes('/auth/verify-email') ||
     url.includes('/auth/reset-password') || url.includes('/auth/resend-verification') ||
     url.includes('/auth/otp/') ||

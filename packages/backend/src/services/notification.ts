@@ -14,9 +14,10 @@ interface NotificationData {
 
 export async function sendNotification(data: NotificationData): Promise<boolean> {
   try {
-    // Get template
+    // Get template. The table stores templates by `code` (one row per language);
+    // tenant-specific overrides take precedence over system (tenant_id null).
     const template = await db('notification_templates')
-      .where({ key: data.templateKey, channel: data.channel, locale: data.locale || 'en' })
+      .where({ code: data.templateKey, channel: data.channel, is_active: true })
       .andWhere(function () {
         this.whereNull('tenant_id').orWhere('tenant_id', data.tenantId);
       })
@@ -24,13 +25,13 @@ export async function sendNotification(data: NotificationData): Promise<boolean>
       .first();
 
     if (!template) {
-      console.warn(`⚠️ No template found: ${data.templateKey}/${data.channel}/${data.locale}`);
+      console.warn(`No template found: ${data.templateKey}/${data.channel}/${data.locale}`);
       return false;
     }
 
     // Replace variables
     let subject = template.subject || '';
-    let body = template.body;
+    let body = template.body_template;
     for (const [key, value] of Object.entries(data.variables)) {
       subject = subject.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);
       body = body.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value);

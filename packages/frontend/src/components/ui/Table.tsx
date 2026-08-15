@@ -24,7 +24,7 @@ export function Table<T extends Record<string, any>>({
 }: TableProps<T>) {
   if (loading) {
     return (
-      <div className="rounded-xl border border-gray-200">
+      <div className="rounded-xl border border-gray-200 dark:border-gray-800">
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
         </div>
@@ -34,18 +34,18 @@ export function Table<T extends Record<string, any>>({
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-xl border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
+      <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
+          <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>
               {columns.map((col) => (
-                <th key={col.key} className={clsx('px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider', col.className)}>
+                <th key={col.key} className={clsx('px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400', col.className)}>
                   {col.header}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 bg-white">
+          <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-800 dark:bg-gray-900">
             {data.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="px-6 py-16 text-center text-sm text-gray-500">

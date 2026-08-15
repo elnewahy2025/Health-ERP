@@ -2740,5 +2740,10 @@
   "nav.pharmacyAdvanced": "الصيدلية المتقدمة",
   "nav.claimsLifecycle": "دورة المطالبات",
   "nav.userManagement": "إدارة المستخدمين",
-  "nav.roleManagement": "الأدوار والصلاحيات"
+  "nav.roleManagement": "الأدوار والصلاحيات",
+  "notifTmpl.code": "رمز القالب",
+  "notifTmpl.codeHelp": "مفتاح فريد يستخدمه النظام (مثال: appointment.reminder). أحرف صغيرة وأرقام ونقاط.",
+  "notifTmpl.name": "اسم القالب",
+  "printTemplates.name": "اسم القالب",
+  "booking.slotDuration": "مدة كل موعد 30 دقيقة"
 }
