@@ -13,6 +13,7 @@ packages/shared/dist/
 .env.local
 .env.production
 .env.docker
+.env.backup-*
 .env.*.local
 *.bak
 *.backup

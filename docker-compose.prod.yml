@@ -1,60 +1,53 @@
-version: '3.8'
+# Production-oriented stack for a VPS. Identical app wiring to the local
+# docker-compose.yml (single source of truth: root .env), plus an SSL nginx
+# front (deployment/nginx/prod.conf) and a nightly Postgres backup job.
+#
+# Prereqs on the VPS:
+#   - copy .env (COOKIE_SECURE=true, DB_SSL=false, APP_URL=https://your-domain)
+#   - place TLS certs at deployment/nginx/ssl/cert.pem and key.pem
+#   - docker compose -f docker-compose.prod.yml up -d --build
 
 services:
   postgres:
     image: postgres:15-alpine
     container_name: visionhc-db
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
-      POSTGRES_DB: ${DB_NAME:-healthcare}
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_DB: ${POSTGRES_DB:-vision_erp}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/backup.sh:/docker-entrypoint-initdb.d/01-backup.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-healthcare}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-vision_erp}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
-    secrets:
-  db_password:
-    file: ./secrets/db_password.txt
-  jwt_secret:
-    file: ./secrets/jwt_secret.txt
-  jwt_refresh_secret:
-    file: ./secrets/jwt_refresh_secret.txt
-
-networks:
+    networks:
       - visionhc-net
-deploy:
+    deploy:
       resources:
         limits:
           memory: 1G
           cpus: '1.0'
 
-redis:
+  redis:
     image: redis:7-alpine
     container_name: visionhc-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
-    secrets:
-    db_password:
-    file: ./secrets/db_password.txt
-jwt_secret:
-    file: ./secrets/jwt_secret.txt
-jwt_refresh_secret:
-    file: ./secrets/jwt_refresh_secret.txt
-
     networks:
       - visionhc-net
     deploy:
@@ -62,29 +55,22 @@ jwt_refresh_secret:
         limits:
           memory: 512M
           cpus: '0.5'
-    minio:
-      image: minio/minio:latest
-      container_name: visionhc-minio
-      restart: unless-stopped
-      command: server /data --console-address ":9001"
+
+  minio:
+    image: minio/minio:latest
+    container_name: visionhc-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY is required}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?Set MINIO_SECRET_KEY}
-      volumes:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    volumes:
       - minio_data:/data
-      healthcheck:
+    healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 10s
       timeout: 5s
       retries: 5
-secrets:
-  db_password:
-    file: ./secrets/db_password.txt
-  jwt_secret:
-    file: ./secrets/jwt_secret.txt
-  jwt_refresh_secret:
-    file: ./secrets/jwt_refresh_secret.txt
-
     networks:
       - visionhc-net
     deploy:
@@ -99,28 +85,34 @@ secrets:
       dockerfile: Dockerfile.backend
     container_name: visionhc-backend
     restart: unless-stopped
-    env_file: .env
-    secrets:
-      - db_password
-      - jwt_secret
-      - jwt_refresh_secret
+    env_file:
+      - .env
     environment:
       NODE_ENV: production
       PORT: 3000
       HOST: 0.0.0.0
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-healthcare}
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD_FILE: /run/secrets/db_password
+      DB_NAME: ${POSTGRES_DB:-vision_erp}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DB_SSL: ${DB_SSL:-false}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      CSRF_SECRET: ${CSRF_SECRET:?CSRF_SECRET is required}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN is required}
+      APP_URL: ${APP_URL:?APP_URL is required}
       MINIO_ENDPOINT: minio
       MINIO_PORT: 9000
-      CORS_ORIGIN: ${CORS_ORIGIN:-https://localhost}
-      APP_URL: ${APP_URL:-https://localhost}
-    ports:
-      - "3000:3000"
+      MINIO_USE_SSL: "false"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:?MINIO_ROOT_USER is required}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -129,22 +121,14 @@ secrets:
       minio:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/v1/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/v1/health', (r) => r.statusCode === 200 ? process.exit(0) : process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-  secrets:
-    db_password:
-    file: ./secrets/db_password.txt
-    jwt_secret:
-      file: ./secrets/jwt_secret.txt
-    jwt_refresh_secret:
-      file: ./secrets/jwt_refresh_secret.txt
-
-  networks:
+    networks:
       - visionhc-net
-  deploy:
+    deploy:
       resources:
         limits:
           memory: 1G
@@ -156,14 +140,6 @@ secrets:
       dockerfile: Dockerfile.frontend
     container_name: visionhc-frontend
     restart: unless-stopped
-    secrets:
-    db_password:
-    file: ./secrets/db_password.txt
-    jwt_secret:
-      file: ./secrets/jwt_secret.txt
-    jwt_refresh_secret:
-      file: ./secrets/jwt_refresh_secret.txt
-
     networks:
       - visionhc-net
     deploy:
@@ -189,18 +165,10 @@ secrets:
       frontend:
         condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-    secrets:
-    db_password:
-    file: ./secrets/db_password.txt
-    jwt_secret:
-      file: ./secrets/jwt_secret.txt
-    jwt_refresh_secret:
-      file: ./secrets/jwt_refresh_secret.txt
-
     networks:
       - visionhc-net
     deploy:
@@ -218,9 +186,9 @@ secrets:
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-healthcare}
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD_FILE: /run/secrets/db_password
+      DB_NAME: ${POSTGRES_DB:-vision_erp}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION:-7}
       S3_BUCKET: ${BACKUP_S3_BUCKET:-}
       S3_ACCESS_KEY: ${AWS_ACCESS_KEY_ID:-}
@@ -232,14 +200,6 @@ secrets:
     depends_on:
       postgres:
         condition: service_healthy
-    secrets:
-      db_password:
-    file: ./secrets/db_password.txt
-    jwt_secret:
-      file: ./secrets/jwt_secret.txt
-    jwt_refresh_secret:
-      file: ./secrets/jwt_refresh_secret.txt
-
     networks:
       - visionhc-net
     deploy:
@@ -247,15 +207,8 @@ secrets:
         limits:
           memory: 256M
           cpus: '0.25'
-      secrets:
-      db_password:
-        file: ./secrets/db_password.txt
-      jwt_secret:
-        file: ./secrets/jwt_secret.txt
-      jwt_refresh_secret:
-      file: ./secrets/jwt_refresh_secret.txt
 
-      networks:
+networks:
   visionhc-net:
     driver: bridge
     name: visionhc-network
@@ -267,6 +220,8 @@ volumes:
     name: visionhc-redis
   minio_data:
     name: visionhc-minio
+  uploads_data:
+    name: visionhc-uploads
   backup_data:
     name: visionhc-backups
   frontend_logs:
