@@ -165,28 +165,17 @@ cd C:\Projects
 git clone https://github.com/elnewahy2025/vision-healthcare-erp.git
 cd vision-healthcare-erp
 
-# Create environment files
-Copy-Item .env.example .env
-Copy-Item .env.docker.example .env.docker
-# Edit both .env and .env.docker with your credentials
+# Easiest: run the full stack in Docker (Postgres + Redis + MinIO + backend +
+# frontend). Generates .env automatically, builds, seeds, and prints the URL
+# for your phone on the same Wi-Fi.
+powershell -ExecutionPolicy Bypass -File scripts/setup-docker-local.ps1
 
-# Generate JWT secrets (run twice, use each output once)
--join ((1..64) | ForEach-Object { '{0:x}' -f (Get-Random -Max 16) })
-
-# Start infrastructure
+# Alternative — dev mode with local Node (Vite on :5173, backend on :3000):
+Copy-Item .env.docker.example .env     # then fill in every value
 docker compose up -d postgres redis minio
-docker compose ps   # wait until all show 'healthy'
-
-# Install dependencies (builds shared package automatically)
 npm install
-
-# Build all packages (shared → backend → frontend)
 npm run build
-
-# Run database migrations
 cd packages/backend && npm run migrate && cd ../..
-
-# Start dev servers (backend :3000, frontend :5173)
 npm run dev
 ```
 
@@ -227,6 +216,63 @@ npm run build -w packages/shared
 npm run build -w packages/backend
 npm run build -w packages/frontend
 ```
+
+---
+
+## ⚡ Everything on Your PC with Docker (reachable from phone)
+
+Runs **Postgres + Redis + MinIO + backend + frontend** entirely in Docker on
+your Windows PC and exposes the app on your LAN so your phone can use it — no
+cloud, no credit card, no free-tier expiry. Everything is env-driven: nothing
+is hardcoded, the script generates every secret and port for you.
+
+### One command (recommended)
+
+```powershell
+# From the repo root (Docker Desktop must be running)
+powershell -ExecutionPolicy Bypass -File scripts/setup-docker-local.ps1
+```
+
+The script automatically:
+
+- Verifies Docker and detects your PC's LAN IP (for phone access)
+- Generates strong random secrets (Postgres, Redis, JWT, CSRF, MinIO)
+- Picks free host ports so it never clashes with a local Postgres/Redis/IIS
+- Writes a complete `.env` (single source of truth; an existing `.env` is backed up)
+- Builds & starts the stack, waits for health, seeds demo data
+- Prints your PC URL, your phone URL, and the demo logins
+
+Open the printed phone URL on your phone — it must be on the same Wi-Fi network.
+If the phone can't connect, allow the port through Windows Firewall once:
+
+```powershell
+New-NetFirewallRule -DisplayName 'Vision ERP' -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow
+```
+
+### Manual (same result, no script)
+
+```powershell
+Copy-Item .env.docker.example .env   # fill every value; secrets must be strong and unique
+docker compose up -d --build
+docker compose exec -T backend npx --no-install tsx src/core/seed.ts
+```
+
+### Common commands
+
+```powershell
+docker compose logs -f backend   # watch backend logs
+docker compose up -d             # start again later (data kept)
+docker compose down              # stop (data kept in named volumes)
+docker compose down -v           # stop and delete all data
+```
+
+### Going online later (HTTPS)
+
+The stack runs in production mode (`NODE_ENV=production`) with
+`COOKIE_SECURE=false` so login cookies work over plain LAN HTTP. To expose it
+to the internet with HTTPS (e.g. Cloudflare Tunnel), set `COOKIE_SECURE=true`
+in `.env` and point `APP_URL` / `CORS_ORIGIN` at your tunnel URL, then
+`docker compose up -d --build` again.
 
 ---
 

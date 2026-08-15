@@ -89,6 +89,7 @@ export interface Environment {
   MAX_LOGIN_ATTEMPTS: number;
   LOCKOUT_DURATION_MINUTES: number;
   MAX_CONCURRENT_SESSIONS: number;
+  COOKIE_SECURE: boolean;
   CSRF_SECRET: string;
 }
 
@@ -132,6 +133,9 @@ export function getEnv(): Environment {
     MAX_LOGIN_ATTEMPTS: parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5', 10),
     LOCKOUT_DURATION_MINUTES: parseInt(process.env.LOCKOUT_DURATION_MINUTES || '15', 10),
     MAX_CONCURRENT_SESSIONS: parseInt(process.env.MAX_CONCURRENT_SESSIONS || '5', 10),
+    // Default to secure cookies in production, but allow explicit override for
+    // local HTTP deployments (e.g. Docker on a LAN without TLS).
+    COOKIE_SECURE: process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : process.env.NODE_ENV === 'production',
     CSRF_SECRET: process.env.CSRF_SECRET || '',
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,

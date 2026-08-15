@@ -140,11 +140,11 @@ export async function login(request: FastifyRequest, reply: FastifyReply) {
 
   const csrfToken = svc.generateCsrfToken();
   reply.setCookie('refresh_token', refreshToken, {
-    httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
+    httpOnly: true, secure: env.COOKIE_SECURE, sameSite: 'strict',
     path: '/', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
   reply.setCookie('csrf_token', svc.hashCsrfToken(csrfToken), {
-    httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
+    httpOnly: true, secure: env.COOKIE_SECURE, sameSite: 'strict',
     path: '/', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
 
@@ -189,11 +189,11 @@ export async function mfaVerify(request: FastifyRequest, reply: FastifyReply) {
 
   const csrfToken = svc.generateCsrfToken();
   reply.setCookie('refresh_token', refreshToken, {
-    httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
+    httpOnly: true, secure: env.COOKIE_SECURE, sameSite: 'strict',
     path: '/', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
   reply.setCookie('csrf_token', svc.hashCsrfToken(csrfToken), {
-    httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
+    httpOnly: true, secure: env.COOKIE_SECURE, sameSite: 'strict',
     path: '/', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
 
@@ -244,11 +244,11 @@ export async function refreshToken(request: FastifyRequest, reply: FastifyReply)
 
   const csrfToken = svc.generateCsrfToken();
   reply.setCookie('refresh_token', result.refreshToken, {
-    httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
+    httpOnly: true, secure: env.COOKIE_SECURE, sameSite: 'strict',
     path: '/', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
   reply.setCookie('csrf_token', svc.hashCsrfToken(csrfToken), {
-    httpOnly: true, secure: env.NODE_ENV === 'production', sameSite: 'strict',
+    httpOnly: true, secure: env.COOKIE_SECURE, sameSite: 'strict',
     path: '/', maxAge: env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60,
   });
 

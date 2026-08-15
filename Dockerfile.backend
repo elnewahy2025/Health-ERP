@@ -29,7 +29,13 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/shared/dist ./node_modules/@healthcare/shared/dist
 COPY --from=builder /app/packages/shared/package.json ./node_modules/@healthcare/shared/package.json
 
-RUN chown -R appuser:appgroup /app
+# Source, migrations and seeds so the same migrate/seed scripts used in CI can
+# run inside the container (npm run migrate / npm run seed equivalents).
+COPY --from=builder /app/packages/backend/src ./src
+COPY --from=builder /app/packages/backend/migrations ./migrations
+COPY --from=builder /app/packages/backend/seeds ./seeds
+
+RUN mkdir -p /app/uploads && chown -R appuser:appgroup /app
 
 USER appuser
 

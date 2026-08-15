@@ -13,6 +13,8 @@ COPY packages/frontend ./packages/frontend
 
 RUN npm run build -w packages/shared
 RUN cd packages/frontend && npx tsc --noEmit
+ARG VITE_API_URL=/api/v1
+ENV VITE_API_URL=$VITE_API_URL
 RUN cd packages/frontend && npx vite build
 
 FROM nginx:alpine AS runner
