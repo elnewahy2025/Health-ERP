@@ -25,6 +25,7 @@
 param(
     [switch]$SkipBuild,   # reuse existing images instead of rebuilding
     [switch]$NoSeed,      # skip seeding demo data
+    [switch]$ResetDb,     # wipe ALL data volumes first (fresh database; one-time)
     [string]$LanIp = ''   # optional: force the LAN IP (e.g. -LanIp 192.168.1.20)
 )
 
@@ -217,6 +218,15 @@ $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 Write-Ok ".env written (secrets generated, DB name: vision_erp)"
 
 # --- 6. Build and start --------------------------------------------------
+if ($ResetDb) {
+    Write-Step "Resetting all data volumes (docker compose down -v)..."
+    docker compose down -v
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker compose down -v failed. Run it manually and check 'docker volume ls'."
+    }
+    Write-Ok "Data volumes removed - a fresh database will be created"
+}
+
 if ($SkipBuild) {
     Write-Step "Starting stack (reusing existing images)..."
     docker compose up -d
