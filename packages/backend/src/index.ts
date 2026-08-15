@@ -270,20 +270,26 @@ async function start() {
     process.exit(1);
   }
 
-  // Run migrations automatically on startup
-  try {
-    const migrationDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../migrations');
-    const [batchNo, migrations] = await db.migrate.latest({
-      directory: migrationDir,
-    });
-    if (migrations.length === 0) {
-      console.log('✓ Database is up to date');
-    } else {
-      console.log(`✓ Ran ${migrations.length} migration(s) (batch ${batchNo})`);
+  // Run migrations automatically on startup. In the Docker image the TS
+  // migrations are applied first via `npx tsx src/core/migrate.ts` (TS loader
+  // required), so SKIP_AUTO_MIGRATE=true avoids a duplicate attempt.
+  if (process.env.SKIP_AUTO_MIGRATE === 'true') {
+    console.log('ℹ Auto-migrations skipped (SKIP_AUTO_MIGRATE=true)');
+  } else {
+    try {
+      const migrationDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../migrations');
+      const [batchNo, migrations] = await db.migrate.latest({
+        directory: migrationDir,
+      });
+      if (migrations.length === 0) {
+        console.log('✓ Database is up to date');
+      } else {
+        console.log(`✓ Ran ${migrations.length} migration(s) (batch ${batchNo})`);
+      }
+    } catch (err) {
+      console.error('✗ Migration failed:', err);
+      console.error('Server will continue, but some tables may be missing.');
     }
-  } catch (err) {
-    console.error('✗ Migration failed:', err);
-    console.error('Server will continue, but some tables may be missing.');
   }
 
   try {

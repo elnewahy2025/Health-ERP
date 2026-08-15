@@ -49,13 +49,30 @@ if ($LASTEXITCODE -ne 0) {
 
 # --- 2. LAN IP ----------------------------------------------------------
 Write-Step "Detecting LAN IP for phone access..."
-$ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {
-    $_.AddressState -eq 'Preferred' -and
-    $_.IPAddress -notlike '127.*' -and
-    ($_.IPAddress -like '192.168.*' -or
-     $_.IPAddress -like '10.*' -or
-     ($_.IPAddress -like '172.*' -and [int]($_.IPAddress.Split('.')[1]) -ge 16 -and [int]($_.IPAddress.Split('.')[1]) -le 31))
-} | Select-Object -First 1
+function Test-PrivateIp([string]$addr) {
+    if ($addr -notlike '127.*' -and
+        ($addr -like '192.168.*' -or
+         $addr -like '10.*' -or
+         ($addr -like '172.*' -and [int]($addr.Split('.')[1]) -ge 16 -and [int]($addr.Split('.')[1]) -le 31))) {
+        return $true
+    }
+    return $false
+}
+
+$ip = $null
+# Prefer real (physical) adapters - Wi-Fi/Ethernet - over WSL/Hyper-V vEthernet
+$physical = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' -and $_.Physical }
+if ($physical) {
+    $ip = $physical |
+        ForEach-Object { Get-NetIPAddress -InterfaceIndex $_.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue } |
+        Where-Object { Test-PrivateIp $_.IPAddress } |
+        Select-Object -First 1
+}
+if (-not $ip) {
+    $ip = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.AddressState -eq 'Preferred' -and (Test-PrivateIp $_.IPAddress) } |
+        Select-Object -First 1
+}
 
 if (-not $ip) {
     throw "No private LAN IPv4 address found. Connect your PC to Wi-Fi or Ethernet, then re-run."
@@ -63,8 +80,8 @@ if (-not $ip) {
 $LAN_IP = $ip.IPAddress
 Write-Ok "PC LAN IP: $LAN_IP (your phone must be on the same network)"
 
-# --- 3. Secrets ----------------------------------------------------------
-Write-Step "Generating strong random secrets..."
+# --- 3. Secrets (reuse existing .env values so the DB volume stays valid) -
+Write-Step "Preparing secrets..."
 function New-Secret([int]$bytes = 32) {
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
     $buf = New-Object byte[] $bytes
@@ -73,13 +90,30 @@ function New-Secret([int]$bytes = 32) {
     ($buf | ForEach-Object { $_.ToString('x2') }) -join ''
 }
 
-$DB_PASSWORD        = New-Secret 24
-$REDIS_PASSWORD     = New-Secret 24
-$JWT_SECRET         = New-Secret 48
-$JWT_REFRESH_SECRET = New-Secret 48
-$CSRF_SECRET        = New-Secret 48
-$MINIO_ROOT_USER    = 'minio-' + (New-Secret 8)
-$MINIO_ROOT_PASS    = New-Secret 24
+$existing = @{}
+if (Test-Path .env) {
+    Get-Content .env | Where-Object { $_ -match '^\s*[A-Za-z0-9_]+\s*=' } | ForEach-Object {
+        $kv = $_ -split '=', 2
+        $key = $kv[0].Trim()
+        $val = $kv[1].Trim()
+        if ($key -and $val) { $existing[$key] = $val }
+    }
+    if ($existing.Count -gt 0) {
+        Write-Ok "Reusing $($existing.Count) existing value(s) from current .env (keeps the DB volume valid)"
+    }
+}
+function Get-Existing([string]$key, [string]$fallback) {
+    if ($existing.ContainsKey($key) -and $existing[$key]) { return $existing[$key] }
+    return $fallback
+}
+
+$DB_PASSWORD        = Get-Existing 'POSTGRES_PASSWORD' (New-Secret 24)
+$REDIS_PASSWORD     = Get-Existing 'REDIS_PASSWORD' (New-Secret 24)
+$JWT_SECRET         = Get-Existing 'JWT_SECRET' (New-Secret 48)
+$JWT_REFRESH_SECRET = Get-Existing 'JWT_REFRESH_SECRET' (New-Secret 48)
+$CSRF_SECRET        = Get-Existing 'CSRF_SECRET' (New-Secret 48)
+$MINIO_ROOT_USER    = Get-Existing 'MINIO_ROOT_USER' ('minio-' + (New-Secret 8))
+$MINIO_ROOT_PASS    = Get-Existing 'MINIO_ROOT_PASSWORD' (New-Secret 24)
 
 # --- 4. Free host ports (avoid clashes with local services) -------------
 function Get-FreePort([int]$preferred) {
@@ -90,12 +124,12 @@ function Get-FreePort([int]$preferred) {
     return $preferred + 50
 }
 
-$POSTGRES_PORT       = Get-FreePort 5432
-$REDIS_PORT          = Get-FreePort 6379
-$BACKEND_PORT        = Get-FreePort 3000
-$FRONTEND_PORT       = Get-FreePort 80
-$MINIO_PORT          = Get-FreePort 9000
-$MINIO_CONSOLE_PORT  = Get-FreePort 9001
+$POSTGRES_PORT       = [int](Get-Existing 'POSTGRES_PORT' (Get-FreePort 5432))
+$REDIS_PORT          = [int](Get-Existing 'REDIS_PORT' (Get-FreePort 6379))
+$BACKEND_PORT        = [int](Get-Existing 'BACKEND_PORT' (Get-FreePort 3000))
+$FRONTEND_PORT       = [int](Get-Existing 'FRONTEND_PORT' (Get-FreePort 80))
+$MINIO_PORT          = [int](Get-Existing 'MINIO_PORT' (Get-FreePort 9000))
+$MINIO_CONSOLE_PORT  = [int](Get-Existing 'MINIO_CONSOLE_PORT' (Get-FreePort 9001))
 
 $portSuffix = if ($FRONTEND_PORT -ne 80) { ':' + $FRONTEND_PORT } else { '' }
 $APP_URL = "http://${LAN_IP}${portSuffix}"

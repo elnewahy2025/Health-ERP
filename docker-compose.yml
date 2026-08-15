@@ -1,6 +1,4 @@
-version: "3.8"
-
-# Fully env-driven local stack. Run `scripts/setup-windows.ps1` to generate a
+# Fully env-driven local stack. Run `scripts/setup-docker-local.ps1` to generate a
 # complete .env automatically (secrets, ports, LAN IP) and bring the stack up.
 # Every value below can be overridden with an environment variable — nothing is
 # hardcoded. Single source of truth: the root `.env` file.
@@ -83,6 +81,7 @@ services:
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
       CSRF_SECRET: ${CSRF_SECRET:?CSRF_SECRET is required}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      SKIP_AUTO_MIGRATE: ${SKIP_AUTO_MIGRATE:-true}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
       APP_URL: ${APP_URL:-http://localhost}
       MINIO_ENDPOINT: minio

@@ -41,4 +41,6 @@ USER appuser
 
 EXPOSE 3000
 
-CMD ["node", "dist/index.js"]
+# TS migrations require the tsx loader, so apply them before starting the API
+# (mirrors railway.json: `npm run migrate && node dist/index.js`).
+CMD ["sh", "-c", "npx --no-install tsx src/core/migrate.ts && node dist/index.js"]
