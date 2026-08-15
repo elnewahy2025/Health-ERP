@@ -1,5 +1,5 @@
 # ============================================================
-# Vision Healthcare ERP — one-command local Docker setup
+# Vision Healthcare ERP - one-command local Docker setup
 # ------------------------------------------------------------
 # Runs the whole stack (Postgres + Redis + MinIO + backend +
 # frontend) with Docker Desktop and makes it reachable from
@@ -98,7 +98,7 @@ if ($LanIp) {
 }
 
 $LAN_IP = $ip.IPAddress
-Write-Ok "PC LAN IP: $LAN_IP  ($($ip.InterfaceAlias)) — phone must be on the same network"
+Write-Ok "PC LAN IP: $LAN_IP  ($($ip.InterfaceAlias)) - phone must be on the same network"
 
 # --- 3. Secrets (reuse existing .env values so the DB volume stays valid) -
 Write-Step "Preparing secrets..."
