@@ -236,7 +236,16 @@ if ($SkipBuild) {
 }
 if ($LASTEXITCODE -ne 0) { throw "docker compose failed. Scroll up to see the error." }
 
-# --- 7. Wait for health --------------------------------------------------
+# --- 7. Verify DB credentials --------------------------------------------
+Write-Step "Verifying Postgres credentials..."
+$dbCheck = docker compose exec -T -e "PGPASSWORD=$DB_PASSWORD" postgres psql -U postgres -d vision_erp -tAc "select 1" 2>&1
+if ($LASTEXITCODE -ne 0 -or "$dbCheck".Trim() -ne '1') {
+    Write-Warn "Postgres rejected the .env password (stale data volume)."
+    throw "Re-run with -ResetDb to wipe the old Postgres volume: powershell -ExecutionPolicy Bypass -File scripts/setup-docker-local.ps1 -ResetDb"
+}
+Write-Ok "Database credentials OK"
+
+# --- 8. Wait for health --------------------------------------------------
 Write-Step "Waiting for backend to become healthy (up to ~2 minutes)..."
 $healthUrl = "http://localhost:${BACKEND_PORT}/api/v1/health"
 $healthy = $false
@@ -264,7 +273,7 @@ for ($i = 0; $i -lt 12; $i++) {
 }
 Write-Ok "Frontend reachable on this PC: $frontUrl"
 
-# --- 8. Seed demo data ---------------------------------------------------
+# --- 9. Seed demo data ---------------------------------------------------
 if (-not $NoSeed) {
     Write-Step "Seeding demo data (admin / doctor / receptionist)..."
     docker compose exec -T backend npx --no-install tsx src/core/seed.ts
@@ -275,7 +284,7 @@ if (-not $NoSeed) {
     }
 }
 
-# --- 9. Summary -----------------------------------------------------------
+# --- 10. Summary ----------------------------------------------------------
 $phoneUrl = "http://${LAN_IP}${portSuffix}"
 Write-Step "Done! Access the ERP:"
 Write-Host ""
