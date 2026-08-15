@@ -127,7 +127,9 @@ function Get-Existing([string]$key, [string]$fallback) {
     return $fallback
 }
 
-$DB_PASSWORD        = Get-Existing 'POSTGRES_PASSWORD' (New-Secret 24)
+# Fixed local DB password - same value everywhere (see .env.docker.example).
+# Change it in all three places if you ever want a different one, then -ResetDb.
+$DB_PASSWORD        = 'visionhc-local-db-2026'
 $REDIS_PASSWORD     = Get-Existing 'REDIS_PASSWORD' (New-Secret 24)
 $JWT_SECRET         = Get-Existing 'JWT_SECRET' (New-Secret 48)
 $JWT_REFRESH_SECRET = Get-Existing 'JWT_REFRESH_SECRET' (New-Secret 48)
@@ -173,7 +175,7 @@ NODE_ENV=production
 # Cookies over plain LAN HTTP: keep false. Set to true behind HTTPS (tunnel).
 COOKIE_SECURE=false
 
-# PostgreSQL
+# PostgreSQL (fixed local password, same in all containers)
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=$DB_PASSWORD
 POSTGRES_DB=vision_erp
