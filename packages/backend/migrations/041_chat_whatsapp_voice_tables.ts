@@ -46,9 +46,9 @@ export async function up(knex: Knex): Promise<void> {
       table.uuid('patient_id').references('id').inTable('patients').nullable();
       table.string('to_number', 30).notNullable();
       table.text('message').notNullable();
-      table.uuid('template_id').nullable();
       table.string('status', 20).defaultTo('sent');
       table.string('direction', 10).defaultTo('outbound');
+      table.text('wa_link').nullable();
       table.timestamp('created_at').defaultTo(knex.fn.now());
       table.index(['tenant_id', 'created_at']);
     });
@@ -76,6 +76,7 @@ export async function up(knex: Knex): Promise<void> {
       table.string('status', 20).defaultTo('completed');
       table.string('direction', 10).defaultTo('outbound');
       table.integer('duration').defaultTo(0);
+      table.text('tel_link').nullable();
       table.timestamp('started_at').nullable();
       table.timestamp('ended_at').nullable();
       table.timestamp('created_at').defaultTo(knex.fn.now());

@@ -14,8 +14,15 @@ export async function registerWhatsAppModule(app: FastifyInstance) {
     let q = db('whatsapp_messages').where('whatsapp_messages.tenant_id', tenantId);
     if (status) q = q.andWhere('whatsapp_messages.status', status);
     const total = await q.clone().count('id as c').first();
-    const messages = await q.orderBy('created_at', 'desc').limit(Number(limit)).offset((Number(page) - 1) * Number(limit));
-    return sendPaginated(reply, messages, Number(total?.c || 0), Number(page), Number(limit));
+    const messages = await q.leftJoin('patients', 'whatsapp_messages.patient_id', 'patients.id')
+      .select('whatsapp_messages.*', 'patients.first_name as pf', 'patients.last_name as pl')
+      .orderBy('whatsapp_messages.created_at', 'desc').limit(Number(limit)).offset((Number(page) - 1) * Number(limit));
+    const mapped = messages.map((m: Record<string, unknown>) => ({
+      id: m.id, toNumber: m.to_number, patientName: m.pf ? `${m.pf} ${m.pl}` : null,
+      patientId: m.patient_id, message: m.message, status: m.status,
+      direction: m.direction, waLink: m.wa_link, createdAt: m.created_at,
+    }));
+    return sendPaginated(reply, mapped, Number(total?.c || 0), Number(page), Number(limit));
   });
 
   // Stats
@@ -27,7 +34,6 @@ export async function registerWhatsAppModule(app: FastifyInstance) {
         db.raw("COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent"),
         db.raw("COUNT(CASE WHEN status = 'delivered' THEN 1 END) as delivered"),
         db.raw("COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed"),
-        db.raw("COUNT(CASE WHEN status = 'read' THEN 1 END) as read_count"),
       ).first();
     return sendSuccess(reply, stats);
   });
@@ -39,16 +45,23 @@ export async function registerWhatsAppModule(app: FastifyInstance) {
     return sendSuccess(reply, templates);
   });
 
-  // Send message (simulated - stores in DB)
+  // Send message — generates wa.me link and stores record
   app.post('/api/v1/whatsapp/send', { preHandler: [authenticate, authorize('communications.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
-    const { to, message, templateId, patientId } = request.body as { to: string; message: string; templateId?: string; patientId?: string };
+    const { to, message, patientId } = request.body as { to: string; message: string; patientId?: string };
+
+    // Build wa.me link — opens WhatsApp on user's device
+    const cleanNumber = to.replace(/[^0-9]/g, '');
+    const encodedMsg = encodeURIComponent(message);
+    const waLink = `https://wa.me/${cleanNumber}?text=${encodedMsg}`;
+
     const [msg] = await db('whatsapp_messages').insert({
       tenant_id: tenantId, sender_id: ctx.userId, patient_id: patientId || null,
-      to_number: to, message, template_id: templateId || null,
-      status: 'sent', direction: 'outbound',
+      to_number: cleanNumber, message, status: 'sent', direction: 'outbound',
+      wa_link: waLink,
     }).returning('*');
-    return sendSuccess(reply, { id: msg.id, status: 'sent' }, 'Message sent', 201);
+
+    return sendSuccess(reply, { id: msg.id, status: 'sent', waLink }, 'Message ready', 201);
   });
 }

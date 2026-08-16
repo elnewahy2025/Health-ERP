@@ -167,10 +167,12 @@ export default function VoiceCallsPage() {
 
     setCallLoading(true);
     try {
-      await api.post('/voice/call', {
+      const res = await api.post('/voice/call', {
         toNumber: callForm.toNumber.trim(),
         notes: sanitizeString(callForm.notes) || undefined,
       });
+      const telLink = res.data?.data?.telLink;
+      if (telLink) window.location.href = telLink;
       toast.success(t('voice.callInitiated'));
       setCallForm({ toNumber: '', notes: '' });
       setTab('calls');

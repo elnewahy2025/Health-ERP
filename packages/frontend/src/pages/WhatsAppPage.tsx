@@ -182,7 +182,9 @@ export default function WhatsAppPage() {
       } else {
         payload.message = sanitizeString(sendForm.message);
       }
-      await api.post('/whatsapp/send', payload);
+      const res = await api.post('/whatsapp/send', payload);
+      const waLink = res.data?.data?.waLink;
+      if (waLink) window.open(waLink, '_blank');
       toast.success(t('whatsapp.messageSent'));
       setShowSendModal(false);
       setSendForm({ to: '', message: '', templateName: '', templateParams: '', messageType: 'text' });

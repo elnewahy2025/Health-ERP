@@ -7,12 +7,13 @@ import { authorize } from '../../services/authorization.js';
 
 export async function registerClinicSettingsModule(app: FastifyInstance) {
 
-  // Get clinic settings
+  // Get clinic settings (includes Twilio credentials for WhatsApp/Voice)
   app.get('/api/v1/clinic-settings', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const tenant = await db('tenants').where({ id: tenantId }).select('name', 'settings').first();
     const settings = (tenant?.settings as Record<string, unknown>) || {};
     return sendSuccess(reply, {
+      // Clinic info
       clinicName: settings.clinicName || tenant?.name || '',
       branch: settings.branch || '',
       landPhone: settings.landPhone || '',
@@ -27,6 +28,12 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
       workingHours: settings.workingHours || 'Sun-Thu: 9AM-5PM',
       licenseNumber: settings.licenseNumber || '',
       taxNumber: settings.taxNumber || '',
+      // Twilio credentials (for real WhatsApp & Voice)
+      twilioAccountSid: settings.twilioAccountSid || '',
+      twilioAuthToken: settings.twilioAuthToken || '',
+      twilioWhatsAppNumber: settings.twilioWhatsAppNumber || '',
+      twilioVoiceNumber: settings.twilioVoiceNumber || '',
+      twilioMessagingServiceSid: settings.twilioMessagingServiceSid || '',
     });
   });
 
