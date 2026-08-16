@@ -364,44 +364,49 @@ option {
 
 /* ════════════════════════════════════════════════════════════════════
    Theme compatibility layer.
-   Pages use Tailwind's static gray/white utilities in many places. These
-   unlayered rules (unlayered CSS always wins over @layer utilities) remap
-   the common ones to the semantic tokens, so every page shares the same
-   light/dark theme without a component-by-component rewrite.
+   Vite strips @layer from built CSS so all rules become unlayered.
+   Tailwind responsive utilities appear AFTER these rules in the output,
+   winning by source order. Using !important ensures the theme tokens
+   always take precedence over Tailwind's static gray palette.
    ════════════════════════════════════════════════════════════════════ */
+
+/* Text colors → semantic tokens */
 .text-gray-800,
-.text-gray-900 { color: var(--text-primary); }
+.text-gray-900 { color: var(--text-primary) !important; }
 
 .text-gray-600,
-.text-gray-700 { color: var(--text-secondary); }
+.text-gray-700 { color: var(--text-secondary) !important; }
 
 .text-gray-400,
-.text-gray-500 { color: var(--text-muted); }
+.text-gray-500 { color: var(--text-muted) !important; }
 
 .text-gray-100,
 .text-gray-200,
-.text-gray-300 { color: var(--text-disabled); }
+.text-gray-300 { color: var(--text-disabled) !important; }
 
-.placeholder-gray-400::placeholder { color: var(--text-disabled); }
+.placeholder-gray-400::placeholder { color: var(--text-disabled) !important; }
 
-.bg-white { background-color: var(--surface); }
+/* Surface backgrounds → semantic tokens */
+.bg-white { background-color: var(--surface) !important; }
 
-.bg-gray-50 { background-color: var(--surface-secondary); }
+.bg-gray-50 { background-color: var(--surface-secondary) !important; }
 
 .bg-gray-100,
-.bg-gray-200 { background-color: var(--surface-hover); }
+.bg-gray-200 { background-color: var(--surface-hover) !important; }
 
-.hover\:bg-white:hover { background-color: var(--surface); }
+/* Hover states → semantic tokens */
+.hover\:bg-white:hover { background-color: var(--surface) !important; }
 
 .hover\:bg-gray-50:hover,
-.hover\:bg-gray-100:hover { background-color: var(--surface-hover); }
+.hover\:bg-gray-100:hover { background-color: var(--surface-hover) !important; }
 
+/* Borders → semantic tokens */
 .border-gray-100,
-.border-gray-200 { border-color: var(--border); }
+.border-gray-200 { border-color: var(--border) !important; }
 
 .border-gray-300,
-.border-gray-400 { border-color: var(--border-strong); }
+.border-gray-400 { border-color: var(--border-strong) !important; }
 
 .divide-gray-100,
 .divide-gray-200,
-.divide-gray-800 { border-color: var(--border); }
+.divide-gray-800 { border-color: var(--border) !important; }

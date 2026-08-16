@@ -83,6 +83,10 @@ import { registerDepartmentsModule } from './modules/departments/index.js';
 import { registerEmergencyAccessModule } from './modules/emergency-access/index.js';
 import { registerMedicalContentModule } from './modules/medical-content/index.js';
 import { registerMultiBranchModule } from './modules/multi-branch/index.js';
+import { registerChatModule } from './modules/chat/index.js';
+import { registerWhatsAppModule } from './modules/whatsapp/index.js';
+import { registerVoiceModule } from './modules/voice/index.js';
+import { registerClinicSettingsModule } from './modules/clinic-settings/index.js';
 import { startReminderService } from './services/reminder.service.js';
 import { loggerOptions } from "./utils/logger.js";
 import pino from "pino";
@@ -257,6 +261,10 @@ await registerDashboardWidgetsModule(app);
   await registerEmergencyAccessModule(app);
   await registerMedicalContentModule(app);
   await registerMultiBranchModule(app);
+  await registerChatModule(app);
+  await registerWhatsAppModule(app);
+  await registerVoiceModule(app);
+  await registerClinicSettingsModule(app);
   return app;
 }
 

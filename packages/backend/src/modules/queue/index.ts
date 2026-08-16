@@ -41,7 +41,7 @@ export async function registerQueueModule(app: FastifyInstance) {
 
   app.put('/api/v1/queue/:id/status', { preHandler: [authenticate, authorize('queue.view')] }, async (request, reply) => {
     const { id } = request.params as { id: string }; const { status } = request.body as Record<string, unknown>;
-    const update: Record<string, unknown> = { status, updated_at: new Date() };
+    const update: Record<string, unknown> = { status };
     if (status === 'in_progress') update.started_at = new Date();
     if (status === 'completed') update.completed_at = new Date();
     await db('queue_entries').where({ id }).update(update);

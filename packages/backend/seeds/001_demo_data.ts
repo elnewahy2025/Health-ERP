@@ -354,6 +354,39 @@ export async function seed(knex: Knex): Promise<void> {
     });
   }
 
+
+  // ── Insurance Companies ──
+  const insuranceCompanies = [];
+  const companyNames = ['Misr Insurance', 'AXA Egypt', 'MetLife Egypt', 'Bupa Arabia', 'Allianz Egypt'];
+  for (const name of companyNames) {
+    const [company] = await knex('insurance_companies').insert({
+      tenant_id: tenant.id,
+      name,
+      code: name.substring(0, 3).toUpperCase(),
+      contract_type: 'network',
+      discount_rate: 10,
+    }).returning('*');
+    insuranceCompanies.push(company);
+  }
+
+  // ── Insurance Claims ──
+  for (let i = 0; i < Math.min(3, patientRecords.length); i++) {
+    const patient = patientRecords[i];
+    const company = insuranceCompanies[i % insuranceCompanies.length];
+    const claimNumber = `CLM-${new Date().getFullYear()}-${String(i + 1).padStart(5, '0')}`;
+    await knex('insurance_claims').insert({
+      tenant_id: tenant.id,
+      patient_id: patient.id,
+      insurance_id: company.id,
+      claim_number: claimNumber,
+      status: i === 0 ? 'approved' : 'draft',
+      claimed_amount: 500 + i * 200,
+      approved_amount: i === 0 ? 450 : 0,
+      paid_amount: i === 0 ? 450 : 0,
+      created_by: adminUser.id,
+    });
+  }
+
   console.log('Demo data seeded:');
   console.log('  Tenant: demo');
   console.log('  Admin: admin@demo.com / Admin@123');
