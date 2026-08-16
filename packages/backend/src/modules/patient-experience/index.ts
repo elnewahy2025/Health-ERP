@@ -130,10 +130,21 @@ export async function registerPatientExperienceModule(app: FastifyInstance) {
   app.post('/api/v1/surveys/:surveyId/respond', async (request, reply) => {
     const { surveyId } = z.object({ surveyId: z.string().uuid() }).parse(request.params);
     const body = z.object({
-      tenantSlug: z.string(), responses: z.record(z.unknown()),
+      tenantSlug: z.string().optional(), responses: z.record(z.unknown()),
       patientId: z.string().uuid().optional(), patientComment: z.string().optional(),
     }).parse(request.body);
-    const tenant = await db('tenants').where({ slug: body.tenantSlug }).first();
+
+    // Resolve the tenant from an explicit slug, or from the authenticated
+    // session when the survey is filled in from inside the dashboard/portal.
+    let tenant: { id: string } | null = null;
+    if (body.tenantSlug) {
+      tenant = await db('tenants').where({ slug: body.tenantSlug }).first();
+    } else {
+      const ctx = (request as { ctx?: { tenantId?: string } }).ctx;
+      if (ctx?.tenantId) {
+        tenant = await db('tenants').where({ id: ctx.tenantId }).first();
+      }
+    }
     if (!tenant) return sendError(reply, 'Tenant not found', 404);
     const survey = await db('surveys').where({ id: surveyId, tenant_id: tenant.id }).first();
     if (!survey) return sendError(reply, 'Survey not found', 404);

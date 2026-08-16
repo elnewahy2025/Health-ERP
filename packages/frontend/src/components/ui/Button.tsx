@@ -13,11 +13,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantStyles: Record<Variant, string> = {
-  primary: 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500 disabled:bg-primary-300',
-  secondary: 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 focus:ring-primary-500 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-700',
-  danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 disabled:bg-red-300',
-  success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 disabled:bg-green-300',
-  ghost: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:ring-gray-500 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-100',
+  primary: 'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500',
+  secondary: 'bg-[var(--surface)] text-[var(--text-secondary)] border border-line-strong hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus:ring-primary-500',
+  danger: 'bg-[var(--error)] text-white hover:bg-[#A52E3C] focus:ring-red-500',
+  success: 'bg-[var(--success)] text-white hover:bg-[#126B48] focus:ring-green-500',
+  ghost: 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)] focus:ring-gray-500',
 };
 
 const sizeStyles: Record<Size, string> = {

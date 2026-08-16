@@ -181,7 +181,7 @@ export default function IntegrationsPage() {
 
       {/* Connections Tab */}
       {tab === 'connections' && (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">
@@ -238,7 +238,7 @@ export default function IntegrationsPage() {
       {/* Webhooks Tab */}
       {tab === 'webhooks' && (
         <div>
-          <div className="bg-white rounded-lg border overflow-hidden mb-6">
+          <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800 mb-6">
             <table className="w-full">
               <thead>
                 <tr className="border-b bg-gray-50">
@@ -298,7 +298,7 @@ export default function IntegrationsPage() {
 
           {/* Webhook Logs */}
           {selectedWebhook && (
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold">
                   {t('intg.logs')}: {escapeHtml(selectedWebhook.name)}
@@ -311,7 +311,7 @@ export default function IntegrationsPage() {
                   {t('common.close')}
                 </Button>
               </div>
-              <div className="bg-white rounded-lg border overflow-hidden">
+              <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b bg-gray-50">
@@ -373,7 +373,7 @@ export default function IntegrationsPage() {
             />
           ) : (
             catalog.map((c) => (
-              <div key={c.id} className="bg-white rounded-lg border p-4">
+              <div key={c.id} className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-semibold text-sm">{escapeHtml(c.name)}</h3>
                   <Badge>{escapeHtml(c.category)}</Badge>

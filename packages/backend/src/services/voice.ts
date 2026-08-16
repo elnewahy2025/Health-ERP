@@ -127,6 +127,7 @@ export async function createConferenceCall(options: ConferenceOptions): Promise<
         tenant_id: options.tenantId,
         appointment_id: options.appointmentId || null,
         call_type: 'conference',
+        from_number: env.TWILIO_PHONE_NUMBER || '+10000000000',
         to_number: options.participants.map(p => p.phone).join(','),
         status: 'completed',
         duration_seconds: 0,

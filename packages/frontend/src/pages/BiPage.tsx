@@ -309,7 +309,7 @@ export default function BiPage() {
               {filteredDashboards.map((d) => (
                 <div
                   key={d.id}
-                  className={`bg-white rounded-lg border p-4 cursor-pointer transition-all hover:shadow-md ${
+                  className={`bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800 cursor-pointer transition-all hover:shadow-md ${
                     selectedDashboard?.id === d.id ? 'ring-2 ring-primary-500' : ''
                   }`}
                   onClick={() => {
@@ -369,7 +369,7 @@ export default function BiPage() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {widgets.map((w) => (
-                  <div key={w.id} className="bg-white rounded-lg border p-4">
+                  <div key={w.id} className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="font-medium text-sm">{escapeHtml(w.title)}</h4>
                       <div className="flex items-center gap-2">
@@ -406,7 +406,7 @@ export default function BiPage() {
         <div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {/* Appointments KPI */}
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <Activity className="w-5 h-5 text-blue-600" />
@@ -424,7 +424,7 @@ export default function BiPage() {
             </div>
 
             {/* Revenue KPI */}
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-green-100 rounded-lg">
                   <DollarSign className="w-5 h-5 text-green-600" />
@@ -442,7 +442,7 @@ export default function BiPage() {
             </div>
 
             {/* Patients KPI */}
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-purple-100 rounded-lg">
                   <Users className="w-5 h-5 text-purple-600" />
@@ -460,7 +460,7 @@ export default function BiPage() {
             </div>
 
             {/* Clinical KPI */}
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-orange-100 rounded-lg">
                   <BarChart3 className="w-5 h-5 text-orange-600" />
@@ -480,7 +480,7 @@ export default function BiPage() {
           </div>
 
           {/* Appointments by Status */}
-          <div className="bg-white rounded-lg border p-4">
+          <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
             <h3 className="font-semibold mb-3">{t('bi.byStatus')}</h3>
             {(kpiAppointments?.byStatus ?? []).length > 0 ? (
               <div className="flex gap-4 flex-wrap">

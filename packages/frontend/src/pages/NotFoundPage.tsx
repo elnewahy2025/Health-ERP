@@ -31,7 +31,7 @@ export default function NotFoundPage() {
             <Link
               key={to}
               to={to}
-              className="flex items-center gap-4 bg-white rounded-xl border border-gray-200 p-4 text-left hover:border-primary-400 hover:shadow-sm transition"
+              className="flex items-center gap-4 bg-white rounded-xl border border-gray-200 dark:bg-gray-900 dark:border-gray-800 p-4 text-left hover:border-primary-400 hover:shadow-sm transition"
             >
               <div className="w-10 h-10 bg-primary-50 rounded-lg flex items-center justify-center shrink-0">
                 <Icon className="w-5 h-5 text-primary-600" />
@@ -45,7 +45,7 @@ export default function NotFoundPage() {
           ))}
           <a
             href="mailto:support@visionhealthcare.com"
-            className="flex items-center gap-4 bg-white rounded-xl border border-gray-200 p-4 text-left hover:border-primary-400 hover:shadow-sm transition"
+            className="flex items-center gap-4 bg-white rounded-xl border border-gray-200 dark:bg-gray-900 dark:border-gray-800 p-4 text-left hover:border-primary-400 hover:shadow-sm transition"
           >
             <div className="w-10 h-10 bg-primary-50 rounded-lg flex items-center justify-center shrink-0">
               <LifeBuoy className="w-5 h-5 text-primary-600" />

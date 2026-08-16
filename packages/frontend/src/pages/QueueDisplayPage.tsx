@@ -41,7 +41,7 @@ export default function QueueDisplayPage() {
     try {
       const slug = new URLSearchParams(window.location.search).get('tenant') || 'demo';
       const branchId = new URLSearchParams(window.location.search).get('branch') || '';
-      const url = `/queue/display${branchId ? '/' + branchId : ''}?tenantSlug=${slug}`;
+      const url = `/api/v1/queue/display${branchId ? '/' + branchId : ''}?tenantSlug=${slug}`;
       const res = await fetch(url);
       const json = await res.json();
       if (json.success && mountedRef.current) {

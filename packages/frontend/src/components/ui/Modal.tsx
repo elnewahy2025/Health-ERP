@@ -39,9 +39,9 @@ export function Modal({ open, onClose, title, children, size = 'md', footer }: M
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className={clsx('relative bg-white rounded-xl shadow-xl w-full dark:bg-gray-900', sizeStyles[size], 'max-h-[90vh] flex flex-col')}>
+      <div className={clsx('relative bg-[var(--surface)] rounded-lg border border-line shadow-xl w-full', sizeStyles[size], 'max-h-[90vh] flex flex-col')}>
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-line">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
             <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600">
               <X className="w-5 h-5" />

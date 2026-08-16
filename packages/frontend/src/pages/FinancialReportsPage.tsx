@@ -144,7 +144,7 @@ export default function FinancialReportsPage() {
       {tab === 'overview' && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                   <DollarSign className="w-5 h-5 text-green-600" />
@@ -157,7 +157,7 @@ export default function FinancialReportsPage() {
                 </div>
               </div>
             </div>
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                   <TrendingUp className="w-5 h-5 text-blue-600" />
@@ -170,7 +170,7 @@ export default function FinancialReportsPage() {
                 </div>
               </div>
             </div>
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
                   <ArrowUp className="w-5 h-5 text-yellow-600" />
@@ -183,7 +183,7 @@ export default function FinancialReportsPage() {
                 </div>
               </div>
             </div>
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
                   <Wallet className="w-5 h-5 text-purple-600" />
@@ -198,7 +198,7 @@ export default function FinancialReportsPage() {
 
           {/* Revenue by Category */}
           {(revenue?.revenueByCategory ?? []).length > 0 && (
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <h3 className="font-semibold mb-3 flex items-center gap-2">
                 {t('finRep.revenue')} {t('finRep.byCategory')}
               </h3>
@@ -215,7 +215,7 @@ export default function FinancialReportsPage() {
 
           {/* Aging */}
           {agingData.length > 0 && (
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <h3 className="font-semibold mb-3 flex items-center gap-2">
                 {t('finRep.agingBuckets')}
               </h3>
@@ -235,7 +235,7 @@ export default function FinancialReportsPage() {
 
           {/* Top Patients */}
           {topPatientsData.length > 0 && (
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <h3 className="font-semibold mb-3 flex items-center gap-2">
                 {t('finRep.topPatients')}
               </h3>
@@ -265,7 +265,7 @@ export default function FinancialReportsPage() {
             {t('finRep.period')}: {plReport.period.from} — {plReport.period.to}
           </p>
 
-          <div className="bg-white rounded-lg border p-4">
+          <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
             <h3 className="font-semibold text-lg text-green-700 mb-3 flex items-center gap-2">
               <TrendingUp className="w-5 h-5" /> {t('finRep.revenue')}
             </h3>
@@ -285,7 +285,7 @@ export default function FinancialReportsPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border p-4">
+          <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
             <h3 className="font-semibold text-lg text-orange-700 mb-3 flex items-center gap-2">
               <Wallet className="w-5 h-5" /> {t('finRep.expenses')}
             </h3>
@@ -303,7 +303,7 @@ export default function FinancialReportsPage() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border p-4">
+          <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
             <div className="space-y-3">
               <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
                 <span className="text-lg font-bold">{t('finRep.grossProfit')}</span>
@@ -321,7 +321,7 @@ export default function FinancialReportsPage() {
           </div>
 
           {(plReport.revenueByMonth ?? []).length > 0 && (
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <h3 className="font-semibold mb-3">{t('finRep.monthlyTrend')}</h3>
               <div className="space-y-2">
                 {plReport.revenueByMonth.map((m) => {

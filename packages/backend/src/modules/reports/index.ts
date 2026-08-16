@@ -14,18 +14,31 @@ export async function registerReportsModule(app: FastifyInstance) {
     let q = db('report_definitions').where('report_definitions.tenant_id', tenantId);
     if (category) q = q.andWhere('category', category);
     const reports = await q.orderBy('name');
+    const parseList = (v: unknown): unknown[] => {
+      if (Array.isArray(v)) return v;
+      if (typeof v === 'string') { try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; } }
+      return [];
+    };
     return sendSuccess(reply, reports.map((r: Record<string, unknown>) => ({
       id: r.id, name: r.name, slug: r.slug, category: r.category,
       description: r.description, queryConfig: r.query_config,
       columns: r.columns, filters: r.filters, sorting: r.sorting,
-      exportFormats: r.export_formats, isScheduled: r.is_scheduled,
+      exportFormats: parseList(r.export_formats), isScheduled: r.is_scheduled,
       createdAt: r.created_at, updatedAt: r.updated_at
     })));
   });
 
   app.post('/api/v1/reports', { preHandler: [authenticate, authorize('reports.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
-    const slug = body.slug || (body.name as string).toLowerCase().replace(/\s+/g, '_');
+    const baseSlug = body.slug || (body.name as string).toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    let slug = baseSlug;
+    let slugSuffix = 2;
+    // Slug is unique per tenant: append a numeric suffix on collisions so
+    // creating "Monthly Report" twice does not 500 on the unique constraint.
+    while (await db('report_definitions').where({ tenant_id: tenantId, slug }).first()) {
+      slug = `${baseSlug}_${slugSuffix}`;
+      slugSuffix += 1;
+    }
     const [rep] = await db('report_definitions').insert({
       tenant_id: tenantId, name: body.name, slug, category: body.category || 'clinical',
       description: body.description || null, query_config: JSON.stringify(body.queryConfig || {}),

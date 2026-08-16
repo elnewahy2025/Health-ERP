@@ -153,7 +153,7 @@ export default function ComplianceReportsPage() {
 
       {/* Reports Tab */}
       {tab === 'reports' && (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">
@@ -214,21 +214,21 @@ export default function ComplianceReportsPage() {
         <div>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <p className="text-sm text-gray-500">{t('compRep.events90d')}</p>
               <p className="text-2xl font-bold">{hipaaSummary?.totalEvents ?? 0}</p>
             </div>
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <p className="text-sm text-gray-500">{t('compRep.uniqueUsers')}</p>
               <p className="text-2xl font-bold">{hipaaSummary?.uniqueUsers ?? 0}</p>
             </div>
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <p className="text-sm text-gray-500">{t('compRep.topAction')}</p>
               <p className="text-lg font-bold">
                 {hipaaSummary?.byAction?.[0]?.action ?? '-'}
               </p>
             </div>
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <p className="text-sm text-gray-500">{t('compRep.topEntity')}</p>
               <p className="text-lg font-bold">
                 {hipaaSummary?.byEntity?.[0]?.entity ?? '-'}
@@ -237,7 +237,7 @@ export default function ComplianceReportsPage() {
           </div>
 
           {/* Actions Breakdown */}
-          <div className="bg-white rounded-lg border p-4 mb-4">
+          <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800 mb-4">
             <h3 className="font-semibold mb-2">{t('compRep.actionsBreakdown')}</h3>
             <div className="flex gap-2 flex-wrap">
               {(hipaaSummary?.byAction ?? []).length > 0 ? (
@@ -251,7 +251,7 @@ export default function ComplianceReportsPage() {
           </div>
 
           {/* Audit Logs Table */}
-          <div className="bg-white rounded-lg border overflow-hidden">
+          <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
             <table className="w-full">
               <thead>
                 <tr className="border-b bg-gray-50">
@@ -300,7 +300,7 @@ export default function ComplianceReportsPage() {
 
       {/* Retention Tab */}
       {tab === 'retention' && (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">
@@ -348,7 +348,7 @@ export default function ComplianceReportsPage() {
 
       {/* BAA Tab */}
       {tab === 'baa' && (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">

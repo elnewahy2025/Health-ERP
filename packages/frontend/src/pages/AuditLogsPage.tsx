@@ -121,7 +121,7 @@ export default function AuditLogsPage() {
         </Button>
       </div>
 
-      <div className="bg-white border rounded-lg p-4">
+      <div className="bg-white border rounded-lg p-4 dark:bg-gray-900 dark:border-gray-800">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
             <Select
@@ -210,7 +210,7 @@ export default function AuditLogsPage() {
           </div>
 
           {selected && (
-            <div className="bg-white border rounded-lg p-4">
+            <div className="bg-white border rounded-lg p-4 dark:bg-gray-900 dark:border-gray-800">
               <h3 className="font-semibold mb-2">{t('audit.action')}: {sanitizeString(selected.action)}</h3>
               <pre className="text-xs text-gray-600 bg-gray-50 p-3 rounded overflow-x-auto">
                 {JSON.stringify(selected.details || {}, null, 2)}

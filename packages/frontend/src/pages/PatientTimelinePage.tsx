@@ -43,7 +43,7 @@ export default function PatientTimelinePage() {
                   <div className={`relative z-10 w-12 h-12 rounded-full ${color} flex items-center justify-center shrink-0`}>
                     <Icon className="w-5 h-5" />
                   </div>
-                  <div className="flex-1 bg-white rounded-xl border border-gray-200 p-4 hover:shadow-sm transition-shadow">
+                  <div className="flex-1 bg-white rounded-xl border border-gray-200 dark:bg-gray-900 dark:border-gray-800 p-4 hover:shadow-sm transition-shadow">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <p className="font-medium text-gray-900 capitalize">{event.title || event.type}</p>

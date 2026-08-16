@@ -39,6 +39,7 @@ export const createInventoryItemSchema = z.object({
   serialNumber: z.string().max(200).optional(),
   manufacturer: z.string().max(200).optional(),
   supplierId: z.string().uuid().optional(),
+  supplier: z.string().max(200).optional(),
   description: z.string().max(2000).optional(),
   barcode: z.string().max(100).optional(),
   controlledSubstanceClass: z.enum(['none', 'I', 'II', 'III', 'IV', 'V']).default('none'),

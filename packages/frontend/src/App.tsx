@@ -147,7 +147,24 @@ function AppContent() {
     if (tenant) {
       const theme = tenant.settings?.theme;
       if (theme?.primaryColor) {
-        document.documentElement.style.setProperty('--color-primary', theme.primaryColor);
+        // White-label branding feeds the semantic primary tokens so every
+        // component (Tailwind palette + CSS variables) follows the tenant brand.
+        const hex = theme.primaryColor;
+        const m = hex.match(/^#?([0-9a-f]{6})$/i);
+        if (m) {
+          const r = parseInt(m[1].slice(0, 2), 16);
+          const g = parseInt(m[1].slice(2, 4), 16);
+          const b = parseInt(m[1].slice(4, 6), 16);
+          const triplet = `${r} ${g} ${b}`;
+          const root = document.documentElement;
+          root.style.setProperty('--primary', hex);
+          root.style.setProperty('--link', hex);
+          root.style.setProperty('--primary-600', triplet);
+          root.style.setProperty('--primary-500', triplet);
+          const darken = (v: number) => Math.max(0, Math.round(v * 0.86));
+          root.style.setProperty('--primary-700', `${darken(r)} ${darken(g)} ${darken(b)}`);
+          root.style.setProperty('--primary-hover', `rgb(${triplet})`);
+        }
       }
     }
   }, [user, tenant, i18n]);
@@ -238,11 +255,11 @@ function AppContent() {
             <Route path="security" element={<SecuritySettingsPage />} />
             <Route path="notification-templates" element={<NotificationTemplatesPage />} />
             <Route path="notification-logs" element={<NotificationLogsPage />} />
+            <Route path="audit-logs" element={<AuditLogsPage />} />
+            <Route path="financial-reports" element={<FinancialReportsPage />} />
+            <Route path="insurance-claims" element={<InsuranceClaimsPage />} />
+            <Route path="patients/:patientId/timeline" element={<PatientTimelinePage />} />
           </Route>
-          <Route path="audit-logs" element={<ProtectedRoute><AuditLogsPage /></ProtectedRoute>} />
-          <Route path="financial-reports" element={<ProtectedRoute><FinancialReportsPage /></ProtectedRoute>} />
-          <Route path="insurance-claims" element={<ProtectedRoute><InsuranceClaimsPage /></ProtectedRoute>} />
-          <Route path="patients/:patientId/timeline" element={<ProtectedRoute><PatientTimelinePage /></ProtectedRoute>} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>

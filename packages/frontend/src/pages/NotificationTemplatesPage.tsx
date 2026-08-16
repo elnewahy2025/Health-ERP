@@ -170,7 +170,7 @@ export default function NotificationTemplatesPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {templates.map((tmpl) => (
-            <div key={tmpl.id} className="bg-white border rounded-lg p-4">
+            <div key={tmpl.id} className="bg-white border rounded-lg p-4 dark:bg-gray-900 dark:border-gray-800">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">

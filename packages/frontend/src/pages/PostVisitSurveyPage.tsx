@@ -68,6 +68,7 @@ export default function PostVisitSurveyPage() {
     setSubmitting(true);
     try {
       await api.post(`/surveys/${survey.id}/respond`, {
+        tenantSlug: localStorage.getItem('tenantSlug') || undefined,
         responses: answers,
         patientComment: sanitizeString(comment) || undefined,
       });
@@ -124,7 +125,7 @@ export default function PostVisitSurveyPage() {
   if (step === 'intro') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-xl p-8 max-w-md w-full text-center">
+        <div className="bg-white rounded-3xl shadow-xl p-8 dark:bg-gray-900 dark:border-gray-800 max-w-md w-full text-center">
           <Heart className="w-16 h-16 text-red-400 mx-auto mb-4" />
           <h1 className="text-2xl font-bold mb-4">{t('survey.title')}</h1>
           <p className="text-gray-500 mb-8">{t('survey.subtitle')}</p>
@@ -143,7 +144,7 @@ export default function PostVisitSurveyPage() {
   if (step === 'thankyou') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-xl p-8 max-w-md w-full text-center">
+        <div className="bg-white rounded-3xl shadow-xl p-8 dark:bg-gray-900 dark:border-gray-800 max-w-md w-full text-center">
           <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Send className="w-8 h-8 text-green-600" />
           </div>
@@ -163,7 +164,7 @@ export default function PostVisitSurveyPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 p-4">
       <div className="max-w-md mx-auto py-8">
-        <div className="bg-white rounded-3xl shadow-xl p-8">
+        <div className="bg-white rounded-3xl shadow-xl p-8 dark:bg-gray-900 dark:border-gray-800">
           <h1 className="text-2xl font-bold mb-2">
             {survey?.name || t('survey.visitFeedback')}
           </h1>

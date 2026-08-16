@@ -288,7 +288,7 @@ export default function AiHubPage() {
 
       {/* Assistants Tab */}
       {tab === 'assistants' && (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">
@@ -332,7 +332,7 @@ export default function AiHubPage() {
 
       {/* Providers Tab */}
       {tab === 'providers' && (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">
@@ -376,7 +376,7 @@ export default function AiHubPage() {
 
       {/* Requests Tab */}
       {tab === 'requests' && (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">
@@ -427,19 +427,19 @@ export default function AiHubPage() {
         <div>
           {costData?.summary ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-white rounded-lg border p-4">
+              <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
                 <p className="text-sm text-gray-500">{t('aiHub.totalCost')}</p>
                 <p className="text-2xl font-bold mt-1">
                   {Number(costData.summary.totalCost).toFixed(4)}
                 </p>
               </div>
-              <div className="bg-white rounded-lg border p-4">
+              <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
                 <p className="text-sm text-gray-500">{t('aiHub.totalTokens')}</p>
                 <p className="text-2xl font-bold mt-1">
                   {costData.summary.totalTokens.toLocaleString()}
                 </p>
               </div>
-              <div className="bg-white rounded-lg border p-4">
+              <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
                 <p className="text-sm text-gray-500">{t('aiHub.totalRequests')}</p>
                 <p className="text-2xl font-bold mt-1">
                   {costData.summary.totalRequests.toLocaleString()}
@@ -456,7 +456,7 @@ export default function AiHubPage() {
             </div>
           )}
 
-          <div className="bg-white rounded-lg border overflow-hidden">
+          <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
             <table className="w-full">
               <thead>
                 <tr className="border-b bg-gray-50">

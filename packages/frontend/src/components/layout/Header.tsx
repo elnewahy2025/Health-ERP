@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../stores/authStore';
 import { useTheme } from '../../stores/themeStore';
 import QuickSearch from './QuickSearch';
+import { Button } from '../ui';
 import {
   Menu, Search, Bell, Globe, User, LogOut,
   ChevronDown, Settings, Sun, Moon, Command,
@@ -17,26 +18,67 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const langRef = useRef<HTMLDivElement>(null);
+  const goKeyRef = useRef<{ timeout: ReturnType<typeof setTimeout> | null }>({ timeout: null });
 
   useEffect(() => {
+    const isTyping = (target: EventTarget | null) =>
+      ['INPUT', 'TEXTAREA', 'SELECT'].includes((target as HTMLElement)?.tagName) ||
+      (target as HTMLElement)?.isContentEditable === true;
+
     function handleClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowUserMenu(false);
       if (langRef.current && !langRef.current.contains(e.target as Node)) setShowLangMenu(false);
     }
+
+    const GO_MAP: Record<string, string> = {
+      d: '/', p: '/patients', a: '/appointments', b: '/billing',
+      s: '/settings', u: '/users',
+    };
+
     function handleKey(e: KeyboardEvent) {
-      if ((e.key === '/' || (e.key === 'k' && (e.metaKey || e.ctrlKey))) && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
+      if ((e.key === '/' || (e.key === 'k' && (e.metaKey || e.ctrlKey))) && !isTyping(e.target)) {
         e.preventDefault(); setShowSearch(true);
+        return;
       }
       if (e.key === 't' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
         e.preventDefault(); toggleTheme();
+        return;
+      }
+      if (e.key === 't' && !isTyping(e.target) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault(); toggleTheme();
+        return;
+      }
+      if (e.key === '?' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault(); setShowShortcuts(true);
+        return;
+      }
+      if (e.key === 'g' && !isTyping(e.target) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        if (goKeyRef.current.timeout) clearTimeout(goKeyRef.current.timeout);
+        const onNext = (ev: KeyboardEvent) => {
+          const target = GO_MAP[ev.key.toLowerCase()];
+          if (target) { ev.preventDefault(); navigate(target); }
+          document.removeEventListener('keydown', onNext);
+          if (goKeyRef.current.timeout) clearTimeout(goKeyRef.current.timeout);
+        };
+        document.addEventListener('keydown', onNext);
+        goKeyRef.current.timeout = setTimeout(() => {
+          document.removeEventListener('keydown', onNext);
+        }, 1200);
       }
     }
+
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('keydown', handleKey);
-    return () => { document.removeEventListener('mousedown', handleClick); document.removeEventListener('keydown', handleKey); };
-  }, [toggleTheme]);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+      if (goKeyRef.current.timeout) clearTimeout(goKeyRef.current.timeout);
+    };
+  }, [toggleTheme, navigate]);
 
   const setLocale2 = (locale: 'ar' | 'en') => {
     i18n.changeLanguage(locale);
@@ -48,7 +90,7 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const isRtl = i18n.language === 'ar';
 
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-gray-200 dark:bg-gray-900 dark:border-gray-800">
+    <header className="sticky top-0 z-30 bg-[var(--surface)] border-b border-gray-200 dark:border-gray-800">
       <div className="flex items-center justify-between h-16 px-2 sm:px-4 lg:px-6 gap-2">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <button
@@ -89,7 +131,7 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
               </span>
             </button>
             {showLangMenu && (
-              <div className={`absolute ${isRtl ? 'left-0' : 'right-0'} mt-2 w-32 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 dark:bg-gray-900 dark:border-gray-800`}>
+              <div className={`absolute ${isRtl ? 'left-0' : 'right-0'} mt-2 w-32 bg-white rounded-lg shadow dark:bg-gray-900-lg border border-gray-200 py-1 z-50 dark:bg-gray-900 dark:border-gray-800`}>
                 <button
                   onClick={() => setLocale2('en')}
                   className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 ${i18n.language === 'en' ? 'text-primary-600 font-medium' : 'text-gray-700'}`}
@@ -143,7 +185,7 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
             </button>
 
             {showUserMenu && (
-              <div className={`absolute ${isRtl ? 'left-0' : 'right-0'} mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 dark:bg-gray-900 dark:border-gray-800`}>
+              <div className={`absolute ${isRtl ? 'left-0' : 'right-0'} mt-2 w-56 bg-white rounded-lg shadow dark:bg-gray-900-lg border border-gray-200 py-1 z-50 dark:bg-gray-900 dark:border-gray-800`}>
                 <div className="px-4 py-3 border-b border-gray-100 sm:hidden">
                   <p className="text-sm font-medium text-gray-900 truncate">{user?.firstName} {user?.lastName}</p>
                   <p className="text-xs text-gray-500 truncate">{user?.email}</p>
@@ -173,6 +215,33 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
         </div>
       </div>
       <QuickSearch open={showSearch} onClose={() => setShowSearch(false)} />
+
+      {showShortcuts && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowShortcuts(false)}>
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4 dark:text-gray-100">{t('preferences.keyboardShortcuts')}</h3>
+            <div className="space-y-2">
+              {[
+                { keys: 'g d', desc: t('nav.dashboard') },
+                { keys: 'g p', desc: t('nav.patients') },
+                { keys: 'g a', desc: t('nav.appointments') },
+                { keys: 'g b', desc: t('nav.billing') },
+                { keys: 'g u', desc: t('nav.users') },
+                { keys: 'g s', desc: t('nav.settings') },
+                { keys: '/', desc: t('preferences.openSearch') },
+                { keys: 't', desc: t('preferences.toggleTheme') },
+                { keys: '?', desc: t('preferences.showShortcuts') },
+              ].map((row) => (
+                <div key={row.keys} className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">{row.desc}</span>
+                  <kbd className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 border rounded text-xs font-mono dark:text-gray-200">{row.keys}</kbd>
+                </div>
+              ))}
+            </div>
+            <Button className="w-full mt-5" onClick={() => setShowShortcuts(false)}>{t('common.close')}</Button>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

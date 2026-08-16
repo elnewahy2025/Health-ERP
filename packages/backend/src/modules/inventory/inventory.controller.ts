@@ -137,7 +137,7 @@ export async function createItem(request: FastifyRequest, reply: FastifyReply) {
     reorder_point: body.reorderPoint, unit_cost: body.unitCost, unit_price: body.unitPrice,
     batch_number: body.batchNumber || null, expiry_date: body.expiryDate || null,
     serial_number: body.serialNumber || null, manufacturer: body.manufacturer || null,
-    supplier_id: body.supplierId || null, description: body.description || null,
+    supplier_id: body.supplierId || null, supplier: body.supplier || null, description: body.description || null,
     barcode: body.barcode || null,
     controlled_substance_class: body.controlledSubstanceClass || 'none',
   });

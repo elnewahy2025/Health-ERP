@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { inventoryApi, type InventoryItem, type Warehouse, type PurchaseOrder } from '../lib/api';
 import { Modal, Input, Select, Button, Badge, EmptyState, PageLoader } from '../components/ui';
@@ -54,6 +54,7 @@ interface WarehouseFormErrors {
 
 interface PoFormErrors {
   supplier?: string;
+  items?: string;
 }
 
 const UNITS = ['piece', 'box', 'bottle', 'strip', 'carton'] as const;
@@ -67,6 +68,16 @@ const INITIAL_ITEM_FORM: ItemForm = {
 
 const INITIAL_WAREHOUSE_FORM: WarehouseForm = { name: '', code: '', type: 'main' };
 const INITIAL_PO_FORM: PoForm = { warehouseId: '', supplier: '', orderDate: '', expectedDate: '', notes: '' };
+
+interface PoLineItem {
+  itemId?: string;
+  itemName: string;
+  sku?: string;
+  quantityOrdered: number;
+  unitCost: number;
+}
+
+const EMPTY_PO_LINE: PoLineItem = { itemId: '', itemName: '', sku: '', quantityOrdered: 1, unitCost: 0 };
 
 function validateItemForm(form: ItemForm, t: (key: string) => string): ItemFormErrors {
   const errors: ItemFormErrors = {};
@@ -84,9 +95,10 @@ function validateWarehouseForm(form: WarehouseForm, t: (key: string) => string):
   return errors;
 }
 
-function validatePoForm(form: PoForm, t: (key: string) => string): PoFormErrors {
+function validatePoForm(form: PoForm, items: PoLineItem[], t: (key: string) => string): PoFormErrors {
   const errors: PoFormErrors = {};
   if (!form.supplier.trim()) errors.supplier = t('inventory.nameRequired');
+  if (items.length === 0) errors.items = t('inventory.poAtLeastOneItem');
   return errors;
 }
 
@@ -121,6 +133,8 @@ export default function InventoryPage() {
   const [warehouseErrors, setWarehouseErrors] = useState<WarehouseFormErrors>({});
   const [poForm, setPoForm] = useState<PoForm>(INITIAL_PO_FORM);
   const [poErrors, setPoErrors] = useState<PoFormErrors>({});
+  const [poItems, setPoItems] = useState<PoLineItem[]>([]);
+  const [poDraft, setPoDraft] = useState<PoLineItem>({ ...EMPTY_PO_LINE });
 
   useEffect(() => {
     let cancelled = false;
@@ -182,7 +196,7 @@ export default function InventoryPage() {
         expiryDate: itemForm.expiryDate || undefined,
         serialNumber: itemForm.serialNumber || undefined,
         manufacturer: itemForm.manufacturer || undefined,
-        supplierId: itemForm.supplier || undefined,
+        supplier: itemForm.supplier || undefined,
         description: itemForm.description || undefined,
       });
       toast.success(t('inventory.createItemSuccess'));
@@ -220,9 +234,21 @@ export default function InventoryPage() {
     }
   };
 
+  const addPoLine = useCallback(() => {
+    const name = poDraft.itemName.trim();
+    if (!name || poDraft.quantityOrdered <= 0) return;
+    setPoItems((prev) => [...prev, { ...poDraft, itemName: sanitizeString(name), sku: poDraft.sku?.trim() || undefined }]);
+    setPoDraft({ ...EMPTY_PO_LINE });
+    setPoErrors((p) => ({ ...p, items: undefined }));
+  }, [poDraft]);
+
+  const removePoLine = useCallback((index: number) => {
+    setPoItems((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
   const handleCreatePo = async (e: React.FormEvent) => {
     e.preventDefault();
-    const errors = validatePoForm(poForm, t);
+    const errors = validatePoForm(poForm, poItems, t);
     setPoErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
@@ -234,9 +260,18 @@ export default function InventoryPage() {
         orderDate: poForm.orderDate || undefined,
         expectedDate: poForm.expectedDate || undefined,
         notes: poForm.notes || undefined,
+        items: poItems.map((i) => ({
+          itemId: i.itemId || undefined,
+          itemName: i.itemName,
+          sku: i.sku || undefined,
+          quantityOrdered: i.quantityOrdered,
+          unitCost: i.unitCost,
+        })),
       });
       toast.success(t('inventory.createPoSuccess'));
       closePoModal();
+      setPoItems([]);
+      setPoDraft({ ...EMPTY_PO_LINE });
       const data = await inventoryApi.listPos();
       setPos(data);
     } catch {
@@ -538,6 +573,68 @@ export default function InventoryPage() {
             <Input type="date" label={t('inventory.expectedDate')} value={poForm.expectedDate}
               onChange={(e) => setPoForm((p) => ({ ...p, expectedDate: e.target.value }))} />
           </div>
+
+          <div className="border border-gray-200 rounded-lg p-3 space-y-3">
+            <p className="text-sm font-medium text-gray-700">{t('inventory.poItems')}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <Select
+                label={t('inventory.item')}
+                options={items.map((i) => ({ value: i.id, label: `${i.name} (${i.sku})` }))}
+                value={poDraft.itemId || ''}
+                onChange={(e) => {
+                  const found = items.find((i) => i.id === e.target.value);
+                  setPoDraft((p) => ({
+                    ...p,
+                    itemId: e.target.value,
+                    itemName: found ? found.name : '',
+                    sku: found ? found.sku : '',
+                    unitCost: found ? Number(found.unitCost || 0) : 0,
+                  }));
+                }}
+                placeholder={t('inventory.selectItem')}
+              />
+              <Input
+                type="number"
+                label={t('inventory.quantity')}
+                min="1"
+                value={poDraft.quantityOrdered}
+                onChange={(e) => setPoDraft((p) => ({ ...p, quantityOrdered: Math.max(1, sanitizeNumber(e.target.value)) }))}
+              />
+              <Input
+                type="number"
+                step="0.01"
+                label={t('inventory.unitCost')}
+                min="0"
+                value={poDraft.unitCost}
+                onChange={(e) => setPoDraft((p) => ({ ...p, unitCost: sanitizeNumber(e.target.value) }))}
+              />
+              <div className="flex items-end">
+                <Button type="button" variant="secondary" onClick={addPoLine} className="w-full">
+                  {t('inventory.addLine')}
+                </Button>
+              </div>
+            </div>
+
+            {poItems.length > 0 ? (
+              <ul className="space-y-1 text-sm">
+                {poItems.map((line, idx) => (
+                  <li key={idx} className="flex items-center justify-between bg-gray-50 rounded px-2 py-1">
+                    <span className="font-medium">{sanitizeString(line.itemName)}</span>
+                    <span className="text-gray-500">
+                      {line.quantityOrdered} x {Number(line.unitCost).toFixed(2)} = {(line.quantityOrdered * line.unitCost).toFixed(2)}
+                    </span>
+                    <button type="button" onClick={() => removePoLine(idx)} className="text-red-500 hover:text-red-700 text-xs font-medium">
+                      {t('common.remove')}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-gray-400">{t('inventory.poNoItems')}</p>
+            )}
+            {poErrors.items && <p className="text-xs text-red-600">{poErrors.items}</p>}
+          </div>
+
           <Input label={t('inventory.description')} value={poForm.notes}
             onChange={(e) => setPoForm((p) => ({ ...p, notes: e.target.value }))} />
         </form>

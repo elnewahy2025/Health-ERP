@@ -153,8 +153,16 @@ export default function PatientSelfServicePage() {
   const fetchAppointments = useCallback(async (): Promise<void> => {
     try {
       const { data } = await api.get('/appointments', { params: { limit: 50 } });
-      const rows = (data.data?.rows ?? data.data ?? []) as Appointment[];
-      setAppointments(rows);
+      const rows = (data.data?.rows ?? data.data ?? []) as Array<Record<string, unknown>>;
+      setAppointments(rows.map((a) => ({
+        id: a.id as string,
+        date: (a.appointmentDate as string) ?? (a.date as string) ?? '',
+        time: (a.startTime as string) ?? (a.time as string) ?? '',
+        endTime: (a.endTime as string) ?? '',
+        type: (a.type as string) ?? 'consultation',
+        status: (a.status as string) ?? 'scheduled',
+        reason: (a.reason as string) ?? '',
+      })));
     } catch {
       toast.error(t('selfService.loadAppointmentsFailed'));
     }
@@ -163,8 +171,14 @@ export default function PatientSelfServicePage() {
   const fetchLabOrders = useCallback(async (): Promise<void> => {
     try {
       const { data } = await api.get('/lab/orders', { params: { limit: 50 } });
-      const rows = (data.data?.rows ?? data.data ?? []) as LabOrder[];
-      setLabOrders(rows);
+      const rows = (data.data?.rows ?? data.data ?? []) as Array<Record<string, unknown>>;
+      setLabOrders(rows.map((o) => ({
+        id: o.id as string,
+        testName: (o.orderNumber as string) ?? (o.testName as string) ?? '—',
+        status: (o.status as string) ?? 'pending',
+        orderedDate: (o.orderDate as string) ?? (o.orderedDate as string) ?? '',
+        notes: (o.clinicalNotes as string) ?? (o.notes as string) ?? '',
+      })));
     } catch {
       toast.error(t('selfService.loadLabFailed'));
     }
@@ -173,8 +187,19 @@ export default function PatientSelfServicePage() {
   const fetchPrescriptions = useCallback(async (): Promise<void> => {
     try {
       const { data } = await api.get('/pharmacy/prescriptions', { params: { limit: 50 } });
-      const rows = (data.data?.rows ?? data.data ?? []) as Prescription[];
-      setPrescriptions(rows);
+      const rows = (data.data?.rows ?? data.data ?? []) as Array<Record<string, unknown>>;
+      setPrescriptions(rows.map((rx) => {
+        const items = Array.isArray(rx.items) ? (rx.items as Array<Record<string, unknown>>) : [];
+        const first = items[0] ?? {};
+        return {
+          id: rx.id as string,
+          medication: (first.drugName as string) ?? (rx.medication as string) ?? '—',
+          dosage: (first.dosage as string) ?? (rx.dosage as string) ?? '—',
+          frequency: (first.frequency as string) ?? (rx.frequency as string) ?? '—',
+          duration: (first.duration as string) ?? (rx.duration as string) ?? '—',
+          prescribedDate: (rx.createdAt as string) ?? (rx.prescribedDate as string) ?? '',
+        };
+      }));
     } catch {
       toast.error(t('selfService.loadPrescriptionsFailed'));
     }
@@ -183,8 +208,16 @@ export default function PatientSelfServicePage() {
   const fetchInvoices = useCallback(async (): Promise<void> => {
     try {
       const { data } = await api.get('/invoices', { params: { limit: 50 } });
-      const rows = (data.data?.rows ?? data.data ?? []) as Invoice[];
-      setInvoices(rows);
+      const rows = (data.data?.rows ?? data.data ?? []) as Array<Record<string, unknown>>;
+      setInvoices(rows.map((inv) => ({
+        id: inv.id as string,
+        invoiceNumber: (inv.invoiceNumber as string) ?? '—',
+        total: Number(inv.total ?? 0),
+        paid: Number(inv.paid ?? 0),
+        dueAmount: Number(inv.due ?? inv.dueAmount ?? 0),
+        status: (inv.status as string) ?? 'pending',
+        issuedAt: (inv.issuedAt as string) ?? (inv.createdAt as string) ?? '',
+      })));
     } catch {
       toast.error(t('selfService.loadInvoicesFailed'));
     }

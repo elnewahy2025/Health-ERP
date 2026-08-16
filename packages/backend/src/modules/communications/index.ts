@@ -16,7 +16,7 @@ export async function registerCommunicationsModule(app: FastifyInstance) {
       .where(function () { this.whereNull('tenant_id').orWhere('tenant_id', tenantId); })
       .orderBy('code');
     return sendSuccess(reply, templates.map((t: Record<string, unknown>) => ({
-      id: t.id, code: t.code, name: t.name, channel: t.channel,
+      id: t.id, code: t.code, key: t.code, name: t.name, channel: t.channel,
       subject: t.subject, body: t.body_template, variables: t.variables,
       tenant_id: t.tenant_id, is_active: t.is_active,
     })));
@@ -57,7 +57,7 @@ export async function registerCommunicationsModule(app: FastifyInstance) {
     }).returning('*');
 
     return sendSuccess(reply, {
-      id: template.id, code: template.code, name: template.name, channel: template.channel,
+      id: template.id, code: template.code, key: template.code, name: template.name, channel: template.channel,
       subject: template.subject, body: template.body_template,
       tenant_id: template.tenant_id, is_active: template.is_active,
     }, 'Template created', 201);

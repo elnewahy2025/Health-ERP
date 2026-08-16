@@ -163,7 +163,7 @@ export default function DrBackupPage() {
 
       {/* Backups Tab */}
       {tab === 'backups' && (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">
@@ -227,7 +227,7 @@ export default function DrBackupPage() {
               />
             ) : (
               configs.map((c) => (
-                <div key={c.id} className="bg-white rounded-lg border p-4">
+                <div key={c.id} className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-semibold text-sm">{escapeHtml(c.name)}</h3>
                     <Badge>{escapeHtml(c.type)}</Badge>
@@ -259,7 +259,7 @@ export default function DrBackupPage() {
         <div>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <p className="text-sm text-gray-500">{t('dr.status')}</p>
               <p className="text-xl font-bold">
                 <Badge variant={drConfig?.status === 'healthy' ? 'success' : 'danger'}>
@@ -267,12 +267,12 @@ export default function DrBackupPage() {
                 </Badge>
               </p>
             </div>
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <p className="text-sm text-gray-500">{t('dr.rpo')}</p>
               <p className="text-xl font-bold">{drConfig?.rpoMinutes ?? 60} min</p>
               <p className="text-xs text-gray-400">{t('dr.rpoDesc')}</p>
             </div>
-            <div className="bg-white rounded-lg border p-4">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
               <p className="text-sm text-gray-500">{t('dr.rto')}</p>
               <p className="text-xl font-bold">{drConfig?.rtoMinutes ?? 120} min</p>
               <p className="text-xs text-gray-400">{t('dr.rtoDesc')}</p>
@@ -280,7 +280,7 @@ export default function DrBackupPage() {
           </div>
 
           {/* DR Configuration Details */}
-          <div className="bg-white rounded-lg border p-4 mb-4">
+          <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800 mb-4">
             <h3 className="font-semibold mb-3">{t('dr.drConfiguration')}</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
               <div>

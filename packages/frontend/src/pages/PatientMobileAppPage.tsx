@@ -286,7 +286,7 @@ export default function PatientMobileAppPage() {
                 appointments.map((apt) => (
                   <div
                     key={apt.id}
-                    className="bg-white border rounded-xl p-4 flex justify-between items-center"
+                    className="bg-white border rounded-xl dark:bg-gray-900 dark:border-gray-800 p-4 flex justify-between items-center"
                   >
                     <div>
                       <p className="font-medium text-sm">
@@ -310,7 +310,7 @@ export default function PatientMobileAppPage() {
                 records.map((rec) => (
                   <div
                     key={rec.id}
-                    className="bg-white border rounded-xl p-4 flex justify-between items-center"
+                    className="bg-white border rounded-xl dark:bg-gray-900 dark:border-gray-800 p-4 flex justify-between items-center"
                   >
                     <div>
                       <p className="font-medium text-sm">{sanitizeString(rec.title)}</p>
@@ -334,7 +334,7 @@ export default function PatientMobileAppPage() {
                 bills.map((bill) => (
                   <div
                     key={bill.id}
-                    className="bg-white border rounded-xl p-4 flex justify-between items-center"
+                    className="bg-white border rounded-xl dark:bg-gray-900 dark:border-gray-800 p-4 flex justify-between items-center"
                   >
                     <div>
                       <p className="font-medium text-sm">{sanitizeString(bill.description)}</p>
@@ -363,7 +363,7 @@ export default function PatientMobileAppPage() {
                 notifications.map((n) => (
                   <div
                     key={n.id}
-                    className={`bg-white border rounded-xl p-4 ${n.read ? '' : 'border-l-4 border-l-blue-500'}`}
+                    className={`bg-white border rounded-xl dark:bg-gray-900 dark:border-gray-800 p-4 ${n.read ? '' : 'border-l-4 border-l-blue-500'}`}
                   >
                     <p className="text-sm font-medium">{sanitizeString(n.message)}</p>
                     <p className="text-xs text-gray-400 mt-1">{formatDateTime(n.created_at)}</p>

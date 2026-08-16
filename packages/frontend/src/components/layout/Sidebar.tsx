@@ -17,11 +17,11 @@ import {
   Upload, UserCog,
   Printer, Send, Shield as ShieldIcon,
   Zap, Barcode, Database,
-  PhoneCall, MessageCircle, Star, Clock,
+  PhoneCall, MessageCircle, Star,
   Wallet, Calendar, TrendingUp, UserCheck, Heart, Smartphone, Code, User, Bell,
   Search,
 } from 'lucide-react';
-import { navigationApi, type NavFavorite, type RecentPage } from '../../lib/api/navigation';
+import { navigationApi, type NavFavorite } from '../../lib/api/navigation';
 import { resolveNavLabelKey } from '../../config/nav-labels';
 
 interface NavItem {
@@ -305,7 +305,6 @@ export default function Sidebar({
   const [search, setSearch] = useState('');
   const [showSecondary, setShowSecondary] = useState(false);
   const [favorites, setFavorites] = useState<NavFavorite[]>([]);
-  const [recent, setRecent] = useState<RecentPage[]>([]);
 
   const allNavItems = useMemo(() => {
     const map = new Map<string, NavItem>();
@@ -320,11 +319,8 @@ export default function Sidebar({
     let cancelled = false;
     const load = async () => {
       try {
-        const [favs, recentPages] = await Promise.all([navigationApi.favorites(), navigationApi.recentPages()]);
-        if (!cancelled) {
-          setFavorites(favs);
-          setRecent(recentPages);
-        }
+        const favs = await navigationApi.favorites();
+        if (!cancelled) setFavorites(favs);
       } catch {
         // Personalization is best-effort; the sidebar works without it.
       }
@@ -408,7 +404,7 @@ export default function Sidebar({
 
       <aside
         className={`
-          fixed top-0 bottom-0 z-50 w-64 bg-white border-gray-200 dark:bg-gray-900 dark:border-gray-800
+          fixed top-0 bottom-0 z-50 w-64 bg-[var(--sidebar)] border-gray-200 dark:border-gray-800
           flex flex-col
           transform transition-transform duration-200 ease-in-out
           lg:translate-x-0 lg:z-40
@@ -526,36 +522,6 @@ export default function Sidebar({
                       <Icon className="w-4 h-4 shrink-0" />
                       <span className="truncate flex-1">{item ? t(item.labelKey) : fav.label}</span>
                       <Star className="w-3 h-3 text-amber-500 fill-current shrink-0" />
-                    </NavLink>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Recent pages */}
-          {!search.trim() && recent.length > 0 && (
-            <div className="pt-3 mt-1 border-t border-gray-100">
-              <p className="px-3 pb-1 text-xs font-medium text-gray-400 uppercase tracking-wide">{t('sidebar.recentPages')}</p>
-              <div className="space-y-0.5">
-                {recent.slice(0, 5).map((page) => {
-                  const item = allNavItems.get(page.path);
-                  const Icon = item?.icon ?? Clock;
-                  return (
-                    <NavLink
-                      key={page.path}
-                      to={page.path}
-                      onClick={handleNavigate}
-                      className={({ isActive }) =>
-                        `flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg transition-colors min-h-[40px] ${
-                          isActive
-                            ? 'bg-primary-50 text-primary-700 font-medium dark:bg-primary-900/30 dark:text-primary-300'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100'
-                        }`
-                      }
-                    >
-                      <Icon className="w-4 h-4 shrink-0" />
-                      <span className="truncate">{item ? t(item.labelKey) : page.label}</span>
                     </NavLink>
                   );
                 })}

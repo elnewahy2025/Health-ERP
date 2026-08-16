@@ -343,6 +343,65 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
     return { kind: 'user', id: principal.id, tenantId: principal.tenantId, role: principal.roles?.[0] || 'staff' };
   }
 
+  // Search tenant users (and optionally patients) to add as conversation participants
+  app.get('/api/v1/chat/participants', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep), authorize('chat.view')] }, async (request, reply) => {
+    const { tenantId } = getCtx(request);
+    const query = z.object({
+      search: z.string().optional().default(''),
+      includePatients: z.enum(['true', 'false']).optional().default('false'),
+      limit: z.coerce.number().optional().default(20),
+    }).parse(request.query);
+
+    const q = query.search.trim().toLowerCase();
+    const userQuery = db('users')
+      .where({ tenant_id: tenantId, status: 'active' })
+      .select('id', 'first_name', 'last_name', 'email', 'employee_type', 'position')
+      .limit(query.limit);
+    if (q) {
+      userQuery.andWhere(function () {
+        this.where('users.first_name', 'ilike', `%${q}%`)
+          .orWhere('users.last_name', 'ilike', `%${q}%`)
+          .orWhere('users.email', 'ilike', `%${q}%`)
+          .orWhere('users.employee_type', 'ilike', `%${q}%`);
+      });
+    }
+    const users = await userQuery;
+
+    let patients: Array<Record<string, unknown>> = [];
+    if (query.includePatients === 'true') {
+      const patientQuery = db('patients')
+        .where({ tenant_id: tenantId })
+        .whereNull('deleted_at')
+        .select('id', 'first_name', 'last_name', 'phone', 'mrn')
+        .limit(20);
+      if (q) {
+        patientQuery.andWhere(function () {
+          this.where('patients.first_name', 'ilike', `%${q}%`)
+            .orWhere('patients.last_name', 'ilike', `%${q}%`)
+            .orWhere('patients.mrn', 'ilike', `%${q}%`)
+            .orWhere('patients.phone', 'ilike', `%${q}%`);
+        });
+      }
+      patients = await patientQuery;
+    }
+
+    return sendSuccess(reply, {
+      users: users.map((u: Record<string, unknown>) => ({
+        id: u.id,
+        name: `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() || (u.email as string),
+        email: u.email,
+        employeeType: u.employee_type || 'staff',
+        position: u.position,
+      })),
+      patients: patients.map((pt: Record<string, unknown>) => ({
+        id: pt.id,
+        name: `${pt.first_name ?? ''} ${pt.last_name ?? ''}`.trim() || (pt.mrn as string),
+        mrn: pt.mrn,
+        phone: pt.phone,
+      })),
+    });
+  });
+
   // Create conversation
   app.post('/api/v1/chat/conversations', { preHandler: [(r: FastifyRequest, rep: FastifyReply) => authenticate(r, rep), authorize('chat.create')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
@@ -355,6 +414,12 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
     }).parse(request.body);
 
     // All participants must belong to this tenant (no cross-tenant conversations).
+    // The creator is always a participant — auto-included so a user can start a
+    // conversation without having to select themselves.
+    if (!body.participantIds.includes(userId)) {
+      body.participantIds.push(userId);
+      body.participantRoles.push('staff');
+    }
     const participants = await db('users')
       .whereIn('id', body.participantIds)
       .andWhere({ tenant_id: tenantId })
@@ -367,9 +432,6 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
       if (!patient) {
         return reply.status(404).send({ success: false, error: 'Patient not found in this organization' });
       }
-    }
-    if (!body.participantIds.includes(userId)) {
-      return reply.status(403).send({ success: false, error: 'Conversation creator must be a participant' });
     }
 
     const conversation = await createConversation({

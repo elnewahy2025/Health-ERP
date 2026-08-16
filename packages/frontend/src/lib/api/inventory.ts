@@ -112,6 +112,7 @@ export interface CreateItemPayload {
   serialNumber?: string;
   manufacturer?: string;
   supplierId?: string;
+  supplier?: string;
   description?: string;
   barcode?: string;
   controlledSubstanceClass?: string;
@@ -142,7 +143,7 @@ export interface CreatePoPayload {
   orderDate?: string;
   expectedDate?: string;
   notes?: string;
-  items?: { itemName: string; sku?: string; quantityOrdered: number; unitCost?: number }[];
+  items: { itemName: string; sku?: string; quantityOrdered: number; unitCost?: number }[];
 }
 
 export interface DispensePayload {

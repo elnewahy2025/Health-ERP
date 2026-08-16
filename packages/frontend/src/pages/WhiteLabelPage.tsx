@@ -228,7 +228,7 @@ export default function WhiteLabelPage() {
       {tab === 'branding' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Brand Identity Form */}
-          <div className="bg-white rounded-lg border p-4">
+          <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
             <h3 className="font-semibold mb-4">{t('wl.brandIdentity')}</h3>
             <div className="space-y-4">
               <Input
@@ -307,7 +307,7 @@ export default function WhiteLabelPage() {
           </div>
 
           {/* Preview */}
-          <div className="bg-white rounded-lg border p-4">
+          <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
             <h3 className="font-semibold mb-4">{t('wl.preview')}</h3>
             <div className="p-6 rounded-lg border bg-white">
               <div
@@ -353,7 +353,7 @@ export default function WhiteLabelPage() {
       {tab === 'domains' && (
         <div>
           {/* Add Domain */}
-          <div className="bg-white rounded-lg border p-4 mb-6">
+          <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800 mb-6">
             <div className="flex gap-2">
               <div className="flex-1 max-w-md">
                 <Input
@@ -373,7 +373,7 @@ export default function WhiteLabelPage() {
           </div>
 
           {/* Domains Table */}
-          <div className="bg-white rounded-lg border overflow-hidden">
+          <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
             <table className="w-full">
               <thead>
                 <tr className="border-b bg-gray-50">

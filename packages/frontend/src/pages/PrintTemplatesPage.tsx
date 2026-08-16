@@ -93,12 +93,13 @@ export default function PrintTemplatesPage() {
         contentHtml: form.contentHtml.trim() ? form.contentHtml : undefined,
         variables: [],
       });
-      toast.success(t('notifTmpl.templateCreated'));
+      toast.success(t('printTemplates.created'));
       setShowCreate(false);
       const r = await api.get('/print/templates');
       setTemplates((r.data?.data ?? []) as PrintTemplate[]);
-    } catch {
-      toast.error(t('printTemplates.loadError'));
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      toast.error(status === 409 ? t('printTemplates.duplicateCode') : t('printTemplates.createError'));
     } finally {
       setCreating(false);
     }

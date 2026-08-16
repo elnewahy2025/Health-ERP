@@ -14,7 +14,12 @@ export async function registerHrModule(app: FastifyInstance) {
     if (department) q = q.andWhere('employees.department', department);
     if (status) q = q.andWhere('employees.status', status);
     const employees = await q.select('employees.*').orderBy('last_name');
-    return sendSuccess(reply, employees);
+    return sendSuccess(reply, employees.map((e: Record<string, unknown>) => ({
+      id: e.id, employeeCode: e.employee_code, firstName: e.first_name, lastName: e.last_name,
+      email: e.email, phone: e.phone, department: e.department, position: e.position,
+      employmentType: e.employment_type, hireDate: e.hire_date, baseSalary: e.base_salary,
+      payFrequency: e.pay_frequency, status: e.status,
+    })));
   });
 
   app.post('/api/v1/hr/employees', { preHandler: [authenticate, authorize('hr.view')] }, async (request, reply) => {
@@ -41,10 +46,19 @@ export async function registerHrModule(app: FastifyInstance) {
   app.get('/api/v1/hr/leave-requests', { preHandler: [authenticate, authorize('hr.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status } = request.query as { status?: string };
-    let q = db('leave_requests').where('leave_requests.tenant_id', tenantId);
+    let q = db('leave_requests')
+      .leftJoin('employees', 'leave_requests.employee_id', 'employees.id')
+      .where('leave_requests.tenant_id', tenantId)
+      .select('leave_requests.*', 'employees.first_name as emp_first_name', 'employees.last_name as emp_last_name');
     if (status) q = q.andWhere('leave_requests.status', status);
-    const requests = await q.orderBy('created_at', 'desc').limit(50);
-    return sendSuccess(reply, requests);
+    const requests = await q.orderBy('leave_requests.created_at', 'desc').limit(50);
+    return sendSuccess(reply, requests.map((r: Record<string, unknown>) => ({
+      id: r.id, employeeId: r.employee_id,
+      employeeName: r.emp_first_name ? `${r.emp_first_name} ${r.emp_last_name}` : null,
+      leaveType: r.leave_type, startDate: r.start_date, endDate: r.end_date,
+      totalDays: r.total_days, reason: r.reason, status: r.status,
+      managerNotes: r.manager_notes, createdAt: r.created_at,
+    })));
   });
 
   app.post('/api/v1/hr/leave-requests', { preHandler: [authenticate, authorize('hr.view')] }, async (request, reply) => {

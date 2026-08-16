@@ -230,7 +230,7 @@ export default function InsuranceClaimsPage() {
       </div>
 
       {/* Claims Table */}
-      <div className="bg-white rounded-lg border overflow-hidden">
+      <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
         <table className="w-full">
           <thead>
             <tr className="border-b bg-gray-50">

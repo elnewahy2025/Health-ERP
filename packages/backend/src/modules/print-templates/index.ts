@@ -34,10 +34,15 @@ export async function registerPrintTemplatesModule(app: FastifyInstance) {
 
   app.post('/api/v1/print/templates', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const body = request.body as Record<string, unknown>;
+    const code = String(body.code || '').trim();
+    const existing = await db('print_templates').where({ tenant_id: tenantId, code }).first();
+    if (existing) return reply.code(409).send({ success: false, error: 'A template with this code already exists' });
+
+    const defaultHtml = '<h1>{{title}}</h1><p>This is a default template. Edit it to customize the layout.</p>';
     const [t] = await db('print_templates').insert({
-      tenant_id: tenantId, name: body.name, code: body.code,
+      tenant_id: tenantId, name: body.name, code,
       category: body.category || 'clinical', document_type: body.documentType,
-      content_html: body.contentHtml ? sanitizeTemplateHtml(String(body.contentHtml)) : null,
+      content_html: body.contentHtml ? sanitizeTemplateHtml(String(body.contentHtml)) : defaultHtml,
       variables: JSON.stringify(body.variables || []),
       styles: JSON.stringify(body.styles || {}), paper_size: body.paperSize || 'A4',
       is_default: body.isDefault || false

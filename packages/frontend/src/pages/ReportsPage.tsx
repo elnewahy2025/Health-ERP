@@ -315,7 +315,7 @@ export default function ReportsPage() {
 
       {/* Reports Tab */}
       {tab === 'reports' && (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">
@@ -387,7 +387,7 @@ export default function ReportsPage() {
 
       {/* Schedules Tab */}
       {tab === 'schedules' && (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">
@@ -439,7 +439,7 @@ export default function ReportsPage() {
 
       {/* Executions Tab */}
       {tab === 'executions' && (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">

@@ -122,8 +122,9 @@ export async function registerUserPreferencesModule(app: FastifyInstance) {
       { key: 'g p', label: 'Go to Patients', category: 'navigation' },
       { key: 'g a', label: 'Go to Appointments', category: 'navigation' },
       { key: 'g b', label: 'Go to Billing', category: 'navigation' },
+      { key: 'g u', label: 'Go to Users', category: 'navigation' },
+      { key: 'g s', label: 'Go to Settings', category: 'navigation' },
       { key: '/', label: 'Open Quick Search', category: 'search' },
-      { key: 'n', label: 'New (context-dependent)', category: 'actions' },
       { key: '?', label: 'Show Keyboard Shortcuts', category: 'help' },
       { key: 't', label: 'Toggle Theme', category: 'appearance' },
     ]);

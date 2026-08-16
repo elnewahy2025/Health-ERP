@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import { Sun, Moon, Bell, Keyboard, Save, Search } from 'lucide-react';
+import { Sun, Moon, Bell, Keyboard, Save, Search , Monitor } from 'lucide-react';
 import {
   PageLoader, EmptyState, Card, CardBody, Button, Select,
 } from '../components/ui';
@@ -140,6 +140,7 @@ export default function UserPreferencesPage() {
                 {[
                   { value: 'light' as const, icon: Sun, label: t('preferences.light') },
                   { value: 'dark' as const, icon: Moon, label: t('preferences.dark') },
+                  { value: 'system' as const, icon: Monitor, label: t('preferences.system') },
                 ].map((opt) => (
                   <button
                     key={opt.value}

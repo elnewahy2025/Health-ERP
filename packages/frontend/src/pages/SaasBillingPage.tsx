@@ -157,14 +157,14 @@ export default function SaasBillingPage() {
         <div>
           {subscription ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-white rounded-lg border p-4">
+              <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
                 <p className="text-sm text-gray-500">{t('saas.currentPlan')}</p>
                 <p className="text-xl font-bold">{escapeHtml(subscription.planName)}</p>
                 <Badge variant={STATUS_VARIANT[subscription.status] ?? 'gray'}>
                   {escapeHtml(subscription.status)}
                 </Badge>
               </div>
-              <div className="bg-white rounded-lg border p-4">
+              <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
                 <p className="text-sm text-gray-500">{t('saas.amount')}</p>
                 <p className="text-xl font-bold">
                   {Number(subscription.amount).toFixed(2)} EGP
@@ -173,7 +173,7 @@ export default function SaasBillingPage() {
                   {escapeHtml(subscription.billingCycle)}
                 </p>
               </div>
-              <div className="bg-white rounded-lg border p-4">
+              <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
                 <p className="text-sm text-gray-500">{t('saas.period')}</p>
                 <p className="text-sm font-medium">
                   {formatDate(subscription.currentPeriodStart)} →{' '}
@@ -187,13 +187,13 @@ export default function SaasBillingPage() {
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-lg border p-4 mb-6">
+            <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800 mb-6">
               <p className="text-gray-500">{t('saas.noSubscription')}</p>
             </div>
           )}
 
           {/* Plan Details */}
-          <div className="bg-white rounded-lg border p-4">
+          <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
             <h3 className="font-semibold mb-3">{t('saas.planDetails')}</h3>
             {subscription ? (
               <div className="text-sm space-y-2">
@@ -288,7 +288,7 @@ export default function SaasBillingPage() {
 
       {/* Invoices Tab */}
       {tab === 'invoices' && (
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
           <table className="w-full">
             <thead>
               <tr className="border-b bg-gray-50">
@@ -347,7 +347,7 @@ export default function SaasBillingPage() {
           {(usage?.totals ?? []).length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               {usage!.totals.map((item) => (
-                <div key={item.metric} className="bg-white rounded-lg border p-4">
+                <div key={item.metric} className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
                   <p className="text-sm text-gray-500 capitalize">
                     {escapeHtml(item.metric.replace(/_/g, ' '))}
                   </p>
@@ -366,7 +366,7 @@ export default function SaasBillingPage() {
           )}
 
           {(usage?.records ?? []).length > 0 && (
-            <div className="bg-white rounded-lg border overflow-hidden">
+            <div className="bg-white rounded-lg border overflow-hidden dark:bg-gray-900 dark:border-gray-800">
               <table className="w-full">
                 <thead>
                   <tr className="border-b bg-gray-50">

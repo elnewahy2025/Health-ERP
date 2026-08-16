@@ -13,7 +13,8 @@ type CommsTab = 'send' | 'history' | 'stats';
 
 interface NotificationTemplate {
   id: string;
-  key: string;
+  code: string;
+  key?: string;
   channel: string;
   locale: string;
   subject: string | null;
@@ -34,9 +35,8 @@ interface NotificationLog {
 
 interface PaginatedLogs {
   data: NotificationLog[];
-  total: number;
-  page: number;
-  limit: number;
+  pagination?: { page: number; limit: number; total: number; totalPages: number };
+  total?: number;
 }
 
 const channelIcons: Record<string, React.ReactNode> = {
@@ -69,10 +69,10 @@ export default function CommunicationsPage() {
         setTemplates((templatesR.value.data?.data ?? []) as NotificationTemplate[]);
       }
       if (logsR.status === 'fulfilled') {
-        const paginated = logsR.value.data?.data as PaginatedLogs | undefined;
-        if (paginated) {
-          setLogs(paginated.data ?? []);
-          setLogsTotal(paginated.total ?? 0);
+        const body = logsR.value.data as PaginatedLogs | undefined;
+        if (body) {
+          setLogs(body.data ?? []);
+          setLogsTotal(body.pagination?.total ?? body.total ?? 0);
         }
       }
     } catch {
@@ -95,10 +95,10 @@ export default function CommunicationsPage() {
           setTemplates((templatesR.value.data?.data ?? []) as NotificationTemplate[]);
         }
         if (logsR.status === 'fulfilled') {
-          const paginated = logsR.value.data?.data as PaginatedLogs | undefined;
-          if (paginated) {
-            setLogs(paginated.data ?? []);
-            setLogsTotal(paginated.total ?? 0);
+          const body = logsR.value.data as PaginatedLogs | undefined;
+          if (body) {
+            setLogs(body.data ?? []);
+            setLogsTotal(body.pagination?.total ?? body.total ?? 0);
           }
         }
       } catch {
@@ -114,10 +114,10 @@ export default function CommunicationsPage() {
   const loadLogsPage = useCallback(async (page: number) => {
     try {
       const r = await api.get('/notification-logs', { params: { page, limit: 20 } });
-      const paginated = r.data?.data as PaginatedLogs | undefined;
-      if (paginated) {
-        setLogs(paginated.data ?? []);
-        setLogsTotal(paginated.total ?? 0);
+      const body = r.data as PaginatedLogs | undefined;
+      if (body) {
+        setLogs(body.data ?? []);
+        setLogsTotal(body.pagination?.total ?? body.total ?? 0);
         setLogsPage(page);
       }
     } catch {
@@ -166,7 +166,7 @@ export default function CommunicationsPage() {
 
   const templateOptions = templates.map((tpl) => ({
     value: tpl.id,
-    label: `${sanitizeString(tpl.key.replace(/_/g, ' '))} (${tpl.channel})`,
+    label: `${sanitizeString((tpl.code || tpl.key || '').replace(/_/g, ' '))} (${tpl.channel})`,
   }));
 
   if (loading) return <PageLoader message={t('common.loading')} />;

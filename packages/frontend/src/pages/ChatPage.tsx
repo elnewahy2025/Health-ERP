@@ -58,7 +58,11 @@ export default function ChatPage() {
 
   /* ── New conversation modal ── */
   const [showNewConv, setShowNewConv] = useState(false);
-  const [convForm, setConvForm] = useState({ title: '', participantIds: '', role: 'staff' });
+  const [convForm, setConvForm] = useState({ title: '', role: 'staff' });
+  const [participantSearch, setParticipantSearch] = useState('');
+  const [participantResults, setParticipantResults] = useState<Array<{ id: string; name: string; email?: string; employeeType?: string }>>([]);
+  const [selectedParticipants, setSelectedParticipants] = useState<Array<{ id: string; name: string }>>([]);
+  const [participantSearching, setParticipantSearching] = useState(false);
   const [convFormErrors, setConvFormErrors] = useState<Record<string, string>>({});
 
   /* ── Derived ── */
@@ -173,17 +177,47 @@ export default function ChatPage() {
     }
   }, [handleSend]);
 
+  /* ── Participant search ── */
+
+  const handleParticipantSearch = useCallback(async (value: string): Promise<void> => {
+    setParticipantSearch(value);
+    const q = value.trim();
+    if (!q) {
+      setParticipantResults([]);
+      return;
+    }
+    setParticipantSearching(true);
+    try {
+      const { data } = await api.get('/chat/participants', { params: { search: q, limit: 20 } });
+      const users = ((data.data?.users ?? []) as Array<{ id: string; name: string; email?: string; employeeType?: string }>)
+        .filter((u) => !selectedParticipants.some((sp) => sp.id === u.id));
+      setParticipantResults(users);
+    } catch { /* non-critical */ } finally {
+      setParticipantSearching(false);
+    }
+  }, [selectedParticipants]);
+
+  const addParticipant = useCallback((p: { id: string; name: string }) => {
+    setSelectedParticipants((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev, p]));
+    setParticipantResults((prev) => prev.filter((x) => x.id !== p.id));
+    setParticipantSearch('');
+  }, []);
+
+  const removeParticipant = useCallback((id: string) => {
+    setSelectedParticipants((prev) => prev.filter((x) => x.id !== id));
+  }, []);
+
   /* ── Create conversation ── */
 
   const handleCreateConv = useCallback(async (): Promise<void> => {
     const errors: Record<string, string> = {};
     if (!convForm.title.trim()) errors.title = t('common.required');
-    if (!convForm.participantIds.trim()) errors.participantIds = t('common.required');
+    if (selectedParticipants.length === 0) errors.participantIds = t('common.required');
     setConvFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
     try {
-      const participantIds = convForm.participantIds.split(',').map((s) => s.trim()).filter(Boolean);
+      const participantIds = selectedParticipants.map((p) => p.id);
       await api.post('/chat/conversations', {
         title: sanitizeString(convForm.title),
         participantIds,
@@ -191,12 +225,15 @@ export default function ChatPage() {
       });
       toast.success(t('chat.convCreated'));
       setShowNewConv(false);
-      setConvForm({ title: '', participantIds: '', role: 'staff' });
+      setConvForm({ title: '', role: 'staff' });
+      setSelectedParticipants([]);
+      setParticipantSearch('');
+      setParticipantResults([]);
       void fetchConversations();
     } catch {
       toast.error(t('chat.convCreateFailed'));
     }
-  }, [convForm, t, fetchConversations]);
+  }, [convForm, selectedParticipants, t, fetchConversations]);
 
   /* ── Select conversation ── */
 
@@ -402,13 +439,54 @@ export default function ChatPage() {
             onChange={(e) => setConvForm((p) => ({ ...p, title: e.target.value }))}
             error={convFormErrors.title}
           />
-          <Input
-            label={t('chat.participantIds')}
-            placeholder={t('chat.participantIdsPlaceholder')}
-            value={convForm.participantIds}
-            onChange={(e) => setConvForm((p) => ({ ...p, participantIds: e.target.value }))}
-            error={convFormErrors.participantIds}
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('chat.participantIds')}
+            </label>
+            <div className="relative">
+              <Input
+                placeholder={t('chat.participantIdsPlaceholder')}
+                value={participantSearch}
+                onChange={(e) => void handleParticipantSearch(e.target.value)}
+                error={convFormErrors.participantIds}
+              />
+              {participantSearch.trim() && (
+                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+                  {participantSearching ? (
+                    <p className="p-3 text-sm text-gray-500">{t('common.loading')}</p>
+                  ) : participantResults.length === 0 ? (
+                    <p className="p-3 text-sm text-gray-400">{t('chat.noResults')}</p>
+                  ) : (
+                    participantResults.map((u) => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center justify-between gap-2"
+                        onClick={() => addParticipant({ id: u.id, name: u.name })}
+                      >
+                        <span className="text-sm font-medium truncate">{escapeHtml(u.name)}</span>
+                        <span className="text-xs text-gray-400 capitalize truncate">
+                          {escapeHtml(u.employeeType || 'staff')}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+            {selectedParticipants.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {selectedParticipants.map((sp) => (
+                  <span key={sp.id} className="inline-flex items-center gap-1 bg-primary-50 text-primary-700 text-xs font-medium rounded-full px-2.5 py-1">
+                    {escapeHtml(sp.name)}
+                    <button type="button" onClick={() => removeParticipant(sp.id)} className="hover:text-red-500" aria-label={t('common.remove')}>
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {t('chat.participantRole')}
