@@ -9,6 +9,8 @@
    these tokens (or the token-backed utilities below), never raw hex.
    ════════════════════════════════════════════════════════════════════ */
 :root {
+  color-scheme: light;
+
   /* Surfaces */
   --background: #F7F9FC;           /* app background          */
   --surface: #FFFFFF;              /* cards, content          */
@@ -59,6 +61,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: #0F1722;
   --surface: #172334;
   --surface-secondary: #141F2D;
@@ -348,3 +351,57 @@
     animation: scale-in 0.2s ease-out;
   }
 }
+
+/* Native dropdown lists (select popups) follow the theme */
+select,
+option {
+  color: var(--text-primary);
+}
+option {
+  background-color: var(--surface);
+  color: var(--text-primary);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Theme compatibility layer.
+   Pages use Tailwind's static gray/white utilities in many places. These
+   unlayered rules (unlayered CSS always wins over @layer utilities) remap
+   the common ones to the semantic tokens, so every page shares the same
+   light/dark theme without a component-by-component rewrite.
+   ════════════════════════════════════════════════════════════════════ */
+.text-gray-800,
+.text-gray-900 { color: var(--text-primary); }
+
+.text-gray-600,
+.text-gray-700 { color: var(--text-secondary); }
+
+.text-gray-400,
+.text-gray-500 { color: var(--text-muted); }
+
+.text-gray-100,
+.text-gray-200,
+.text-gray-300 { color: var(--text-disabled); }
+
+.placeholder-gray-400::placeholder { color: var(--text-disabled); }
+
+.bg-white { background-color: var(--surface); }
+
+.bg-gray-50 { background-color: var(--surface-secondary); }
+
+.bg-gray-100,
+.bg-gray-200 { background-color: var(--surface-hover); }
+
+.hover\:bg-white:hover { background-color: var(--surface); }
+
+.hover\:bg-gray-50:hover,
+.hover\:bg-gray-100:hover { background-color: var(--surface-hover); }
+
+.border-gray-100,
+.border-gray-200 { border-color: var(--border); }
+
+.border-gray-300,
+.border-gray-400 { border-color: var(--border-strong); }
+
+.divide-gray-100,
+.divide-gray-200,
+.divide-gray-800 { border-color: var(--border); }

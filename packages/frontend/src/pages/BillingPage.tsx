@@ -156,7 +156,7 @@ function getStatusLabel(status: InvoiceStatus, t: (key: string) => string): stri
 }
 
 function SortIndicator({ active, direction }: { active: boolean; direction: 'asc' | 'desc' }) {
-  if (!active) return <ArrowUpDown className="w-3 h-3 text-gray-400" />;
+  if (!active) return <ArrowUpDown className="w-3 h-3 text-muted-txt" />;
   return direction === 'asc'
     ? <ChevronUp className="w-3 h-3 text-primary-600" />
     : <ChevronDown className="w-3 h-3 text-primary-600" />;
@@ -343,7 +343,7 @@ export default function BillingPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">{t('billing.title')}</h1>
-          <p className="text-gray-500 mt-1">{t('billing.invoiceCount', { count: pagination.total })}</p>
+          <p className="text-muted-txt mt-1">{t('billing.invoiceCount', { count: pagination.total })}</p>
         </div>
         <Button
           icon={<Plus className="w-4 h-4" />}
@@ -356,50 +356,50 @@ export default function BillingPage() {
       {/* Revenue Summary Cards */}
       {!revenueLoading && revenue && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="card p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-blue-600" />
+              <div className="w-10 h-10 rounded-lg bg-[var(--info-soft)] flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-[var(--info)]" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">{t('billing.totalRevenue')}</p>
-                <p className="text-lg font-bold text-gray-900">{formatEgp(revenue.total_revenue)}</p>
+                <p className="text-xs text-muted-txt">{t('billing.totalRevenue')}</p>
+                <p className="text-lg font-bold text-[var(--text-primary)]">{formatEgp(revenue.total_revenue)}</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="card p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-green-50 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-green-600" />
+              <div className="w-10 h-10 rounded-lg bg-[var(--success-soft)] flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-[var(--success)]" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">{t('billing.collected')}</p>
-                <p className="text-lg font-bold text-green-600">{formatEgp(revenue.total_collected)}</p>
+                <p className="text-xs text-muted-txt">{t('billing.collected')}</p>
+                <p className="text-lg font-bold text-[var(--success)]">{formatEgp(revenue.total_collected)}</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="card p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-yellow-50 flex items-center justify-center">
-                <FileText className="w-5 h-5 text-yellow-600" />
+              <div className="w-10 h-10 rounded-lg bg-[var(--warning-soft)] flex items-center justify-center">
+                <FileText className="w-5 h-5 text-[var(--warning)]" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">{t('billing.outstanding')}</p>
-                <p className="text-lg font-bold text-yellow-600">{formatEgp(revenue.total_pending)}</p>
+                <p className="text-xs text-muted-txt">{t('billing.outstanding')}</p>
+                <p className="text-lg font-bold text-[var(--warning)]">{formatEgp(revenue.total_pending)}</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="card p-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-red-50 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-red-600" />
+              <div className="w-10 h-10 rounded-lg bg-[var(--error-soft)] flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-[var(--error)]" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">{t('billing.overdueCount')}</p>
-                <p className="text-lg font-bold text-red-600">{revenue.overdue_count}</p>
+                <p className="text-xs text-muted-txt">{t('billing.overdueCount')}</p>
+                <p className="text-lg font-bold text-[var(--error)]">{revenue.overdue_count}</p>
               </div>
             </div>
           </div>
@@ -434,13 +434,13 @@ export default function BillingPage() {
           }
         />
       ) : (
-        <div className="rounded-xl border border-gray-200 overflow-hidden">
+        <div className="card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+              <thead>
                 <tr>
                   <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-[var(--surface-hover)] select-none"
                     onClick={() => toggleSort('createdAt')}
                   >
                     <span className="flex items-center gap-1">
@@ -451,7 +451,7 @@ export default function BillingPage() {
                     {t('billing.patient')}
                   </th>
                   <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-[var(--surface-hover)] select-none"
                     onClick={() => toggleSort('total')}
                   >
                     <span className="flex items-center gap-1">
@@ -462,7 +462,7 @@ export default function BillingPage() {
                     {t('billing.paid')}
                   </th>
                   <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-[var(--surface-hover)] select-none"
                     onClick={() => toggleSort('due')}
                   >
                     <span className="flex items-center gap-1">
@@ -470,7 +470,7 @@ export default function BillingPage() {
                     </span>
                   </th>
                   <th
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-[var(--surface-hover)] select-none"
                     onClick={() => toggleSort('status')}
                   >
                     <span className="flex items-center gap-1">
@@ -482,22 +482,22 @@ export default function BillingPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
+              <tbody className="divide-y divide-gray-200">
                 {invoices.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-[var(--text-primary)]">
                       {invoice.invoiceNumber}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-txt">
                       {invoice.patientName || '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-primary)] font-medium">
                       {formatEgp(invoice.total)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--success)]">
                       {formatEgp(invoice.paid)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-medium">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--error)] font-medium">
                       {formatEgp(invoice.due)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -525,7 +525,7 @@ export default function BillingPage() {
 
           {/* Pagination */}
           {pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-between px-6 py-3 border-t border-line bg-[var(--surface-secondary)]">
               <p className="text-sm text-gray-500">
                 {t('common.pageOf', { current: page, total: pagination.totalPages })}
               </p>
@@ -586,7 +586,7 @@ export default function BillingPage() {
           {/* Invoice Items */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-gray-700">{t('billing.items')}</h3>
+              <h3 className="text-sm font-medium text-secondary-txt">{t('billing.items')}</h3>
               <Button variant="ghost" size="sm" type="button" icon={<Plus className="w-3 h-3" />} onClick={addItem}>
                 {t('billing.addItem')}
               </Button>
@@ -596,7 +596,7 @@ export default function BillingPage() {
             )}
             <div className="space-y-3">
               {newInvoice.items.map((item, idx) => (
-                <div key={idx} className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg">
+                <div key={idx} className="flex items-start gap-2 p-3 bg-[var(--surface-secondary)] rounded-lg">
                   <div className="flex-1">
                     <Input
                       placeholder={t('billing.description')}
@@ -640,7 +640,7 @@ export default function BillingPage() {
                       onChange={(e) => updateItem(idx, 'type', e.target.value as InvoiceItem['type'])}
                     />
                   </div>
-                  <div className="w-20 text-sm font-medium pt-2 text-right text-gray-700">
+                  <div className="w-20 text-sm font-medium pt-2 text-right text-secondary-txt">
                     {formatEgp(calcItemTotal(item))}
                   </div>
                   {newInvoice.items.length > 1 && (
@@ -690,7 +690,7 @@ export default function BillingPage() {
             />
           </div>
 
-          <div className="text-right text-lg font-bold text-gray-900">
+          <div className="text-right text-lg font-bold text-[var(--text-primary)]">
             {t('billing.totalEgp', { amount: calcInvoiceTotal(newInvoice.items, newInvoice.discount, newInvoice.tax).toLocaleString('en-EG') })}
           </div>
 
@@ -721,14 +721,14 @@ export default function BillingPage() {
       >
         {selectedInvoice && (
           <div className="space-y-4">
-            <div className="bg-gray-50 rounded-lg p-4">
-              <p className="text-sm text-gray-500">
+            <div className="bg-[var(--surface-secondary)] rounded-lg p-4">
+              <p className="text-sm text-muted-txt">
                 {t('billing.invoiceNumber')}: {selectedInvoice.invoiceNumber}
               </p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-txt">
                 {t('billing.patient')}: {selectedInvoice.patientName}
               </p>
-              <p className="text-lg font-bold mt-2 text-gray-900">
+              <p className="text-lg font-bold mt-2 text-[var(--text-primary)]">
                 {t('billing.amountDue')}: {formatEgp(selectedInvoice.due)}
               </p>
             </div>

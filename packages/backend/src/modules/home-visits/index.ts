@@ -13,7 +13,7 @@ export async function registerHomeVisitsModule(app: FastifyInstance) {
     if (status) q = q.andWhere('home_visits.status', status);
     if (assignedTo) q = q.andWhere('home_visits.assigned_to', assignedTo);
     const visits = await q.join('patients', 'home_visits.patient_id', 'patients.id')
-      .join('users', 'home_visits.assigned_to', 'users.id')
+      .leftJoin('users', 'home_visits.assigned_to', 'users.id')
       .select('home_visits.*', 'patients.first_name as p_first', 'patients.last_name as p_last', 'users.first_name as n_first', 'users.last_name as n_last')
       .orderBy('scheduled_date', 'asc').limit(50);
     return sendSuccess(reply, visits.map((v: Record<string, unknown>) => ({
@@ -21,7 +21,7 @@ export async function registerHomeVisitsModule(app: FastifyInstance) {
       patientName: String(v.p_first) + ' ' + String(v.p_last), status: v.status,
       visitType: v.visit_type, scheduledDate: v.scheduled_date, scheduledTime: v.scheduled_time,
       address: v.address, notes: v.notes, clinicalNotes: v.clinical_notes,
-      assignedTo: v.assigned_to, assignedToName: String(v.n_first) + ' ' + String(v.n_last),
+      assignedTo: v.assigned_to, assignedToName: v.n_first && v.n_last ? String(v.n_first) + ' ' + String(v.n_last) : null,
       startedAt: v.started_at, completedAt: v.completed_at, createdAt: v.created_at,
     })));
   });

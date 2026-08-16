@@ -61,7 +61,7 @@ interface TodayAppointment { id: string; patientName: string; doctorName: string
       <div className="page-header">
         <div>
           <h1 className="page-title">{t('dashboard.title')}</h1>
-          <p className="text-gray-500 mt-1">
+          <p className="text-muted-txt mt-1">
             {new Date().toLocaleDateString(i18n.language === 'ar' ? 'ar-EG' : 'en-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
@@ -79,7 +79,7 @@ interface TodayAppointment { id: string; patientName: string; doctorName: string
               <div className={`w-10 h-10 ${card.color} rounded-lg flex items-center justify-center`}>
                 <card.icon className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xs text-green-600 font-medium flex items-center gap-1">
+              <span className="text-xs text-[var(--success)] font-medium flex items-center gap-1">
                 <ArrowUp className="w-3 h-3" />
                 {card.change}
               </span>
@@ -94,7 +94,7 @@ interface TodayAppointment { id: string; patientName: string; doctorName: string
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
           <div className="card-header">
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <CalendarCheck className="w-5 h-5 text-primary-600" />
               {t('appointment.today')}
             </h2>
@@ -102,47 +102,47 @@ interface TodayAppointment { id: string; patientName: string; doctorName: string
           <div className="card-body">
             {todayData && todayData.counts ? (
               <div className="grid grid-cols-3 gap-4 mb-4">
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-bold text-gray-900">{todayData.counts.scheduled}</p>
-                  <p className="text-xs text-gray-500">Scheduled</p>
+                <div className="text-center p-3 bg-[var(--surface-secondary)] rounded-lg">
+                  <p className="text-2xl font-bold text-[var(--text-primary)]">{todayData.counts.scheduled}</p>
+                  <p className="text-xs text-[var(--text-muted)]">Scheduled</p>
                 </div>
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <p className="text-2xl font-bold text-blue-600">{todayData.counts.checkedIn}</p>
-                  <p className="text-xs text-blue-500">Checked In</p>
+                <div className="text-center p-3 bg-[var(--info-soft)] rounded-lg">
+                  <p className="text-2xl font-bold text-[var(--info)]">{todayData.counts.checkedIn}</p>
+                  <p className="text-xs text-[var(--info)]">Checked In</p>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <p className="text-2xl font-bold text-green-600">{todayData.counts.completed}</p>
-                  <p className="text-xs text-green-500">Completed</p>
+                <div className="text-center p-3 bg-[var(--success-soft)] rounded-lg">
+                  <p className="text-2xl font-bold text-[var(--success)]">{todayData.counts.completed}</p>
+                  <p className="text-xs text-[var(--success)]">Completed</p>
                 </div>
-                <div className="text-center p-3 bg-yellow-50 rounded-lg">
-                  <p className="text-2xl font-bold text-yellow-600">{todayData.counts.inProgress}</p>
-                  <p className="text-xs text-yellow-500">In Progress</p>
+                <div className="text-center p-3 bg-[var(--warning-soft)] rounded-lg">
+                  <p className="text-2xl font-bold text-[var(--warning)]">{todayData.counts.inProgress}</p>
+                  <p className="text-xs text-[var(--warning)]">In Progress</p>
                 </div>
-                <div className="text-center p-3 bg-red-50 rounded-lg">
-                  <p className="text-2xl font-bold text-red-600">{todayData.counts.cancelled}</p>
-                  <p className="text-xs text-red-500">Cancelled</p>
+                <div className="text-center p-3 bg-[var(--error-soft)] rounded-lg">
+                  <p className="text-2xl font-bold text-[var(--error)]">{todayData.counts.cancelled}</p>
+                  <p className="text-xs text-[var(--error)]">Cancelled</p>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-bold text-gray-900">{todayData.counts.noShow || 0}</p>
-                  <p className="text-xs text-gray-500">No Show</p>
+                <div className="text-center p-3 bg-[var(--surface-secondary)] rounded-lg">
+                  <p className="text-2xl font-bold text-[var(--text-primary)]">{todayData.counts.noShow || 0}</p>
+                  <p className="text-xs text-[var(--text-muted)]">No Show</p>
                 </div>
               </div>
             ) : (
-              <p className="text-gray-500 text-sm">{t('common.noData')}</p>
+              <p className="text-muted-txt text-sm">{t('common.noData')}</p>
             )}
 
             {todayData?.appointments && todayData.appointments.length > 0 && (
               <div className="space-y-3 mt-4">
                 {todayData.appointments.slice(0, 5).map((apt: TodayAppointment) => (
-                  <div key={apt.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                  <div key={apt.id} className="flex items-center gap-3 p-3 bg-[var(--surface-secondary)] rounded-lg">
                     <div className={`w-2 h-2 rounded-full ${
                       apt.status === 'completed' ? 'bg-green-500' :
                       apt.status === 'checked_in' ? 'bg-blue-500' :
                       apt.status === 'cancelled' ? 'bg-red-500' : 'bg-yellow-500'
                     }`} />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{apt.patientName}</p>
-                      <p className="text-xs text-gray-500">{apt.startTime} - {apt.endTime}</p>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">{apt.patientName}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{apt.startTime} - {apt.endTime}</p>
                     </div>
                     <span className={`badge ${
                       apt.status === 'completed' ? 'badge-success' :
@@ -159,23 +159,23 @@ interface TodayAppointment { id: string; patientName: string; doctorName: string
         {/* Quick Actions & Activity */}
         <div className="card">
           <div className="card-header">
-            <h2 className="text-lg font-semibold text-gray-900">{t('dashboard.recentActivity')}</h2>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('dashboard.recentActivity')}</h2>
           </div>
           <div className="card-body">
             <div className="space-y-3">
               {[
-                { icon: UserCheck, color: 'green', text: 'New patient registered', sub: 'Ahmed Mohamed', time: '2m ago' },
-                { icon: Clock, color: 'blue', text: 'Appointment checked in', sub: 'Fatma Hassan - Check-up', time: '15m ago' },
-                { icon: CheckCircle, color: 'purple', text: 'Invoice paid', sub: 'INV-001 - 1,250 EGP', time: '1h ago' },
-                { icon: XCircle, color: 'red', text: 'Appointment cancelled', sub: 'Omar Ali - Follow-up', time: '2h ago' },
+                { icon: UserCheck, iconClass: 'bg-[var(--success-soft)] text-[var(--success)]', text: 'New patient registered', sub: 'Ahmed Mohamed', time: '2m ago' },
+                { icon: Clock, iconClass: 'bg-[var(--info-soft)] text-[var(--info)]', text: 'Appointment checked in', sub: 'Fatma Hassan - Check-up', time: '15m ago' },
+                { icon: CheckCircle, iconClass: 'bg-[var(--info-soft)] text-[var(--info)]', text: 'Invoice paid', sub: 'INV-001 - 1,250 EGP', time: '1h ago' },
+                { icon: XCircle, iconClass: 'bg-[var(--error-soft)] text-[var(--error)]', text: 'Appointment cancelled', sub: 'Omar Ali - Follow-up', time: '2h ago' },
               ].map((item, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <item.icon className={`w-8 h-8 text-${item.color}-500 bg-${item.color}-50 p-1.5 rounded-lg`} />
+                <div key={i} className="flex items-center gap-3 p-3 bg-[var(--surface-secondary)] rounded-lg">
+                  <item.icon className={`w-8 h-8 ${item.iconClass} p-1.5 rounded-lg`} />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{item.text}</p>
-                    <p className="text-xs text-gray-500 truncate">{item.sub}</p>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">{item.text}</p>
+                    <p className="text-xs text-[var(--text-muted)] truncate">{item.sub}</p>
                   </div>
-                  <span className="text-xs text-gray-400 whitespace-nowrap">{item.time}</span>
+                  <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">{item.time}</span>
                 </div>
               ))}
             </div>
