@@ -8,6 +8,7 @@ import { ErrorBoundary, PageLoader } from './components/ui';
 import { Shield } from 'lucide-react';
 import { useDirection } from './hooks/useDirection';
 import { routePermissions } from './router';
+import { ProtectedRoute as AuthorizationProtectedRoute } from './components/auth/Authorization';
 
 // Lazy-loaded page components
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -118,17 +119,13 @@ function resolveRoutePermission(pathname: string): string | undefined {
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading, can } = useAuth();
   const location = useLocation();
-  if (isLoading) {
-    return <PageLoader />;
-  }
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
   const required = resolveRoutePermission(location.pathname);
-  if (required && !can(required)) {
-    return <PermissionDenied />;
-  }
-  return <>{children}</>;
+  return (
+    <AuthorizationProtectedRoute permission={required}>
+      {children}
+    </AuthorizationProtectedRoute>
+  );
 }
 
 function AppContent() {

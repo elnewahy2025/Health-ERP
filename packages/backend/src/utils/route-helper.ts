@@ -10,11 +10,14 @@ interface RequestWithMeta extends FastifyRequest {
   ctx?: {
     tenantId: string;
     userId: string;
+    membershipId?: string;
+    authorizationScope?: string;
     roles: string[];
     permissions: string[];
     branches: string[];
     locale: 'ar' | 'en';
     branchId?: string;
+    departmentId?: string | null;
     requestId: string;
     principal: Principal;
   };

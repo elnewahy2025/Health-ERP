@@ -15,6 +15,7 @@ function generateToken(): string {
 interface TokenPair {
   accessToken: string;
   refreshToken: string;
+  membershipId?: string | null;
 }
 
 export async function generateTokenPair(
@@ -22,6 +23,7 @@ export async function generateTokenPair(
   tenantId: string,
   ipAddress?: string | null,
   userAgent?: string | null,
+  membershipId?: string | null,
 ): Promise<TokenPair> {
   const refreshToken = generateToken();
   const tokenHash = hashToken(refreshToken);
@@ -30,6 +32,7 @@ export async function generateTokenPair(
   await db('refresh_tokens').insert({
     tenant_id: tenantId,
     user_id: userId,
+    membership_id: membershipId || null,
     token_hash: tokenHash,
     family,
     expires_at: new Date(Date.now() + env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
@@ -37,7 +40,7 @@ export async function generateTokenPair(
     user_agent: userAgent ?? null,
   });
 
-  return { accessToken: '', refreshToken };
+  return { accessToken: '', refreshToken, membershipId: membershipId || null };
 }
 
 export async function rotateRefreshToken(
@@ -85,6 +88,7 @@ export async function rotateRefreshToken(
     await trx('refresh_tokens').insert({
       tenant_id: existing.tenant_id,
       user_id: existing.user_id,
+      membership_id: existing.membership_id || null,
       token_hash: newHash,
       family: existing.family,
       expires_at: new Date(Date.now() + env.REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
@@ -93,7 +97,7 @@ export async function rotateRefreshToken(
     });
   });
 
-  return { accessToken: '', refreshToken: newRefreshToken };
+  return { accessToken: '', refreshToken: newRefreshToken, membershipId: existing.membership_id || null };
 }
 
 export async function revokeRefreshToken(token: string): Promise<void> {

@@ -8,6 +8,7 @@ import { confirmDialog } from '../components/ui';
 import { Plus, Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDate } from '../lib/format';
+import { Can } from '../components/auth/Authorization';
 
 interface PatientFormData {
   firstName: string;
@@ -185,10 +186,12 @@ export default function PatientsPage() {
           <h1 className="page-title">{t('patient.title')}</h1>
           <p className="text-gray-500 mt-1">{pagination.total} total patients</p>
         </div>
-        <button onClick={() => setShowNewModal(true)} className="btn-primary">
-          <Plus className="w-4 h-4" />
-          {t('patient.new')}
-        </button>
+        <Can permission="patients.create">
+          <button onClick={() => setShowNewModal(true)} className="btn-primary">
+            <Plus className="w-4 h-4" />
+            {t('patient.new')}
+          </button>
+        </Can>
       </div>
 
       <div className="card mb-6">

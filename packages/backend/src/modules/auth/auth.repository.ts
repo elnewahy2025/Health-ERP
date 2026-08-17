@@ -137,8 +137,9 @@ export async function deactivateOldestSessions(userId: string, tenantId: string,
   }
 }
 
-export async function createSession(data: Record<string, unknown>) {
-  await db('user_sessions').insert(data);
+export async function createSession(data: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const [session] = await db('user_sessions').insert(data).returning('*');
+  return session as Record<string, unknown>;
 }
 
 export async function deactivateSession(sessionId: string, userId: string, tenantId: string) {
@@ -160,11 +161,19 @@ export async function findActiveSessions(userId: string, tenantId: string) {
     .orderBy('last_activity_at', 'desc');
 }
 
+export async function findSessionByTokenHash(tokenHash: string) {
+  return db('user_sessions').where({ token_hash: tokenHash, is_active: true }).first();
+}
+
 export async function updateSessionActivity(userId: string, tenantId: string, tokenHash: string) {
   await db('user_sessions')
     .where({ user_id: userId, tenant_id: tenantId, is_active: true })
     .where('token_hash', tokenHash)
     .update({ last_activity_at: new Date() });
+}
+
+export async function rotateSessionToken(sessionId: string, tokenHash: string) {
+  await db('user_sessions').where({ id: sessionId, is_active: true }).update({ token_hash: tokenHash, last_activity_at: new Date() });
 }
 
 // ── Password Resets ──

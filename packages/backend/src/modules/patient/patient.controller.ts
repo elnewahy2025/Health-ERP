@@ -14,22 +14,24 @@ import {
 import * as repo from './patient.repository.js';
 import { mapPatient } from './patient.mapper.js';
 import type { PatientRow, QuickSearchResult } from './types.js';
+import type { PermissionScope } from '@healthcare/shared/authz';
 
 /** Effective scope for list/search operations on patient data. */
 async function resolvePatientListScope(principal: Principal): Promise<{
   branchIds?: string[];
   patientIds?: string[];
+  scope: PermissionScope;
 }> {
   if (hasPermission(principal, 'patients.view', 'system') || hasPermission(principal, 'patients.view', 'tenant')) {
-    return {};
+    return { scope: hasPermission(principal, 'patients.view', 'system') ? 'system' : 'tenant' };
   }
   if (hasPermission(principal, 'patients.view', 'branch') || hasPermission(principal, 'patients.view', 'branches')) {
-    return { branchIds: principal.branches };
+    return { branchIds: principal.branches, scope: principal.branches.length > 1 ? 'branches' : 'branch' };
   }
   if (hasPermission(principal, 'patients.view', 'assigned_patients') || hasPermission(principal, 'patients.view', 'department')) {
-    return { patientIds: await assignedPatientIds(principal) };
+    return { patientIds: await assignedPatientIds(principal), scope: 'assigned_patients' };
   }
-  return { patientIds: [] };
+  return { patientIds: [], scope: 'self' };
 }
 
 async function assertPatientAccess(principal: Principal, patient: { id: string; tenant_id: string; branch_id?: string | null }): Promise<void> {
@@ -51,6 +53,8 @@ export async function listPatients(request: FastifyRequest, reply: FastifyReply)
     limit: query.limit, offset: (query.page - 1) * query.limit,
     branchIds: scope.branchIds,
     patientIds: scope.patientIds,
+    principal,
+    scope: scope.scope,
   });
 
   await logAudit({ tenantId, userId, action: 'patient.list', entityType: 'patients' });
@@ -182,6 +186,8 @@ export async function quickSearch(request: FastifyRequest, reply: FastifyReply) 
   const patients = await repo.quickSearchPatients(tenantId, q, {
     branchIds: scope.branchIds,
     patientIds: scope.patientIds,
+    principal,
+    scope: scope.scope,
   });
   const results: QuickSearchResult[] = patients.map((p: PatientRow) => ({
     id: p.id,

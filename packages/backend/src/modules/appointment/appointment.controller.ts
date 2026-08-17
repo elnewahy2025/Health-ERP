@@ -22,6 +22,7 @@ import {
 } from '../../services/authorization.js';
 import { ForbiddenError } from '@healthcare/shared/errors';
 import type { AppointmentRow } from './types.js';
+import type { PermissionScope } from '@healthcare/shared/authz';
 
 // ── #5: Valid status transitions ──
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -43,17 +44,17 @@ function isWithinWorkingHours(time: string): boolean {
 
 // ── #8: Cancellation policy — >24h free, <=24h requires reason ──
 /** Effective scope for appointment list/summary operations. */
-async function resolveAppointmentListScope(principal: Principal): Promise<{ branchIds?: string[]; patientIds?: string[] }> {
+async function resolveAppointmentListScope(principal: Principal): Promise<{ branchIds?: string[]; patientIds?: string[]; scope: PermissionScope }> {
   if (hasPermission(principal, 'appointments.view', 'system') || hasPermission(principal, 'appointments.view', 'tenant')) {
-    return {};
+    return { scope: hasPermission(principal, 'appointments.view', 'system') ? 'system' : 'tenant' };
   }
   if (hasPermission(principal, 'appointments.view', 'branch') || hasPermission(principal, 'appointments.view', 'branches')) {
-    return { branchIds: principal.branches };
+    return { branchIds: principal.branches, scope: principal.branches.length > 1 ? 'branches' : 'branch' };
   }
   if (hasPermission(principal, 'appointments.view', 'assigned_patients') || hasPermission(principal, 'appointments.view', 'department')) {
-    return { patientIds: await assignedPatientIds(principal) };
+    return { patientIds: await assignedPatientIds(principal), scope: 'assigned_patients' };
   }
-  return { patientIds: [] };
+  return { patientIds: [], scope: 'self' };
 }
 
 async function assertAppointmentAccess(
@@ -98,6 +99,8 @@ export async function listAppointments(request: FastifyRequest, reply: FastifyRe
     date, status, doctorId, patientId, branchId,
     branchIds: scope.branchIds,
     patientIds: scope.patientIds,
+    principal,
+    scope: scope.scope,
     sort: query.sort, order: query.order,
     limit: query.limit, offset: (query.page - 1) * query.limit,
   });
@@ -400,7 +403,7 @@ export async function todaySummary(request: FastifyRequest, reply: FastifyReply)
   const today = new Date().toISOString().split('T')[0];
   const scope = await resolveAppointmentListScope(principal);
 
-  const appointments = await repo.findTodayAppointments(tenantId, today, scope.branchIds);
+  const appointments = await repo.findTodayAppointments(tenantId, today, scope.branchIds, principal, scope.scope);
 
   try {
     await logAudit({ tenantId, userId, action: 'appointment.today_summary', entityType: 'appointment' });
@@ -537,7 +540,7 @@ export async function bulkCancelAppointments(request: FastifyRequest, reply: Fas
   }
 
   const scope = await resolveAppointmentListScope(principal);
-  const cancelled = await repo.bulkCancelAppointments(tenantId, appointmentIds, reason || 'Bulk cancellation', scope);
+  const cancelled = await repo.bulkCancelAppointments(tenantId, appointmentIds, reason || 'Bulk cancellation', { ...scope, principal, permissionScope: scope.scope });
 
   try {
     await logAudit({

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { navigationApi, type NavFavorite } from '../../lib/api/navigation';
 import { resolveNavLabelKey } from '../../config/nav-labels';
+import { filterMenu } from '../auth/Authorization';
 
 interface NavItem {
   path: string;
@@ -282,13 +283,13 @@ export default function Sidebar({
     return navGroups
       .map((group) => ({
         ...group,
-        items: group.items.filter((item) => !item.permission || can(item.permission)),
+        items: filterMenu(group.items, can),
       }))
       .filter((group) => group.items.length > 0);
   }, [can]);
 
   const visibleSecondary = useMemo(
-    () => secondaryItems.filter((item) => !item.permission || can(item.permission)),
+    () => filterMenu(secondaryItems, can),
     [can],
   );
 

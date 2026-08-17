@@ -1,5 +1,8 @@
 import { db } from '../../core/database.js';
 import type { AppointmentRow } from './types.js';
+import type { PermissionScope } from '@healthcare/shared/authz';
+import type { Principal } from '../../services/authorization.js';
+import { applyScopePolicy } from '../../services/scope-policy.js';
 
 export async function findAppointments(tenantId: string, filters: {
   date?: string;
@@ -9,6 +12,8 @@ export async function findAppointments(tenantId: string, filters: {
   branchId?: string;
   branchIds?: string[];
   patientIds?: string[];
+  principal?: Principal;
+  scope?: PermissionScope;
   sort?: string;
   order?: string;
   limit: number;
@@ -19,6 +24,9 @@ export async function findAppointments(tenantId: string, filters: {
     .join('users', 'appointments.doctor_id', 'users.id')
     .where('appointments.tenant_id', tenantId)
     .whereNull('appointments.deleted_at');
+  if (filters.principal && filters.scope) {
+    query = applyScopePolicy('appointments', query, filters.principal, filters.scope) as typeof query;
+  }
 
   if (filters.date) query = query.andWhere('appointments.appointment_date', filters.date);
   if (filters.status) query = query.andWhere('appointments.status', filters.status);
@@ -68,14 +76,15 @@ export async function findAppointmentById(appointmentId: string, tenantId: strin
     .first();
 }
 
-export async function findTodayAppointments(tenantId: string, today: string, branchIds?: string[]): Promise<AppointmentRow[]> {
-  const query = db('appointments')
+export async function findTodayAppointments(tenantId: string, today: string, branchIds?: string[], principal?: Principal, scope?: PermissionScope): Promise<AppointmentRow[]> {
+  let query = db('appointments')
     .join('patients', 'appointments.patient_id', 'patients.id')
     .join('users', 'appointments.doctor_id', 'users.id')
     .where('appointments.tenant_id', tenantId)
     .where('appointments.appointment_date', today)
     .whereNull('appointments.deleted_at');
 
+  if (principal && scope) query = applyScopePolicy('appointments', query, principal, scope) as typeof query;
   if (branchIds && branchIds.length > 0) query.whereIn('appointments.branch_id', branchIds);
   if (branchIds && branchIds.length === 0) query.where(db.raw('false'));
 
@@ -173,13 +182,14 @@ export async function bulkCancelAppointments(
   tenantId: string,
   appointmentIds: string[],
   cancelReason: string,
-  scope?: { branchIds?: string[]; patientIds?: string[] },
+  scope?: { branchIds?: string[]; patientIds?: string[]; principal?: Principal; permissionScope?: PermissionScope },
 ): Promise<number> {
-  const query = db('appointments')
+  let query = db('appointments')
     .where('tenant_id', tenantId)
     .whereIn('id', appointmentIds)
     .whereIn('status', ['scheduled', 'confirmed']);
 
+  if (scope?.principal && scope.permissionScope) query = applyScopePolicy('appointments', query, scope.principal, scope.permissionScope) as typeof query;
   if (scope?.branchIds && scope.branchIds.length > 0) query.whereIn('branch_id', scope.branchIds);
   if (scope?.branchIds && scope.branchIds.length === 0) query.where(db.raw('false'));
   if (scope?.patientIds && scope.patientIds.length > 0) query.whereIn('patient_id', scope.patientIds);

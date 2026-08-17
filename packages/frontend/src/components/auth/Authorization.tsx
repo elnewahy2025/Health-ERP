@@ -36,7 +36,6 @@ export function ProtectedRoute({
 export interface PermissionMenuItem {
   permission?: string;
   children?: PermissionMenuItem[];
-  [key: string]: unknown;
 }
 
 export function filterMenu<T extends PermissionMenuItem>(items: T[], can: (permission: string) => boolean): T[] {

@@ -13,12 +13,13 @@ import {
 export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { user, tenant, logout, setLocale } = useAuth();
+  const { user, tenant, memberships, activeMembership, switchMembership, logout, setLocale } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [switchingMembershipId, setSwitchingMembershipId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const langRef = useRef<HTMLDivElement>(null);
   const goKeyRef = useRef<{ timeout: ReturnType<typeof setTimeout> | null }>({ timeout: null });
@@ -119,6 +120,30 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2">
+          {memberships.length > 1 && (
+            <select
+              aria-label="Switch active membership"
+              value={activeMembership?.id || ''}
+              disabled={Boolean(switchingMembershipId)}
+              onChange={async (event) => {
+                const membershipId = event.target.value;
+                if (!membershipId || membershipId === activeMembership?.id) return;
+                setSwitchingMembershipId(membershipId);
+                try {
+                  await switchMembership(membershipId);
+                } finally {
+                  setSwitchingMembershipId(null);
+                }
+              }}
+              className="hidden md:block max-w-[180px] rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+            >
+              {memberships.map((membership) => (
+                <option key={membership.id} value={membership.id}>
+                  {membership.tenantId.slice(0, 8)} · {membership.branchId?.slice(0, 8) || 'Tenant'}
+                </option>
+              ))}
+            </select>
+          )}
           <div className="relative" ref={langRef}>
             <button
               onClick={() => setShowLangMenu(!showLangMenu)}

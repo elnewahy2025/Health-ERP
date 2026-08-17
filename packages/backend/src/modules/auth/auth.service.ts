@@ -65,11 +65,19 @@ export function summarizeDevice(userAgent: string | null): string {
 }
 
 export async function createSessionRecord(
-  tenantId: string, userId: string, refreshToken: string, ip: string, userAgent: string | null,
-) {
+  tenantId: string,
+  userId: string,
+  refreshToken: string,
+  ip: string,
+  userAgent: string | null,
+  membershipId?: string | null,
+): Promise<Record<string, unknown>> {
   const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
-  await repo.createSession({
-    tenant_id: tenantId, user_id: userId, token_hash: tokenHash,
+  return repo.createSession({
+    tenant_id: tenantId,
+    user_id: userId,
+    membership_id: membershipId || null,
+    token_hash: tokenHash,
     device: summarizeDevice(userAgent),
     ip_address: ip,
     user_agent: userAgent ? userAgent.slice(0, 1000) : null,

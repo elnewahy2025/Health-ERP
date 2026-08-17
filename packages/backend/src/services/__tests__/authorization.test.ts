@@ -6,6 +6,7 @@ import {
   anyPermission,
   uniquePermissionKeys,
   patientAccessByScope,
+  authorize,
 } from '../authorization.js';
 import {
   allPermissionKeys,
@@ -84,6 +85,14 @@ describe('hasPermission', () => {
   it('denies unknown permissions and empty grants', () => {
     expect(hasPermission(principal([]), 'patients.view')).toBe(false);
     expect(hasPermission(principal([]), 'patients.view', 'tenant')).toBe(false);
+  });
+});
+
+describe('authorize middleware', () => {
+  it('supports object form and resolves auto scope', async () => {
+    const request = { ctx: { principal: principal([{ permission: 'patients.view', scope: 'branch' }]) } } as any;
+    await authorize({ permission: 'patients.view', scope: 'auto' })(request, {} as any);
+    expect(request.ctx.authorizationScope).toBe('branch');
   });
 });
 

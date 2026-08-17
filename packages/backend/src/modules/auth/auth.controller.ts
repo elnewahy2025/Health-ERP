@@ -10,7 +10,7 @@ import { generateSecret, verifyToken, generateQrCode } from '../../services/totp
 import { createAndSendOtp, verifyOtp, incrementOtpAttempt } from '../../services/otp.js';
 import { sendEmail } from '../../services/email.js';
 import { getEnv } from '@healthcare/shared/config';
-import { loadUserPrincipal, loadUserPrincipalByMembership, uniquePermissionKeys, type Principal } from '../../services/authorization.js';
+import { getDefaultMembershipForUser, loadUserPrincipal, loadUserPrincipalByMembership, uniquePermissionKeys, type Principal } from '../../services/authorization.js';
 import { db } from '../../core/database.js';
 import * as svc from './auth.service.js';
 import * as repo from './auth.repository.js';
@@ -133,11 +133,12 @@ export async function login(request: FastifyRequest, reply: FastifyReply) {
   }
 
   const jwt = svc.getJwtHelper(request.server);
-  const accessToken = svc.generateAccessToken(jwt, tenant.id, user.id);
-  const { refreshToken } = await generateTokenPair(user.id, tenant.id, ip, userAgent);
+  const membership = await getDefaultMembershipForUser(String(user.id), String(tenant.id));
+  const { refreshToken } = await generateTokenPair(user.id, tenant.id, ip, userAgent, membership?.id);
   await svc.enforceSessionLimit(user.id, tenant.id);
-  await svc.createSessionRecord(tenant.id, user.id, refreshToken, ip, userAgent);
-  await logAudit({ tenantId: tenant.id, userId: user.id, action: 'user.login', ipAddress: ip, userAgent });
+  const session = await svc.createSessionRecord(tenant.id, user.id, refreshToken, ip, userAgent, membership?.id);
+  const accessToken = svc.generateAccessToken(jwt, tenant.id, user.id, membership?.id, String(session.id));
+  await logAudit({ tenantId: tenant.id, userId: user.id, action: 'user.login', ipAddress: ip, userAgent, metadata: { membershipId: membership?.id, sessionId: session.id } });
 
   const csrfToken = svc.generateCsrfToken();
   reply.setCookie('refresh_token', refreshToken, {
@@ -182,11 +183,12 @@ export async function mfaVerify(request: FastifyRequest, reply: FastifyReply) {
   if (!tenant) throw new UnauthorizedError('Invalid organization');
 
   const jwt = svc.getJwtHelper(request.server);
-  const accessToken = svc.generateAccessToken(jwt, tenant.id, user.id);
-  const { refreshToken } = await generateTokenPair(user.id, tenant.id, ip, userAgent);
+  const membership = await getDefaultMembershipForUser(String(user.id), String(tenant.id));
+  const { refreshToken } = await generateTokenPair(user.id, tenant.id, ip, userAgent, membership?.id);
   await svc.enforceSessionLimit(user.id, tenant.id);
-  await svc.createSessionRecord(tenant.id, user.id, refreshToken, ip, userAgent);
-  await logAudit({ tenantId: tenant.id, userId: user.id, action: 'user.login.mfa', ipAddress: ip });
+  const session = await svc.createSessionRecord(tenant.id, user.id, refreshToken, ip, userAgent, membership?.id);
+  const accessToken = svc.generateAccessToken(jwt, tenant.id, user.id, membership?.id, String(session.id));
+  await logAudit({ tenantId: tenant.id, userId: user.id, action: 'user.login.mfa', ipAddress: ip, metadata: { membershipId: membership?.id, sessionId: session.id } });
 
   const csrfToken = svc.generateCsrfToken();
   reply.setCookie('refresh_token', refreshToken, {
@@ -237,11 +239,35 @@ export async function refreshToken(request: FastifyRequest, reply: FastifyReply)
   const user = await repo.findUserById(oldRecord.user_id);
   if (!user || user.status !== 'active') throw new UnauthorizedError('Account is not active');
 
+  const membership = oldRecord.membership_id
+    ? await loadUserPrincipalByMembership(String(user.id), String(oldRecord.membership_id))
+    : await getDefaultMembershipForUser(String(user.id), String(oldRecord.tenant_id));
+  if (oldRecord.membership_id && !membership) throw new UnauthorizedError('Membership is not active');
+  const membershipId = oldRecord.membership_id
+    ? String(oldRecord.membership_id)
+    : (membership && 'membershipId' in membership ? membership.membershipId : membership?.id);
+
+  const oldSession = await repo.findSessionByTokenHash(oldTokenHash);
+  let sessionId = oldSession?.id ? String(oldSession.id) : null;
+  if (oldSession?.id) {
+    await repo.rotateSessionToken(String(oldSession.id), crypto.createHash('sha256').update(result.refreshToken).digest('hex'));
+  } else {
+    const createdSession = await svc.createSessionRecord(
+      String(oldRecord.tenant_id),
+      String(user.id),
+      result.refreshToken,
+      ip,
+      userAgent,
+      membershipId,
+    );
+    sessionId = String(createdSession.id);
+  }
+
   const jwt = svc.getJwtHelper(request.server);
-  const accessToken = svc.generateAccessToken(jwt, oldRecord.tenant_id, user.id);
+  const accessToken = svc.generateAccessToken(jwt, oldRecord.tenant_id, user.id, membershipId, sessionId);
 
   await repo.updateSessionActivity(user.id, oldRecord.tenant_id, oldTokenHash);
-  await logAudit({ tenantId: oldRecord.tenant_id, userId: user.id, action: 'user.token_refresh' });
+  await logAudit({ tenantId: oldRecord.tenant_id, userId: user.id, action: 'user.token_refresh', metadata: { membershipId, sessionId } });
 
   const csrfToken = svc.generateCsrfToken();
   reply.setCookie('refresh_token', result.refreshToken, {

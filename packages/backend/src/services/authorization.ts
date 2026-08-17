@@ -44,6 +44,8 @@ export interface Principal {
 export interface RequestCtx {
   tenantId: string;
   userId: string;
+  membershipId?: string;
+  authorizationScope?: PermissionScope;
   roles: string[];
   permissions: string[];
   branches: string[];
@@ -136,6 +138,22 @@ async function loadPrincipalForContext(
   };
 }
 
+export async function getDefaultMembershipForUser(userId: string, tenantId: string): Promise<MembershipContext | null> {
+  const row = await db('memberships')
+    .where({ user_id: userId, tenant_id: tenantId, status: 'ACTIVE' })
+    .orderBy([{ column: 'is_default', order: 'desc' }, { column: 'created_at', order: 'asc' }])
+    .first();
+  if (!row) return null;
+  return {
+    id: String(row.id),
+    userId,
+    tenantId,
+    branchId: row.branch_id ? String(row.branch_id) : null,
+    departmentId: row.department_id ? String(row.department_id) : null,
+    status: String(row.status),
+  };
+}
+
 export async function loadUserPrincipal(userId: string, tenantId: string): Promise<Principal | null> {
   return loadPrincipalForContext(userId, tenantId);
 }
@@ -212,15 +230,40 @@ export function anyPermission(
  * Fastify preHandler guard — enforces permission + scope before a handler runs.
  * Usage: preHandler: [authenticate, authorize('patients.view', 'branch')]
  */
-export function authorize(permission: string, requestedScope?: PermissionScope) {
+export interface AuthorizeOptions {
+  permission: string;
+  scope?: PermissionScope | 'auto';
+}
+
+function matchingGrantScopes(principal: Principal, permission: string): PermissionScope[] {
+  return principal.grants
+    .filter((grant) => permissionKeyMatches(grant.permission, permission))
+    .map((grant) => grant.scope)
+    .sort((left, right) => SCOPE_RANK[right] - SCOPE_RANK[left]);
+}
+
+export function authorize(permission: string, requestedScope?: PermissionScope): (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+export function authorize(options: AuthorizeOptions): (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+export function authorize(
+  permissionOrOptions: string | AuthorizeOptions,
+  positionalScope?: PermissionScope,
+) {
+  const options: AuthorizeOptions = typeof permissionOrOptions === 'string'
+    ? { permission: permissionOrOptions, scope: positionalScope }
+    : permissionOrOptions;
+  const requestedScope = options.scope === 'auto' ? undefined : options.scope;
+
   return async function (request: FastifyRequest, _reply: FastifyReply): Promise<void> {
-    const req = request as FastifyRequest & { ctx?: { principal?: Principal } };
+    const req = request as FastifyRequest & { ctx?: { principal?: Principal; authorizationScope?: PermissionScope } };
     const principal = req.ctx?.principal;
     if (!principal) throw new ForbiddenError('Authorization context missing');
-    if (!hasPermission(principal, permission, requestedScope)) {
+    if (!hasPermission(principal, options.permission, requestedScope)) {
       throw new ForbiddenError(
-        `Missing permission: ${permission}${requestedScope ? ` (scope: ${requestedScope})` : ''}`,
+        `Missing permission: ${options.permission}${requestedScope ? ` (scope: ${requestedScope})` : ''}`,
       );
+    }
+    if (req.ctx) {
+      req.ctx.authorizationScope = requestedScope || matchingGrantScopes(principal, options.permission)[0];
     }
   };
 }

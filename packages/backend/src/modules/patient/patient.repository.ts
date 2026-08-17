@@ -1,5 +1,8 @@
 import { db } from '../../core/database.js';
 import type { PatientRow } from './types.js';
+import type { PermissionScope } from '@healthcare/shared/authz';
+import type { Principal } from '../../services/authorization.js';
+import { applyScopePolicy } from '../../services/scope-policy.js';
 import { encryptField } from '@healthcare/shared/utils';
 
 const MAX_PAGE_LIMIT = 100;
@@ -15,13 +18,18 @@ export async function findPatients(tenantId: string, options: {
   order?: string;
   limit: number;
   offset: number;
-  branchIds?: string[];
-  patientIds?: string[];
-}): Promise<{ patients: PatientRow[]; total: number }> {
+    branchIds?: string[];
+    patientIds?: string[];
+    principal?: Principal;
+    scope?: PermissionScope;
+  }): Promise<{ patients: PatientRow[]; total: number }> {
   const safeLimit = enforceLimit(options.limit);
   let query = db('patients')
     .where({ tenant_id: tenantId })
     .whereNull('deleted_at');
+  if (options.principal && options.scope) {
+    query = applyScopePolicy('patients', query, options.principal, options.scope) as typeof query;
+  }
 
   if (options.search) {
     const s = options.search;
@@ -178,11 +186,18 @@ export async function softDeletePatient(patientId: string, tenantId: string): Pr
   });
 }
 
-export async function quickSearchPatients(tenantId: string, q: string, options?: { branchIds?: string[]; patientIds?: string[] }): Promise<PatientRow[]> {
+export async function quickSearchPatients(tenantId: string, q: string, options?: {     branchIds?: string[];
+    patientIds?: string[];
+    principal?: Principal;
+    scope?: PermissionScope;
+  }): Promise<PatientRow[]> {
   let query = db('patients')
     .where({ tenant_id: tenantId })
-    .whereNull('deleted_at')
-    .where(function () {
+    .whereNull('deleted_at');
+  if (options?.principal && options.scope) {
+    query = applyScopePolicy('patients', query, options.principal, options.scope) as typeof query;
+  }
+  query = query.where(function () {
       this.where('first_name', 'ilike', `%${q}%`)
         .orWhere('last_name', 'ilike', `%${q}%`)
         .orWhere('phone', 'ilike', `%${q}%`)
@@ -215,10 +230,16 @@ export async function trigramSearchPatients(
   tenantId: string,
   q: string,
   limit: number = 10,
+  principal?: Principal,
+  scope?: PermissionScope,
 ): Promise<PatientRow[]> {
-  return db('patients')
+  let query = db('patients')
     .where({ tenant_id: tenantId })
-    .whereNull('deleted_at')
+    .whereNull('deleted_at');
+  if (principal && scope) {
+    query = applyScopePolicy('patients', query, principal, scope) as typeof query;
+  }
+  return query
     .whereRaw(
       "(first_name || ' ' || last_name) % ?",
       [q]

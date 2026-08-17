@@ -14,9 +14,34 @@ import { getCtx } from '../../utils/route-helper.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
-import { loadUserPrincipal, uniquePermissionKeys, hasPermission } from '../../services/authorization.js';
+import { invalidateAuthorizationCache, loadUserPrincipal, uniquePermissionKeys, hasPermission } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
 import { revokeAllUserTokens } from '../../services/refresh-token.js';
+
+function expandPermissionInputs(
+  inputs: string[],
+  scope: PermissionScope,
+  effect: 'ALLOW' | 'DENY',
+): Array<{ permission: string; scope: PermissionScope; effect: 'ALLOW' | 'DENY' }> {
+  const rows: Array<{ permission: string; scope: PermissionScope; effect: 'ALLOW' | 'DENY' }> = [];
+  const seen = new Set<string>();
+  for (const raw of inputs) {
+    const keys = raw === '*' ? allPermissionKeys() : expandGrantKey(raw);
+    for (const permission of keys) {
+      const key = `${permission}:${scope}:${effect}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      rows.push({ permission, scope, effect });
+    }
+  }
+  return rows;
+}
+
+async function resolveTargetMembership(userId: string, tenantId: string, membershipId?: string) {
+  const query = db('memberships').where({ user_id: userId, tenant_id: tenantId, status: 'ACTIVE' });
+  if (membershipId) query.andWhere('id', membershipId);
+  return query.orderBy([{ column: 'is_default', order: 'desc' }, { column: 'created_at', order: 'asc' }]).first();
+}
 
 export async function registerRbacModule(app: FastifyInstance) {
 
@@ -33,19 +58,36 @@ export async function registerRbacModule(app: FastifyInstance) {
     });
   });
 
-  // Get role templates + tenant roles (custom roles created via this API)
-  app.get('/api/v1/rbac/roles', { preHandler: [authenticate, authorize('roles.view')] }, async (request, reply) => {
+  // Get the 39 system templates plus tenant custom roles. The catalog table
+  // is populated by migration 042; the fallback preserves pre-migration reads.
+  app.get('/api/v1/rbac/roles', { preHandler: [authenticate, authorize({ permission: 'roles.view', scope: 'auto' })] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
-    const templates = Object.entries(SEED_ROLES).map(([slug, template]) => ({
-      id: null,
-      slug,
-      name: slug.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-      level: template.level,
-      scopeDefault: template.scopeDefault,
-      description: template.description || null,
-      isSystem: true,
-      grants: expandRoleGrants(template),
-    }));
+    const catalogRows = await db.schema.hasTable('role_template_catalog')
+      ? await db('role_template_catalog').where({ is_system: true }).orderBy('name', 'asc')
+      : [];
+    const templates = catalogRows.length > 0
+      ? catalogRows.map((row: Record<string, unknown>) => ({
+        id: null,
+        slug: String(row.slug),
+        name: String(row.name),
+        level: String(row.slug) === 'super_administrator' ? 'system' : 'tenant',
+        scopeDefault: String(row.default_scope),
+        description: row.description || null,
+        isSystem: true,
+        grants: typeof row.grants === 'string' ? JSON.parse(row.grants) : (row.grants || {}),
+        denials: typeof row.denials === 'string' ? JSON.parse(row.denials) : (row.denials || []),
+      }))
+      : Object.entries(SEED_ROLES).map(([slug, template]) => ({
+        id: null,
+        slug,
+        name: slug.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        level: template.level,
+        scopeDefault: template.scopeDefault,
+        description: template.description || null,
+        isSystem: true,
+        grants: expandRoleGrants(template),
+        denials: [],
+      }));
 
     const dbRoles = await db('roles').where({ tenant_id: tenantId }).select('*');
     const merged: Array<Record<string, unknown>> = [];
@@ -56,7 +98,7 @@ export async function registerRbacModule(app: FastifyInstance) {
     }
     for (const role of dbRoles) {
       if (seen.has(String(role.slug))) continue;
-      const grants = await db('role_permissions').where({ role_id: role.id }).select('permission', 'scope');
+      const grants = await db('role_permissions').where({ role_id: role.id }).select('permission', 'scope', 'effect');
       merged.push({
         id: role.id,
         slug: role.slug,
@@ -65,10 +107,70 @@ export async function registerRbacModule(app: FastifyInstance) {
         scopeDefault: role.scope_default || 'tenant',
         description: role.description || null,
         isSystem: Boolean(role.is_system),
-        grants: grants.map((g) => ({ permission: String(g.permission), scope: String(g.scope) })),
+        grants: grants.filter((g) => String(g.effect || 'ALLOW').toUpperCase() !== 'DENY').map((g) => ({ permission: String(g.permission), scope: String(g.scope) })),
+        denials: grants.filter((g) => String(g.effect || 'ALLOW').toUpperCase() === 'DENY').map((g) => ({ permission: String(g.permission), scope: String(g.scope) })),
       });
     }
     return sendSuccess(reply, merged);
+  });
+
+  // Clone a system template into the active tenant. Templates remain immutable.
+  app.post('/api/v1/rbac/roles/clone', { preHandler: [authenticate, authorize({ permission: 'roles.create', scope: 'auto' })] }, async (request, reply) => {
+    const { tenantId, principal, userId: actorId } = getCtx(request);
+    const body = z.object({
+      templateSlug: z.string().min(1),
+      name: z.string().min(1).max(100),
+      slug: z.string().min(1).max(100).regex(/^[a-z0-9_]+$/),
+    }).parse(request.body);
+    const existing = await db('roles').where({ tenant_id: tenantId, slug: body.slug }).first();
+    if (existing) throw new ForbiddenError(`Role '${body.slug}' already exists in this organization`);
+
+    const catalogRow = await db.schema.hasTable('role_template_catalog')
+      ? await db('role_template_catalog').where({ slug: body.templateSlug, is_system: true }).first()
+      : null;
+    const fallback = SEED_ROLES[body.templateSlug];
+    if (!catalogRow && !fallback) return sendError(reply, 'System role template not found', 404);
+
+    const grantRows: Array<{ permission: string; scope: PermissionScope; effect: 'ALLOW' | 'DENY' }> = [];
+    if (catalogRow) {
+      const grants = typeof catalogRow.grants === 'string' ? JSON.parse(catalogRow.grants) : (catalogRow.grants || {});
+      const denials = typeof catalogRow.denials === 'string' ? JSON.parse(catalogRow.denials) : (catalogRow.denials || []);
+      for (const [permission, scopes] of Object.entries(grants as Record<string, string[]>)) {
+        for (const scope of scopes) grantRows.push(...expandPermissionInputs([permission], scope as PermissionScope, 'ALLOW'));
+      }
+      for (const denial of denials as Array<{ permission: string; scope: PermissionScope }>) {
+        grantRows.push(...expandPermissionInputs([denial.permission], denial.scope, 'DENY'));
+      }
+    } else {
+      grantRows.push(...expandRoleGrants(fallback!).map((grant) => ({ permission: grant.permission, scope: grant.scope, effect: 'ALLOW' as const })));
+    }
+    const isSuper = hasPermission(principal, '*');
+    if (!isSuper) {
+      for (const grant of grantRows) {
+        if (!hasPermission(principal, grant.permission, grant.scope)) {
+          throw new ForbiddenError(`Cannot clone template '${body.templateSlug}': exceeds your permissions`);
+        }
+      }
+    }
+
+    const role = await db.transaction(async (trx) => {
+      const [created] = await trx('roles').insert({
+        tenant_id: tenantId,
+        name: body.name,
+        slug: body.slug,
+        description: catalogRow?.description || fallback?.description || null,
+        permissions: '[]',
+        is_system: false,
+        level: 'custom',
+        scope_default: catalogRow?.default_scope || fallback?.scopeDefault || 'tenant',
+      }).returning('*');
+      for (const grant of grantRows) {
+        await trx('role_permissions').insert({ role_id: created.id, tenant_id: tenantId, permission: grant.permission, scope: grant.scope, effect: grant.effect });
+      }
+      return created;
+    });
+    await logAudit({ tenantId, userId: actorId, action: 'role.cloned', entityType: 'role', entityId: role.id, metadata: { templateSlug: body.templateSlug } });
+    return sendSuccess(reply, { id: role.id, name: role.name, slug: role.slug, templateSlug: body.templateSlug }, 'Role cloned', 201);
   });
 
   // Get user permissions
@@ -83,6 +185,7 @@ export async function registerRbacModule(app: FastifyInstance) {
       userId,
       roles: principal.roles,
       permissions: uniquePermissionKeys(principal.grants),
+      denials: principal.denials || [],
       isSuperAdmin: principal.roles.includes('super_admin'),
     });
   });
@@ -92,12 +195,16 @@ export async function registerRbacModule(app: FastifyInstance) {
     const { tenantId, principal, userId: actorId } = getCtx(request);
     const { userId } = z.object({ userId: z.string().uuid() }).parse(request.params);
     const body = z.object({
+      membershipId: z.string().uuid().optional(),
       roles: z.array(z.string()).optional(),
       permissions: z.array(z.string()).optional(),
+      denials: z.array(z.string()).optional(),
     }).parse(request.body);
 
     const target = await db('users').where({ id: userId, tenant_id: tenantId }).first();
     if (!target) return sendError(reply, 'User not found', 404);
+    const targetMembership = await resolveTargetMembership(userId, tenantId, body.membershipId);
+    if (!targetMembership) return sendError(reply, 'Active target membership not found', 404);
 
     // Escalation cap: an actor can only assign grants they themselves hold.
     const isSuper = hasPermission(principal, '*');
@@ -112,46 +219,48 @@ export async function registerRbacModule(app: FastifyInstance) {
         }
       }
     }
-    if (body.permissions) {
-      for (const raw of body.permissions) {
-        const keys = raw === '*' ? allPermissionKeys() : expandGrantKey(raw);
-        for (const permission of keys) {
-          if (!isSuper && !hasPermission(principal, permission)) {
-            throw new ForbiddenError(`Cannot assign permission '${permission}': exceeds your permissions`);
-          }
+    for (const raw of [...(body.permissions || []), ...(body.denials || [])]) {
+      const keys = raw === '*' ? allPermissionKeys() : expandGrantKey(raw);
+      for (const permission of keys) {
+        if (!isSuper && !hasPermission(principal, permission)) {
+          throw new ForbiddenError(`Cannot assign permission '${permission}': exceeds your permissions`);
         }
       }
     }
 
     await db.transaction(async (trx) => {
       if (body.roles) {
-        await trx('user_roles').where({ user_id: userId, tenant_id: tenantId }).delete();
+        await trx('user_roles').where({ user_id: userId, tenant_id: tenantId, membership_id: targetMembership.id }).delete();
         const roles = await trx('roles').where({ tenant_id: tenantId }).whereIn('slug', body.roles).select('id', 'slug');
         for (const role of roles) {
           await trx('user_roles').insert({
-            user_id: userId, role_id: role.id, tenant_id: tenantId, assigned_by: actorId,
+            user_id: userId, role_id: role.id, tenant_id: tenantId, membership_id: targetMembership.id, assigned_by: actorId,
           });
         }
       }
-      if (body.permissions) {
-        await trx('user_permissions').where({ user_id: userId, tenant_id: tenantId }).delete();
-        const seen = new Set<string>();
-        for (const raw of body.permissions) {
-          const keys = raw === '*' ? allPermissionKeys() : expandGrantKey(raw);
-          for (const permission of keys) {
-            if (seen.has(permission)) continue;
-            seen.add(permission);
-            await trx('user_permissions').insert({
-              user_id: userId, tenant_id: tenantId, permission, scope: 'tenant', assigned_by: actorId,
-            });
-          }
+      if (body.permissions || body.denials) {
+        await trx('user_permissions').where({ user_id: userId, tenant_id: tenantId, membership_id: targetMembership.id }).delete();
+        const rows = [
+          ...expandPermissionInputs(body.permissions || [], 'tenant', 'ALLOW'),
+          ...expandPermissionInputs(body.denials || [], 'tenant', 'DENY'),
+        ];
+        for (const row of rows) {
+          await trx('user_permissions').insert({
+            user_id: userId,
+            tenant_id: tenantId,
+            membership_id: targetMembership.id,
+            permission: row.permission,
+            scope: row.scope,
+            effect: row.effect,
+            assigned_by: actorId,
+          });
         }
       }
       // Keep legacy columns in sync for backward compatibility; bump perm_version
       // so cached principals are invalidated.
       const updateData: Record<string, unknown> = { perm_version: trx.raw('perm_version + 1') };
       if (body.roles) updateData.roles = JSON.stringify(body.roles);
-      if (body.permissions) updateData.permissions = JSON.stringify(body.permissions);
+      if (body.permissions || body.denials) updateData.permissions = JSON.stringify([...(body.permissions || []), ...(body.denials || []).map((permission) => `deny:${permission}`)]);
       await trx('users').where({ id: userId, tenant_id: tenantId }).update(updateData);
     });
 
@@ -161,16 +270,17 @@ export async function registerRbacModule(app: FastifyInstance) {
       action: 'user.permissions_updated',
       entityType: 'user',
       entityId: userId,
-      metadata: { roles: body.roles, permissions: body.permissions },
+      metadata: { membershipId: targetMembership.id, roles: body.roles, permissions: body.permissions, denials: body.denials },
       ipAddress: request.ip,
       userAgent: request.headers['user-agent'] as string,
     });
 
     // Permission changes take effect immediately (principal is loaded per
     // request); revoke the target's sessions/tokens for defense in depth.
+    await invalidateAuthorizationCache(userId, String(targetMembership.id));
     await revokeAllUserTokens(userId, tenantId);
     await db('user_sessions').where({ user_id: userId, tenant_id: tenantId, is_active: true }).update({ is_active: false });
-    return sendSuccess(reply, { userId, ...body }, 'Permissions updated');
+    return sendSuccess(reply, { userId, membershipId: targetMembership.id, ...body }, 'Permissions updated');
   });
 
   // ── Create custom role ──
@@ -182,6 +292,7 @@ export async function registerRbacModule(app: FastifyInstance) {
       description: z.string().optional(),
       scopeDefault: z.enum(['self', 'assigned_patients', 'department', 'branch', 'branches', 'tenant', 'system']).optional().default('tenant'),
       grants: z.array(z.object({ permission: z.string().min(1), scope: z.enum(['self', 'assigned_patients', 'department', 'branch', 'branches', 'tenant', 'system']) })).optional().default([]),
+      denials: z.array(z.object({ permission: z.string().min(1), scope: z.enum(['self', 'assigned_patients', 'department', 'branch', 'branches', 'tenant', 'system']) })).optional().default([]),
     }).parse(request.body);
 
     const existing = await db('roles').where({ tenant_id: tenantId, slug: body.slug }).first();
@@ -190,13 +301,15 @@ export async function registerRbacModule(app: FastifyInstance) {
     // Validate every grant against the catalog and the actor's own grants (no escalation).
     const isSuper = hasPermission(principal, '*');
     const expanded = new Set<string>();
-    for (const grant of body.grants) {
-      const keys = grant.permission === '*' ? allPermissionKeys() : expandGrantKey(grant.permission);
-      for (const permission of keys) {
-        if (!isSuper && !hasPermission(principal, permission, grant.scope as PermissionScope)) {
-          throw new ForbiddenError(`Cannot grant '${permission}' at scope '${grant.scope}': exceeds your permissions`);
+    for (const [effect, inputs] of [['ALLOW', body.grants], ['DENY', body.denials]] as const) {
+      for (const grant of inputs) {
+        const keys = grant.permission === '*' ? allPermissionKeys() : expandGrantKey(grant.permission);
+        for (const permission of keys) {
+          if (!isSuper && !hasPermission(principal, permission, grant.scope as PermissionScope)) {
+            throw new ForbiddenError(`Cannot ${effect.toLowerCase()} '${permission}' at scope '${grant.scope}': exceeds your permissions`);
+          }
+          expanded.add(`${permission}:${grant.scope}:${effect}`);
         }
-        expanded.add(`${permission}:${grant.scope}`);
       }
     }
 
@@ -212,8 +325,8 @@ export async function registerRbacModule(app: FastifyInstance) {
         scope_default: body.scopeDefault,
       }).returning('*');
       for (const key of expanded) {
-        const [permission, scope] = key.split(':');
-        await trx('role_permissions').insert({ role_id: inserted.id, tenant_id: tenantId, permission, scope });
+        const [permission, scope, effect] = key.split(':');
+        await trx('role_permissions').insert({ role_id: inserted.id, tenant_id: tenantId, permission, scope, effect });
       }
       return inserted;
     });
@@ -224,7 +337,7 @@ export async function registerRbacModule(app: FastifyInstance) {
       action: 'role.created',
       entityType: 'role',
       entityId: role.id,
-      metadata: { name: body.name, slug: body.slug, grantCount: expanded.size },
+      metadata: { name: body.name, slug: body.slug, grantCount: expanded.size, denialCount: body.denials.length },
       ipAddress: request.ip,
       userAgent: request.headers['user-agent'] as string,
     });
@@ -240,6 +353,7 @@ export async function registerRbacModule(app: FastifyInstance) {
       description: z.string().nullable().optional(),
       scopeDefault: z.enum(['self', 'assigned_patients', 'department', 'branch', 'branches', 'tenant', 'system']).optional(),
       grants: z.array(z.object({ permission: z.string().min(1), scope: z.enum(['self', 'assigned_patients', 'department', 'branch', 'branches', 'tenant', 'system']) })).optional(),
+      denials: z.array(z.object({ permission: z.string().min(1), scope: z.enum(['self', 'assigned_patients', 'department', 'branch', 'branches', 'tenant', 'system']) })).optional(),
     }).parse(request.body);
 
     const role = await db('roles').where({ id: roleId, tenant_id: tenantId }).first();
@@ -248,14 +362,14 @@ export async function registerRbacModule(app: FastifyInstance) {
 
     const isSuper = hasPermission(principal, '*');
     const expanded = new Set<string>();
-    if (body.grants) {
-      for (const grant of body.grants) {
+    for (const [effect, inputs] of [['ALLOW', body.grants || []], ['DENY', body.denials || []] ] as const) {
+      for (const grant of inputs) {
         const keys = grant.permission === '*' ? allPermissionKeys() : expandGrantKey(grant.permission);
         for (const permission of keys) {
           if (!isSuper && !hasPermission(principal, permission, grant.scope as PermissionScope)) {
-            throw new ForbiddenError(`Cannot grant '${permission}' at scope '${grant.scope}': exceeds your permissions`);
+            throw new ForbiddenError(`Cannot ${effect.toLowerCase()} '${permission}' at scope '${grant.scope}': exceeds your permissions`);
           }
-          expanded.add(`${permission}:${grant.scope}`);
+          expanded.add(`${permission}:${grant.scope}:${effect}`);
         }
       }
     }
@@ -267,11 +381,11 @@ export async function registerRbacModule(app: FastifyInstance) {
       if (body.scopeDefault) updateData.scope_default = body.scopeDefault;
       await trx('roles').where({ id: roleId, tenant_id: tenantId }).update(updateData);
 
-      if (body.grants) {
+      if (body.grants || body.denials) {
         await trx('role_permissions').where({ role_id: roleId }).delete();
         for (const key of expanded) {
-          const [permission, scope] = key.split(':');
-          await trx('role_permissions').insert({ role_id: roleId, tenant_id: tenantId, permission, scope });
+          const [permission, scope, effect] = key.split(':');
+          await trx('role_permissions').insert({ role_id: roleId, tenant_id: tenantId, permission, scope, effect });
         }
       }
 
@@ -289,11 +403,12 @@ export async function registerRbacModule(app: FastifyInstance) {
       action: 'role.updated',
       entityType: 'role',
       entityId: roleId,
-      metadata: { changed: Object.keys(body), grantCount: body.grants ? expanded.size : undefined },
+      metadata: { changed: Object.keys(body), grantCount: body.grants ? expanded.size : undefined, denialCount: body.denials?.length || 0 },
       ipAddress: request.ip,
       userAgent: request.headers['user-agent'] as string,
     });
     for (const row of affected) {
+      await invalidateAuthorizationCache(String(row.user_id));
       await revokeAllUserTokens(String(row.user_id), tenantId);
       await db('user_sessions').where({ user_id: row.user_id, tenant_id: tenantId, is_active: true }).update({ is_active: false });
     }
