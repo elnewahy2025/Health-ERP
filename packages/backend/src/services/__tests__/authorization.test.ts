@@ -192,3 +192,11 @@ describe('deterministic denial precedence', () => {
     expect(hasPermission(p, 'patients.delete', 'branch')).toBe(false);
   });
 });
+
+
+describe('permission alias compatibility', () => {
+  it('normalizes roles.update to the existing roles.edit catalog permission', () => {
+    const p = principal([{ permission: 'roles.edit', scope: 'tenant', source: 'role', effect: 'ALLOW' }]);
+    expect(hasPermission(p, 'roles.update', 'tenant')).toBe(true);
+  });
+});

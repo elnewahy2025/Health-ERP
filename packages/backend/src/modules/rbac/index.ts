@@ -345,7 +345,7 @@ export async function registerRbacModule(app: FastifyInstance) {
   });
 
   // ── Update custom role (grants/meta) ──
-  app.put('/api/v1/rbac/roles/:roleId', { preHandler: [authenticate, authorize('roles.edit')] }, async (request, reply) => {
+  app.put('/api/v1/rbac/roles/:roleId', { preHandler: [authenticate, authorize('roles.update')] }, async (request, reply) => {
     const { tenantId, principal, userId: actorId } = getCtx(request);
     const { roleId } = z.object({ roleId: z.string().uuid() }).parse(request.params);
     const body = z.object({

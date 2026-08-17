@@ -99,3 +99,23 @@ describe('remaining high-risk module policies', () => {
     expect(query.calls.some((call) => call.method === 'whereExists')).toBe(true);
   });
 });
+
+
+describe('export, report, and bulk-style query isolation', () => {
+  it('always constrains reports and audit exports to the active tenant', () => {
+    for (const module of ['reports', 'audit']) {
+      const query = new FakeQuery();
+      applyScopePolicy(module, query as any, principal([{ permission: `${module}.export`, scope: 'tenant' }]), 'tenant');
+      expect(query.calls).toContainEqual({ method: 'andWhere', args: ['tenant_id', 'tenant-1'] });
+    }
+  });
+
+  it('constrains inventory bulk-style reads to assigned branches', () => {
+    const query = new FakeQuery();
+    applyScopePolicy('inventory', query as any, principal([{ permission: 'inventory.view', scope: 'branches' }]), 'branches');
+    expect(query.calls).toEqual([
+      { method: 'andWhere', args: ['inventory_items.tenant_id', 'tenant-1'] },
+      { method: 'whereIn', args: ['warehouses.branch_id', ['branch-1']] },
+    ]);
+  });
+});

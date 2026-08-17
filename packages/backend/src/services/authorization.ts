@@ -1,7 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Knex } from 'knex';
 import { ForbiddenError } from '@healthcare/shared/errors';
-import { expandGrantKey, permissionKeyMatches } from '@healthcare/shared/authz';
+import { expandGrantKey, normalizeLegacyPermission, permissionKeyMatches } from '@healthcare/shared/authz';
 import type { Grant, PermissionEffect, PermissionScope } from '@healthcare/shared/authz';
 import { db } from '../core/database.js';
 import { CACHE_TTL, getOrSet } from '../core/redis.js';
@@ -223,13 +223,14 @@ export function hasPermission(
   requestedScope?: PermissionScope,
 ): boolean {
   const requested = requestedScope as PermissionScope | undefined;
+  const canonicalPermission = normalizeLegacyPermission(permission);
   const candidates = [...(principal.grants || []), ...(principal.denials || [])]
-    .filter((grant) => permissionKeyMatches(grant.permission, permission))
+    .filter((grant) => permissionKeyMatches(grant.permission, canonicalPermission))
     .filter((grant) => !requested || scopeCovers(grant.scope, requested))
     .sort((left, right) => {
       const rankDifference = authorizationRank(right) - authorizationRank(left);
       if (rankDifference !== 0) return rankDifference;
-      return permissionSpecificity(right.permission, permission) - permissionSpecificity(left.permission, permission);
+      return permissionSpecificity(right.permission, canonicalPermission) - permissionSpecificity(left.permission, canonicalPermission);
     });
   return candidates[0]?.effect !== 'DENY' && candidates.length > 0;
 }
@@ -252,8 +253,9 @@ export interface AuthorizeOptions {
 }
 
 function matchingGrantScopes(principal: Principal, permission: string): PermissionScope[] {
+  const canonicalPermission = normalizeLegacyPermission(permission);
   return principal.grants
-    .filter((grant) => permissionKeyMatches(grant.permission, permission))
+    .filter((grant) => permissionKeyMatches(grant.permission, canonicalPermission))
     .map((grant) => grant.scope)
     .sort((left, right) => SCOPE_RANK[right] - SCOPE_RANK[left]);
 }
