@@ -3,14 +3,14 @@
 **Repository:** `elnewahy2025/Health-ERP`  
 **Reviewed:** 2026-08-17  
 **Branch:** `main`  
-**HEAD:** `69f739b`
+**HEAD:** pending ops-scope increment after `8cb6f39`
 **Review basis:** Attached authorization specification, repository source, migrations, runtime call sites, tests, and build/type-check results.
 
 ## Executive conclusion
 
 > **No. The full specification is not complete.**
 
-The repository contains a committed reference architecture and an expanding authorization implementation. The latest increment adds server-side validation of active session IDs for session-bound JWTs, persists membership changes on the verified session, integrates scope policies into EMR, billing, laboratory, and radiology paths, closes report export ownership checks, adds DMS and BI action-level gates, and adds scope-policy/JWT regression tests. Full enterprise completion is still not claimed because universal module coverage, complete security integration tests, and some membership/RBAC lifecycle operations remain.
+The repository contains a committed reference architecture and an expanding authorization implementation. The latest increment adds server-side validation of active session IDs for session-bound JWTs, persists membership changes on the verified session, integrates scope policies into EMR, billing, laboratory, radiology, pharmacy, HR, compliance, and audit paths, adds additive pharmacy/HR scope-context migrations, closes report export ownership checks, adds DMS and BI action-level gates, and expands scope-policy regression tests. Full enterprise completion is still not claimed because universal module coverage, complete security integration tests, and some membership/RBAC lifecycle operations remain.
 
 The implementation is therefore **not ready to be declared enterprise-complete**. It is more accurately classified as a **partially implemented authorization foundation**.
 
@@ -22,7 +22,7 @@ The implementation is therefore **not ready to be declared enterprise-complete**
 | Backend TypeScript build | Passed. |
 | Shared TypeScript build | Passed. |
 | Frontend TypeScript check | Passed. |
-| Backend tests | Passed: 25 test files, 189 tests. Redis emitted an expected optional-infrastructure connection warning; the audit test logs an expected mocked database error but passes. |
+| Backend tests | Passed: 25 test files, 192 tests. Redis emitted an expected optional-infrastructure connection warning; the audit test logs an expected mocked database error but passes. |
 | Frontend tests | Passed: 4 test files, 15 tests. React Router emitted future-version warnings. |
 | Database migration execution | **Not verified**; no connected production/staging PostgreSQL migration run was performed during this audit. |
 | Full authorization security matrix | **Not complete**; the repository does not contain the required comprehensive cross-tenant, cross-branch, cross-department, cache, membership-switching, wildcard-escalation, and endpoint-bypass suite. |
@@ -45,9 +45,9 @@ The implementation is therefore **not ready to be declared enterprise-complete**
 | First-class Membership model | **Partial** | Migration `041_memberships_authorization_effects.ts` creates `memberships` and performs a compatibility backfill. The runtime mostly still uses tenant-bound legacy paths. |
 | Multiple tenants/branches/departments | **Partial** | Schema and principal loader support the concept, but role/direct-permission mutation APIs remain tenant-scoped and do not require membership IDs. |
 | Membership statuses | **Partial** | `ACTIVE`, `SUSPENDED`, and `INVITED` are present. The full lifecycle and operational management endpoints are absent. |
-| Explicit active membership context | **Partial** | `/auth/me` and the switch endpoint expose membership information, but login and normal session restoration do not consistently establish an active membership context. |
-| Secure membership switching | **Partial** | `POST /api/v1/auth/membership/switch` validates user ownership and active status and writes an audit event. It returns a new access token but does not create or rotate a real session record for the switch, and no frontend context-switcher UI is integrated. |
-| JWT claims `user_id`, `active_membership_id`, `session_id` | **Not done end-to-end** | The helper can emit compatibility claims, but login, MFA, and refresh still call `generateAccessToken(jwt, tenantId, userId)` without membership or session arguments at `auth.controller.ts:136`, `:185`, and `:241`. The switch path uses the membership ID as a fallback session identifier rather than a verified session-record ID. |
+| Explicit active membership context | **Improved, still partial** | `/auth/me`, login, MFA, refresh, and switching now establish or preserve active membership context; membership lifecycle administration and legacy-session migration remain. |
+| Secure membership switching | **Improved, still partial** | `POST /api/v1/auth/membership/switch` validates ownership/status, updates the verified persistent session membership, issues a bound access token, writes an audit event, and is exposed in the header UI. Full lifecycle administration and database-backed integration tests remain. |
+| JWT claims `user_id`, `active_membership_id`, `session_id` | **Implemented for new flows; legacy fallback remains** | Login, MFA, refresh, and switching issue membership/session-bound claims backed by persistent sessions. The authentication decorator validates active session IDs when present; legacy tokens without the new claims remain accepted for migration compatibility. |
 | JWT must not be the authorization database | **Partial** | The membership loader resolves from PostgreSQL, but the normal legacy path still extracts and uses tenant claims when `active_membership_id` is absent. |
 | Legacy token compatibility | **Partial** | Compatibility is present, but the migration is not complete because new tokens are not consistently issued with active membership and session claims. |
 
@@ -56,14 +56,14 @@ The implementation is therefore **not ready to be declared enterprise-complete**
 | Requirement | Status | Evidence and finding |
 |---|---|---|
 | Preserve existing permission catalog | **Done** | Existing catalog remains in `packages/shared/src/authz/index.ts`. |
-| Direct user grants | **Partial** | Existing direct grants remain and are loaded by the principal resolver. The RBAC mutation API still writes tenant-wide grants rather than membership-scoped grants. |
-| Explicit user and role denials | **Partial** | Migration adds an `effect` column and the resolver evaluates `DENY`, but the RBAC API cannot create, update, list, or audit explicit denials. |
+| Direct user grants | **Improved, still partial** | Existing direct grants remain, and RBAC mutations accept membership targeting and explicit effects. Full membership lifecycle administration and database-backed mutation tests remain. |
+| Explicit user and role denials | **Improved, still partial** | User and custom-role mutations accept and persist explicit `ALLOW`/`DENY` effects with authorization-cache invalidation. Full denial precedence matrix and endpoint integration tests remain. |
 | Exact permissions | **Done** | `hasPermission()` handles exact matching. |
 | `*` wildcard | **Done** | `permissionKeyMatches()` and resolver logic support global wildcard matching. |
 | `module.*` wildcard | **Done in resolver; incomplete operationally** | The resolver supports module wildcards, but existing migration `033` expands most template grants into concrete rows and the runtime RBAC API still expands many grants before storage. The desired “resolve wildcards in the engine rather than duplicate concrete rows” behavior is not consistently enforced. |
 | Deterministic denial precedence | **Partial** | The current check gives any matching denial precedence over grants, but it does not implement the documented distinction among explicit-user deny, explicit-user allow, role deny, role allow, and wildcard grant. |
-| Single effective authorization resolver | **Partial** | `loadPrincipalForContext()` is centralized, but legacy module-specific helpers such as `canAccessPatient()` remain active and the new scope-policy registry is unused. |
-| Object API `authorize({ permission, scope })` | **Not done** | The active function remains `authorize(permission: string, requestedScope?: PermissionScope)` in `services/authorization.ts:215`; no object-form overload or `scope: 'auto'` support exists. |
+| Single effective authorization resolver | **Improved, still partial** | `loadPrincipalForContext()` remains central, while legacy patient helpers are retained for compatibility. The scope-policy registry is now used by major clinical, billing, pharmacy, HR, compliance, audit, and inventory paths, but not universally. |
+| Object API `authorize({ permission, scope })` | **Implemented with compatibility support** | The authorization service accepts the documented object form and preserves positional callers; automatic scope resolution and resolved scope are attached to request context. |
 | Authorization context attached to request | **Done for current path** | The active Fastify decorator attaches `req.ctx`, but it remains compatible with legacy tenant-based requests. |
 
 ### 4. Caching and invalidation
@@ -80,7 +80,7 @@ The implementation is therefore **not ready to be declared enterprise-complete**
 | Requirement | Status | Evidence and finding |
 |---|---|---|
 | Reusable data scopes | **Partial** | Existing `scopeQuery()` and new `scope-policy.ts` exist. |
-| Module-specific scope policies | **Partial, expanded** | Runtime calls now exist in patient, appointment, EMR, billing, laboratory, and radiology paths. Inventory, pharmacy, HR, compliance, audit, and remaining query categories still require integration. |
+| Module-specific scope policies | **Partial, substantially expanded** | Runtime calls now exist in patient, appointment, EMR, billing, laboratory, radiology, pharmacy, HR, compliance, and audit paths. Inventory branch/warehouse integration, remaining payroll/report/export/aggregate/bulk categories, and other modules still require integration. |
 | Apply scopes to every data-returning path | **Not done** | No repository-wide proof exists for all list, detail, search, export, report, aggregate, count, dashboard, analytics, and bulk-action paths. |
 | Tenant isolation | **Partial to strong** | Existing tenant filters, RLS support, and principal checks are present, but the requested zero-bypass audit is not complete. |
 | Branch isolation | **Partial** | Existing `scopeQuery()` supports branch filters, but policy application is not universal and membership branch context is not used consistently by all modules. |
@@ -129,7 +129,7 @@ The implementation is therefore **not ready to be declared enterprise-complete**
 |---|---|
 | Fully complete | Discovery/reference document, baseline permission preservation, exact permission checks, global/module wildcard matching in the resolver, basic membership table migration, basic switch endpoint, existing tenant protections, baseline tests/builds. |
 | Partially complete | Membership runtime, JWT compatibility, explicit denials, caching, audit coverage, frontend route/sidebar authorization, 39-role catalog, migration assurance. |
-| Not complete | Universal scope-policy enforcement across every module/query path, complete action-level frontend gating, comprehensive database-backed security/integration testing, inventory/pharmacy/HR/compliance/audit scope integration, and full membership/RBAC lifecycle hardening. |
+| Not complete | Universal scope-policy enforcement across every module/query path, complete action-level frontend gating, comprehensive database-backed security/integration testing, remaining payroll/report/export/aggregate/bulk scope coverage, and full membership/RBAC lifecycle hardening. |
 
 ## Final confirmation
 

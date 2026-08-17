@@ -3,7 +3,10 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
-import { authorize } from '../../services/authorization.js';
+import { authorize, canAccessPatient, type Principal } from '../../services/authorization.js';
+import { applyScopePolicy } from '../../services/scope-policy.js';
+import type { PermissionScope } from '@healthcare/shared/authz';
+import { ForbiddenError } from '@healthcare/shared/errors';
 import { logAudit } from '../../services/audit.js';
 
 interface CompliancePolicyRow {
@@ -70,11 +73,17 @@ interface BreachLogRow {
 }
 
 export async function registerComplianceModule(app: FastifyInstance) {
+  const resolveComplianceScope = (principal: Principal): PermissionScope =>
+    principal.grants.find((grant) => grant.permission === 'compliance.view' || grant.permission === '*')?.scope || 'tenant';
+
   // Policies
   app.get('/api/v1/compliance/policies', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { category, status } = request.query as { category?: string; status?: string };
+    const principal = getCtx(request).principal;
+    const scope = resolveComplianceScope(principal);
     let q = db('compliance_policies').where('compliance_policies.tenant_id', tenantId);
+    q = applyScopePolicy('compliance', q, principal, scope) as typeof q;
     if (category) q = q.andWhere('category', category);
     if (status) q = q.andWhere('status', status);
     const policies = await q.orderBy('title');
@@ -139,7 +148,10 @@ export async function registerComplianceModule(app: FastifyInstance) {
   app.get('/api/v1/compliance/audits', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status, type } = request.query as { status?: string; type?: string };
+    const principal = getCtx(request).principal;
+    const scope = resolveComplianceScope(principal);
     let q = db('compliance_audits').where('compliance_audits.tenant_id', tenantId);
+    q = applyScopePolicy('compliance', q, principal, scope) as typeof q;
     if (status) q = q.andWhere('status', status);
     if (type) q = q.andWhere('type', type);
     const audits = await q.orderBy('scheduled_date', 'desc').limit(50);
@@ -202,10 +214,13 @@ export async function registerComplianceModule(app: FastifyInstance) {
   app.get('/api/v1/compliance/consents', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { patientId } = request.query as { patientId?: string };
+    const principal = getCtx(request).principal;
+    const scope = resolveComplianceScope(principal);
     let q = db('data_consent_logs').where('data_consent_logs.tenant_id', tenantId);
+    q = q.leftJoin('patients', 'data_consent_logs.patient_id', 'patients.id');
+    q = applyScopePolicy('compliance_consent', q, principal, scope) as typeof q;
     if (patientId) q = q.andWhere('data_consent_logs.patient_id', patientId);
-    const consents = await q.leftJoin('patients', 'data_consent_logs.patient_id', 'patients.id')
-      .select('data_consent_logs.*', 'patients.first_name as pf', 'patients.last_name as pl')
+    const consents = await q.select('data_consent_logs.*', 'patients.first_name as pf', 'patients.last_name as pl')
       .orderBy('consented_at', 'desc').limit(50);
     return sendSuccess(reply, consents.map((c: DataConsentLogRow) => ({
       id: c.id, patientId: c.patient_id, patientName: `${c.pf || ''} ${c.pl || ''}`.trim(),
@@ -218,6 +233,8 @@ export async function registerComplianceModule(app: FastifyInstance) {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
+    const patient = await db('patients').where({ id: body.patientId, tenant_id: tenantId }).first();
+    if (!patient || !(await canAccessPatient(ctx.principal, patient))) throw new ForbiddenError('You do not have access to this patient');
     const [consent] = await db('data_consent_logs').insert({
       tenant_id: tenantId, patient_id: body.patientId,
       consent_type: body.consentType, granted: body.granted !== false,
@@ -239,7 +256,10 @@ export async function registerComplianceModule(app: FastifyInstance) {
   app.get('/api/v1/compliance/breaches', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status, severity } = request.query as { severity?: string; status?: string };
+    const principal = getCtx(request).principal;
+    const scope = resolveComplianceScope(principal);
     let q = db('breach_log').where('breach_log.tenant_id', tenantId);
+    q = applyScopePolicy('compliance', q, principal, scope) as typeof q;
     if (status) q = q.andWhere('breach_log.status', status);
     if (severity) q = q.andWhere('breach_log.severity', severity);
     const breaches = await q.orderBy('detected_date', 'desc').limit(50);

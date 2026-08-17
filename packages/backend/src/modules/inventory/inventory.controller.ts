@@ -1,5 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import type { PermissionScope } from '@healthcare/shared/authz';
+import type { Principal } from '../../services/authorization.js';
 import { sendSuccess } from '../../utils/response.js';
 import { ValidationError, NotFoundError } from '@healthcare/shared/errors';
 import { logAudit } from '../../services/audit.js';
@@ -15,6 +17,14 @@ import {
   transferStockSchema, dispenseStockSchema,
   createPurchaseOrderSchema, receivePurchaseOrderSchema,
 } from './inventory.schema.js';
+
+function inventoryContext(request: FastifyRequest): { principal: Principal; scope: PermissionScope } {
+  const principal = getCtx(request).principal;
+  return {
+    principal,
+    scope: principal.grants.find((grant) => grant.permission === 'inventory.view' || grant.permission === '*')?.scope || 'tenant',
+  };
+}
 
 // ══════════════════════════════════════════
 // #7: Suppliers
@@ -103,7 +113,7 @@ export async function listItems(request: FastifyRequest, reply: FastifyReply) {
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
   const { category, warehouseId, search } = request.query as Record<string, string | undefined>;
-  const items = await repo.findInventoryItems(tenantId, { category, warehouseId, search });
+  const items = await repo.findInventoryItems(tenantId, { category, warehouseId, search, ...inventoryContext(request) });
   try { await logAudit({ tenantId, userId, action: 'inventory.item.list', entityType: 'inventory_item' }); } catch {}
   return sendSuccess(reply, items.map(mapInventoryItem));
 }
@@ -112,7 +122,7 @@ export async function getItem(request: FastifyRequest, reply: FastifyReply) {
   const { itemId } = request.params as { itemId: string };
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
-  const item = await repo.findInventoryItemById(itemId, tenantId);
+  const item = await repo.findInventoryItemById(itemId, tenantId, inventoryContext(request));
   if (!item) throw new NotFoundError('Inventory item', itemId);
   try { await logAudit({ tenantId, userId, action: 'inventory.item.view', entityType: 'inventory_item', entityId: itemId }); } catch {}
   return sendSuccess(reply, mapInventoryItem(item));
@@ -122,7 +132,7 @@ export async function getItem(request: FastifyRequest, reply: FastifyReply) {
 export async function getItemByBarcode(request: FastifyRequest, reply: FastifyReply) {
   const { barcode } = request.params as { barcode: string };
   const tenantId = getTenantId(request);
-  const item = await repo.findItemByBarcode(barcode, tenantId);
+  const item = await repo.findItemByBarcode(barcode, tenantId, inventoryContext(request));
   if (!item) throw new NotFoundError('Item with barcode', barcode);
   return sendSuccess(reply, mapInventoryItem(item));
 }
@@ -167,7 +177,7 @@ export async function updateStock(request: FastifyRequest, reply: FastifyReply) 
 
   // ── #2: Prevent dispensing expired items ──
   if (body.type === 'dispensing' || body.type === 'issue') {
-    const item = await repo.findInventoryItemById(itemId, tenantId);
+    const item = await repo.findInventoryItemById(itemId, tenantId, inventoryContext(request));
     if (item?.expiry_date) {
       const today = new Date().toISOString().split('T')[0];
       if (item.expiry_date < today) {
@@ -205,7 +215,7 @@ export async function listTransactions(request: FastifyRequest, reply: FastifyRe
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
   const { itemId, type } = request.query as Record<string, string | undefined>;
-  const transactions = await repo.findTransactions(tenantId, { itemId, type });
+  const transactions = await repo.findTransactions(tenantId, { itemId, type, ...inventoryContext(request) });
   try { await logAudit({ tenantId, userId, action: 'inventory.transaction.list', entityType: 'inventory_item' }); } catch {}
   return sendSuccess(reply, transactions.map(mapInventoryTransaction));
 }
@@ -219,7 +229,7 @@ export async function createAdjustment(request: FastifyRequest, reply: FastifyRe
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
 
-  const item = await repo.findInventoryItemById(body.itemId, tenantId);
+  const item = await repo.findInventoryItemById(body.itemId, tenantId, inventoryContext(request));
   if (!item) throw new NotFoundError('Inventory item', body.itemId);
 
   // Prevent negative stock on adjustment
@@ -255,7 +265,7 @@ export async function transferStock(request: FastifyRequest, reply: FastifyReply
     throw new ValidationError('Source and destination warehouses must be different');
   }
 
-  const item = await repo.findInventoryItemById(body.itemId, tenantId);
+  const item = await repo.findInventoryItemById(body.itemId, tenantId, inventoryContext(request));
   if (!item) throw new NotFoundError('Inventory item', body.itemId);
 
   // Deduct from source
@@ -263,7 +273,7 @@ export async function transferStock(request: FastifyRequest, reply: FastifyReply
   if (!deductResult) throw new ValidationError('Insufficient stock for transfer');
 
   // Add to destination — find or create item in destination warehouse
-  let destItem = (await repo.findInventoryItems(tenantId, { warehouseId: body.toWarehouseId }))
+  let destItem = (await repo.findInventoryItems(tenantId, { warehouseId: body.toWarehouseId, ...inventoryContext(request) }))
     .find(i => i.sku === item.sku);
 
   if (!destItem) {
@@ -308,7 +318,7 @@ export async function transferStock(request: FastifyRequest, reply: FastifyReply
 
 export async function getLowStockAlerts(request: FastifyRequest, reply: FastifyReply) {
   const tenantId = getTenantId(request);
-  const items = await repo.findLowStockItems(tenantId);
+  const items = await repo.findLowStockItems(tenantId, inventoryContext(request));
   return sendSuccess(reply, items.map(mapLowStockAlert));
 }
 
@@ -316,7 +326,7 @@ export async function getLowStockAlerts(request: FastifyRequest, reply: FastifyR
 export async function getExpiredItems(request: FastifyRequest, reply: FastifyReply) {
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
-  const items = await repo.findExpiredItems(tenantId);
+  const items = await repo.findExpiredItems(tenantId, inventoryContext(request));
   try { await logAudit({ tenantId, userId, action: 'inventory.alert.expired', entityType: 'inventory_item' }); } catch {}
   return sendSuccess(reply, items.map(mapInventoryItem));
 }
@@ -325,7 +335,7 @@ export async function getExpiredItems(request: FastifyRequest, reply: FastifyRep
 export async function getControlledSubstances(request: FastifyRequest, reply: FastifyReply) {
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
-  const items = await repo.findControlledSubstances(tenantId);
+  const items = await repo.findControlledSubstances(tenantId, inventoryContext(request));
   await logAudit({ tenantId, userId, action: 'inventory.controlled_substance.viewed', entityType: 'inventory_item',
     metadata: { count: items.length },
   });
@@ -341,7 +351,7 @@ export async function getStockValuation(request: FastifyRequest, reply: FastifyR
   const { method } = request.query as { method?: string };
 
   if (method === 'fifo') {
-    const valuations = await repo.getFifoValuation(tenantId);
+    const valuations = await repo.getFifoValuation(tenantId, inventoryContext(request));
     const result = valuations.map(v => ({
       itemId: v.item_id, itemName: v.item_name,
       totalQuantity: v.total_quantity, fifoCost: Number(v.fifo_cost),
@@ -351,7 +361,7 @@ export async function getStockValuation(request: FastifyRequest, reply: FastifyR
   }
 
   // Default: weighted average
-  const valuations = await repo.getStockValuation(tenantId);
+  const valuations = await repo.getStockValuation(tenantId, inventoryContext(request));
   return sendSuccess(reply, valuations.map(mapStockValuation));
 }
 
@@ -364,7 +374,7 @@ export async function dispenseStock(request: FastifyRequest, reply: FastifyReply
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
 
-  const item = await repo.findInventoryItemById(body.itemId, tenantId);
+  const item = await repo.findInventoryItemById(body.itemId, tenantId, inventoryContext(request));
   if (!item) throw new NotFoundError('Inventory item', body.itemId);
 
   // ── #2: Prevent dispensing expired items ──
@@ -454,7 +464,7 @@ export async function listPurchaseOrders(request: FastifyRequest, reply: Fastify
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
   const { status } = request.query as { status?: string };
-  const pos = await repo.findPurchaseOrders(tenantId, status);
+  const pos = await repo.findPurchaseOrders(tenantId, status, inventoryContext(request));
   const posWithItems = await Promise.all(
     pos.map(async (po) => {
       const items = await repo.findPurchaseOrderItems(po.id, tenantId);
@@ -470,7 +480,7 @@ export async function getPurchaseOrder(request: FastifyRequest, reply: FastifyRe
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
 
-  const po = await repo.findPurchaseOrderById(poId, tenantId);
+  const po = await repo.findPurchaseOrderById(poId, tenantId, inventoryContext(request));
   if (!po) throw new NotFoundError('Purchase order', poId);
 
   const items = await repo.findPurchaseOrderItems(poId, tenantId);

@@ -3,7 +3,10 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
-import { authorize } from '../../services/authorization.js';
+import { authorize, canAccessPatient, type Principal } from '../../services/authorization.js';
+import { applyScopePolicy } from '../../services/scope-policy.js';
+import type { PermissionScope } from '@healthcare/shared/authz';
+import { ForbiddenError } from '@healthcare/shared/errors';
 import { logAudit } from '../../services/audit.js';
 
 interface PharmacyInventoryRow {
@@ -40,11 +43,17 @@ interface PharmacyPrescriptionItemRow {
 }
 
 export async function registerPharmacyModule(app: FastifyInstance) {
+  const resolvePharmacyScope = (principal: Principal): PermissionScope =>
+    principal.grants.find((grant) => grant.permission === 'pharmacy.view' || grant.permission === '*')?.scope || 'tenant';
+
   // Inventory
   app.get('/api/v1/pharmacy/inventory', { preHandler: [authenticate, authorize('pharmacy.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { search, status } = request.query as { search?: string; status?: string };
+    const principal = getCtx(request).principal;
+    const scope = resolvePharmacyScope(principal);
     let q = db('pharmacy_inventory').where({ tenant_id: tenantId });
+    q = applyScopePolicy('pharmacy_inventory', q, principal, scope) as typeof q;
     if (status) q = q.andWhere('status', status);
     if (search) q = q.andWhere(function() { this.where('drug_name', 'ilike', '%'+search+'%').orWhere('generic_name', 'ilike', '%'+search+'%'); });
     const items = await q.orderBy('drug_name');
@@ -74,6 +83,10 @@ export async function registerPharmacyModule(app: FastifyInstance) {
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
     const { quantity } = request.body as Record<string, unknown>;
+    const principal = getCtx(request).principal;
+    const scope = resolvePharmacyScope(principal);
+    const accessible = await applyScopePolicy('pharmacy_inventory', db('pharmacy_inventory').where({ id, tenant_id: tenantId }), principal, scope).first();
+    if (!accessible) throw new ForbiddenError('You do not have access to this pharmacy inventory item');
     await db('pharmacy_inventory').where({ id, tenant_id: tenantId }).increment('stock_quantity', Number(quantity)).update({ updated_at: new Date() });
 
     await logAudit({ tenantId, userId: ctx.userId, action: 'pharmacy.stock_updated', entityType: 'pharmacy_inventory', entityId: id, metadata: { quantity }, ipAddress: request.ip, userAgent: request.headers['user-agent'] as string });
@@ -85,11 +98,13 @@ export async function registerPharmacyModule(app: FastifyInstance) {
   app.get('/api/v1/pharmacy/prescriptions', { preHandler: [authenticate, authorize('pharmacy.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status, patientId } = request.query as { patientId?: string; status?: string };
-    let q = db('pharmacy_prescriptions').where('pharmacy_prescriptions.tenant_id', tenantId).whereNull('pharmacy_prescriptions.deleted_at');
+    const principal = getCtx(request).principal;
+    const scope = resolvePharmacyScope(principal);
+    let q = db('pharmacy_prescriptions').join('patients', 'pharmacy_prescriptions.patient_id', 'patients.id').where('pharmacy_prescriptions.tenant_id', tenantId).whereNull('pharmacy_prescriptions.deleted_at');
+    q = applyScopePolicy('pharmacy_prescriptions', q, principal, scope) as typeof q;
     if (status) q = q.andWhere('pharmacy_prescriptions.status', status);
     if (patientId) q = q.andWhere('pharmacy_prescriptions.patient_id', patientId);
-    const rows = await q.join('patients', 'pharmacy_prescriptions.patient_id', 'patients.id')
-      .select('pharmacy_prescriptions.*', 'patients.first_name as p_first', 'patients.last_name as p_last')
+    const rows = await q.select('pharmacy_prescriptions.*', 'patients.first_name as p_first', 'patients.last_name as p_last')
       .orderBy('created_at', 'desc').limit(50);
     return sendSuccess(reply, await Promise.all(rows.map(async (r: Record<string, unknown>) => {
       const items = await db('pharmacy_prescription_items').where({ prescription_id: r.id });
@@ -106,6 +121,8 @@ export async function registerPharmacyModule(app: FastifyInstance) {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
+    const patient = await db('patients').where({ id: body.patientId, tenant_id: tenantId }).first();
+    if (!patient || !(await canAccessPatient(ctx.principal, patient))) throw new ForbiddenError('You do not have access to this patient');
     const prescNum = "RX-" + Date.now().toString(36).toUpperCase();
     const [presc] = await db('pharmacy_prescriptions').insert({
       tenant_id: tenantId, patient_id: body.patientId, doctor_id: ctx.userId,
@@ -130,6 +147,10 @@ export async function registerPharmacyModule(app: FastifyInstance) {
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
     const { items } = request.body as Record<string, unknown>;
+    const principal = getCtx(request).principal;
+    const scope = resolvePharmacyScope(principal);
+    const accessible = await applyScopePolicy('pharmacy_prescriptions', db('pharmacy_prescriptions').join('patients', 'pharmacy_prescriptions.patient_id', 'patients.id').where({ 'pharmacy_prescriptions.id': id, 'pharmacy_prescriptions.tenant_id': tenantId }), principal, scope).first();
+    if (!accessible) throw new ForbiddenError('You do not have access to this prescription');
     if (Array.isArray(items) && items.length) {
       for (const it of items) {
         const item = it as Record<string, unknown>;

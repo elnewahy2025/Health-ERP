@@ -5,9 +5,14 @@ import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { sendSuccess, sendPaginated } from '../../utils/response.js';
 import type { AuditLogRow } from "../types.js";
 import { authenticate } from '../auth-guard.js';
-import { authorize } from '../../services/authorization.js';
+import { authorize, type Principal } from '../../services/authorization.js';
+import { applyScopePolicy } from '../../services/scope-policy.js';
+import type { PermissionScope } from '@healthcare/shared/authz';
 
 export async function registerAuditModule(app: FastifyInstance) {
+  const resolveAuditScope = (principal: Principal): PermissionScope =>
+    principal.grants.find((grant) => grant.permission === 'audit.view' || grant.permission === '*')?.scope || 'tenant';
+
   // List audit logs (paginated, filterable)
   app.get('/api/v1/audit-logs', { preHandler: [authenticate, authorize('audit.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
@@ -21,7 +26,8 @@ export async function registerAuditModule(app: FastifyInstance) {
       to: z.string().optional(),
     }).parse(request.query);
 
-    const qb = db('audit_logs').where({ tenant_id: tenantId });
+    const principal = getCtx(request).principal;
+    const qb = applyScopePolicy('audit', db('audit_logs').where({ tenant_id: tenantId }), principal, resolveAuditScope(principal));
 
     if (query.action) qb.andWhere('action', 'like', `${query.action}%`);
     if (query.entityType) qb.andWhere({ entity_type: query.entityType });
@@ -39,7 +45,8 @@ export async function registerAuditModule(app: FastifyInstance) {
   app.get('/api/v1/audit-logs/:id', { preHandler: [authenticate, authorize('audit.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-    const log = await db('audit_logs').where({ id, tenant_id: tenantId }).first();
+    const principal = getCtx(request).principal;
+    const log = await applyScopePolicy('audit', db('audit_logs').where({ id, tenant_id: tenantId }), principal, resolveAuditScope(principal)).first();
     if (!log) return reply.code(404).send({ error: 'Not found' });
     return sendSuccess(reply, log);
   });
@@ -47,7 +54,8 @@ export async function registerAuditModule(app: FastifyInstance) {
   // Get all distinct action types (for filtering)
   app.get('/api/v1/audit-logs/actions/types', { preHandler: [authenticate, authorize('audit.view')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
-    const actions = await db('audit_logs').where({ tenant_id: tenantId }).distinct('action').orderBy('action');
+    const principal = getCtx(request).principal;
+    const actions = await applyScopePolicy('audit', db('audit_logs').where({ tenant_id: tenantId }), principal, resolveAuditScope(principal)).distinct('action').orderBy('action');
     return sendSuccess(reply, actions.map((a: AuditLogRow) => a.action));
   });
 
@@ -56,7 +64,8 @@ export async function registerAuditModule(app: FastifyInstance) {
     const { tenantId } = getCtx(request);
     const query = z.object({ format: z.enum(['csv', 'json']).optional().default('json'), action: z.string().optional(), entityType: z.string().optional(), fromDate: z.string().optional(), toDate: z.string().optional() }).parse(request.query);
 
-    let dbQuery = db('audit_logs').where({ tenant_id: tenantId });
+    const principal = getCtx(request).principal;
+    let dbQuery = applyScopePolicy('audit', db('audit_logs').where({ tenant_id: tenantId }), principal, resolveAuditScope(principal));
     if (query.action) dbQuery = dbQuery.andWhere({ action: query.action });
     if (query.entityType) dbQuery = dbQuery.andWhere({ entity_type: query.entityType });
     if (query.fromDate) dbQuery = dbQuery.andWhere('created_at', '>=', query.fromDate);

@@ -73,3 +73,29 @@ describe('membership-bound access-token claims', () => {
     });
   });
 });
+
+describe('remaining high-risk module policies', () => {
+  it('scopes pharmacy inventory to the principal tenant and branches', () => {
+    const query = new FakeQuery();
+    applyScopePolicy('pharmacy_inventory', query as any, principal([{ permission: 'pharmacy.view', scope: 'branch' }]), 'branch');
+    expect(query.calls).toEqual([
+      { method: 'andWhere', args: ['pharmacy_inventory.tenant_id', 'tenant-1'] },
+      { method: 'whereIn', args: ['pharmacy_inventory.branch_id', ['branch-1']] },
+    ]);
+  });
+
+  it('scopes HR employees to the principal department', () => {
+    const query = new FakeQuery();
+    applyScopePolicy('hr', query as any, principal([{ permission: 'hr.view', scope: 'department' }]), 'department');
+    expect(query.calls).toEqual([
+      { method: 'andWhere', args: ['employees.tenant_id', 'tenant-1'] },
+      { method: 'andWhere', args: ['employees.department_id', 'department-1'] },
+    ]);
+  });
+
+  it('adds an assigned-patient relationship constraint to consent logs', () => {
+    const query = new FakeQuery();
+    applyScopePolicy('compliance_consent', query as any, principal([{ permission: 'compliance.view', scope: 'assigned_patients' }]), 'assigned_patients');
+    expect(query.calls.some((call) => call.method === 'whereExists')).toBe(true);
+  });
+});

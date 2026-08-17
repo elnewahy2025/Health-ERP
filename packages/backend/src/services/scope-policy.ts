@@ -52,6 +52,75 @@ const departmentPolicy: ScopePolicy = (qb, principal, scope) =>
 const branchPolicy: ScopePolicy = (qb, principal, scope) =>
   scopeQuery(qb, principal, { scope, tenantColumn: 'tenant_id', branchColumn: 'branch_id' });
 
+const complianceConsentPolicy: ScopePolicy = (qb, principal, scope) => {
+  const constrained = scopeQuery(qb, principal, {
+    scope,
+    tenantColumn: 'data_consent_logs.tenant_id',
+    branchColumn: 'patients.branch_id',
+    departmentColumn: 'patients.department_id',
+  });
+  if (scope === 'assigned_patients') {
+    return constrained.whereExists(function assignedConsentPatients() {
+      this.select(1)
+        .from('appointments')
+        .whereRaw('appointments.patient_id = data_consent_logs.patient_id')
+        .andWhere('appointments.tenant_id', principal.tenantId)
+        .andWhere('appointments.doctor_id', principal.id);
+    });
+  }
+  return constrained;
+};
+
+const hrEmployeePolicy: ScopePolicy = (qb, principal, scope) =>
+  scopeQuery(qb, principal, {
+    scope,
+    tenantColumn: 'employees.tenant_id',
+    branchColumn: 'employees.branch_id',
+    departmentColumn: 'employees.department_id',
+  });
+
+const hrAttendancePolicy: ScopePolicy = (qb, principal, scope) =>
+  scopeQuery(qb, principal, {
+    scope,
+    tenantColumn: 'attendance.tenant_id',
+    branchColumn: 'employees.branch_id',
+    departmentColumn: 'employees.department_id',
+  });
+
+const hrLeavePolicy: ScopePolicy = (qb, principal, scope) =>
+  scopeQuery(qb, principal, {
+    scope,
+    tenantColumn: 'leave_requests.tenant_id',
+    branchColumn: 'employees.branch_id',
+    departmentColumn: 'employees.department_id',
+  });
+
+const pharmacyInventoryPolicy: ScopePolicy = (qb, principal, scope) =>
+  scopeQuery(qb, principal, {
+    scope,
+    tenantColumn: 'pharmacy_inventory.tenant_id',
+    branchColumn: 'pharmacy_inventory.branch_id',
+  });
+
+const pharmacyPrescriptionPolicy: ScopePolicy = (qb, principal, scope) => {
+  const constrained = scopeQuery(qb, principal, {
+    scope,
+    tenantColumn: 'pharmacy_prescriptions.tenant_id',
+    branchColumn: 'patients.branch_id',
+    departmentColumn: 'patients.department_id',
+  });
+  if (scope === 'assigned_patients') {
+    return constrained.whereExists(function assignedPharmacyPatients() {
+      this.select(1)
+        .from('appointments')
+        .whereRaw('appointments.patient_id = pharmacy_prescriptions.patient_id')
+        .andWhere('appointments.tenant_id', principal.tenantId)
+        .andWhere('appointments.doctor_id', principal.id);
+    });
+  }
+  return constrained;
+};
+
 const laboratoryPolicy: ScopePolicy = (qb, principal, scope) => {
   const constrained = scopeQuery(qb, principal, {
     scope,
@@ -90,6 +159,13 @@ const radiologyPolicy: ScopePolicy = (qb, principal, scope) => {
   return constrained;
 };
 
+const inventoryPurchaseOrderPolicy: ScopePolicy = (qb, principal, scope) =>
+  scopeQuery(qb, principal, {
+    scope,
+    tenantColumn: 'purchase_orders.tenant_id',
+    branchColumn: 'warehouses.branch_id',
+  });
+
 const inventoryPolicy: ScopePolicy = (qb, principal, scope) =>
   scopeQuery(qb, principal, {
     scope,
@@ -120,16 +196,22 @@ export const SCOPE_POLICIES: Record<string, ScopePolicy> = {
   patients: patientsPolicy,
   appointments: appointmentsPolicy,
   emr: emrPolicy,
-  hr: departmentPolicy,
+  hr: hrEmployeePolicy,
+  hr_attendance: hrAttendancePolicy,
+  hr_leave: hrLeavePolicy,
   inventory: inventoryPolicy,
+  inventory_purchase_orders: inventoryPurchaseOrderPolicy,
   billing: billingPolicy,
-  finance: tenantOnly,
+  compliance: tenantOnly,
+  compliance_consent: complianceConsentPolicy,
   reports: tenantOnly,
   audit: tenantOnly,
   documents: patientsPolicy,
   laboratory: laboratoryPolicy,
   radiology: radiologyPolicy,
-  pharmacy: branchPolicy,
+  pharmacy: pharmacyPrescriptionPolicy,
+  pharmacy_inventory: pharmacyInventoryPolicy,
+  pharmacy_prescriptions: pharmacyPrescriptionPolicy,
 };
 
 /** Apply the policy for a module; unknown modules fail closed to tenant scope. */

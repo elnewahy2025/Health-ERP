@@ -3,6 +3,11 @@ import type {
   WarehouseRow, InventoryItemRow, InventoryTransactionRow,
   PurchaseOrderRow, PurchaseOrderItemRow, SupplierRow,
 } from './types.js';
+import type { PermissionScope } from '@healthcare/shared/authz';
+import type { Principal } from '../../services/authorization.js';
+import { applyScopePolicy } from '../../services/scope-policy.js';
+
+type InventoryScope = { principal?: Principal; scope?: PermissionScope };
 
 // ── #7: Suppliers ──
 
@@ -62,7 +67,7 @@ export async function createWarehouse(
 
 export async function findInventoryItems(
   tenantId: string,
-  filters: { category?: string; warehouseId?: string; search?: string },
+  filters: { category?: string; warehouseId?: string; search?: string } & InventoryScope,
 ): Promise<(InventoryItemRow & { wh_name?: string })[]> {
   let query = db('inventory_items')
     .where('inventory_items.tenant_id', tenantId)
@@ -79,32 +84,35 @@ export async function findInventoryItems(
     });
   }
 
+  query = query.leftJoin('warehouses', 'inventory_items.warehouse_id', 'warehouses.id');
+  if (filters.principal && filters.scope) query = applyScopePolicy('inventory', query, filters.principal, filters.scope) as typeof query;
   return query
-    .leftJoin('warehouses', 'inventory_items.warehouse_id', 'warehouses.id')
     .select('inventory_items.*', 'warehouses.name as wh_name')
     .orderBy('inventory_items.name');
 }
 
 export async function findInventoryItemById(
-  itemId: string, tenantId: string,
+  itemId: string, tenantId: string, context?: InventoryScope,
 ): Promise<InventoryItemRow | undefined> {
-  return db('inventory_items')
-    .where({ id: itemId, tenant_id: tenantId })
-    .whereNull('deleted_at')
-    .first();
+  let query = db('inventory_items')
+    .leftJoin('warehouses', 'inventory_items.warehouse_id', 'warehouses.id')
+    .where({ 'inventory_items.id': itemId, 'inventory_items.tenant_id': tenantId })
+    .whereNull('inventory_items.deleted_at');
+  if (context?.principal && context.scope) query = applyScopePolicy('inventory', query, context.principal, context.scope) as typeof query;
+  return query.select('inventory_items.*').first();
 }
 
 // ── #9: Barcode lookup ──
 export async function findItemByBarcode(
-  barcode: string, tenantId: string,
+  barcode: string, tenantId: string, context?: InventoryScope,
 ): Promise<(InventoryItemRow & { wh_name?: string }) | undefined> {
-  return db('inventory_items')
+  let query = db('inventory_items')
     .leftJoin('warehouses', 'inventory_items.warehouse_id', 'warehouses.id')
     .where('inventory_items.barcode', barcode)
     .where('inventory_items.tenant_id', tenantId)
-    .whereNull('inventory_items.deleted_at')
-    .select('inventory_items.*', 'warehouses.name as wh_name')
-    .first();
+    .whereNull('inventory_items.deleted_at');
+  if (context?.principal && context.scope) query = applyScopePolicy('inventory', query, context.principal, context.scope) as typeof query;
+  return query.select('inventory_items.*', 'warehouses.name as wh_name').first();
 }
 
 export async function createInventoryItem(
@@ -164,12 +172,14 @@ export async function findFifoItem(
 
 // ── #2: Check for expired items ──
 export async function findExpiredItems(
-  tenantId: string,
+  tenantId: string, context?: InventoryScope,
 ): Promise<(InventoryItemRow & { wh_name?: string })[]> {
-  return db('inventory_items')
+  let query = db('inventory_items')
     .leftJoin('warehouses', 'inventory_items.warehouse_id', 'warehouses.id')
     .where('inventory_items.tenant_id', tenantId)
-    .whereNull('inventory_items.deleted_at')
+    .whereNull('inventory_items.deleted_at');
+  if (context?.principal && context.scope) query = applyScopePolicy('inventory', query, context.principal, context.scope) as typeof query;
+  return query
     .where('inventory_items.expiry_date', '<', new Date().toISOString().split('T')[0])
     .where('inventory_items.quantity', '>', 0)
     .select('inventory_items.*', 'warehouses.name as wh_name')
@@ -178,12 +188,14 @@ export async function findExpiredItems(
 
 // ── #5: Low stock alerts ──
 export async function findLowStockItems(
-  tenantId: string,
+  tenantId: string, context?: InventoryScope,
 ): Promise<(InventoryItemRow & { wh_name?: string })[]> {
-  return db('inventory_items')
+  let query = db('inventory_items')
     .leftJoin('warehouses', 'inventory_items.warehouse_id', 'warehouses.id')
     .where('inventory_items.tenant_id', tenantId)
-    .whereNull('inventory_items.deleted_at')
+    .whereNull('inventory_items.deleted_at');
+  if (context?.principal && context.scope) query = applyScopePolicy('inventory', query, context.principal, context.scope) as typeof query;
+  return query
     .whereRaw('inventory_items.quantity <= inventory_items.reorder_point')
     .where('inventory_items.status', '!=', 'discontinued')
     .select('inventory_items.*', 'warehouses.name as wh_name')
@@ -192,12 +204,14 @@ export async function findLowStockItems(
 
 // ── #11: Controlled substance items ──
 export async function findControlledSubstances(
-  tenantId: string,
+  tenantId: string, context?: InventoryScope,
 ): Promise<(InventoryItemRow & { wh_name?: string })[]> {
-  return db('inventory_items')
+  let query = db('inventory_items')
     .leftJoin('warehouses', 'inventory_items.warehouse_id', 'warehouses.id')
     .where('inventory_items.tenant_id', tenantId)
-    .whereNull('inventory_items.deleted_at')
+    .whereNull('inventory_items.deleted_at');
+  if (context?.principal && context.scope) query = applyScopePolicy('inventory', query, context.principal, context.scope) as typeof query;
+  return query
     .where('inventory_items.controlled_substance_class', '!=', 'none')
     .whereNotNull('inventory_items.controlled_substance_class')
     .where('inventory_items.quantity', '>', 0)
@@ -229,15 +243,17 @@ export async function insertTransaction(data: {
 
 export async function findTransactions(
   tenantId: string,
-  filters: { itemId?: string; type?: string },
+  filters: { itemId?: string; type?: string } & InventoryScope,
 ): Promise<(InventoryTransactionRow & { item_name?: string })[]> {
   let query = db('inventory_transactions')
+    .leftJoin('inventory_items', 'inventory_transactions.item_id', 'inventory_items.id')
+    .leftJoin('warehouses', 'inventory_items.warehouse_id', 'warehouses.id')
     .where('inventory_transactions.tenant_id', tenantId);
+  if (filters.principal && filters.scope) query = applyScopePolicy('inventory', query, filters.principal, filters.scope) as typeof query;
   if (filters.itemId) query = query.andWhere('inventory_transactions.item_id', filters.itemId);
   if (filters.type) query = query.andWhere('inventory_transactions.type', filters.type);
 
   return query
-    .leftJoin('inventory_items', 'inventory_transactions.item_id', 'inventory_items.id')
     .select('inventory_transactions.*', 'inventory_items.name as item_name')
     .orderBy('inventory_transactions.created_at', 'desc')
     .limit(200);
@@ -245,10 +261,14 @@ export async function findTransactions(
 
 // ── #12: Stock valuation (weighted average cost) ──
 export async function getStockValuation(
-  tenantId: string,
+  tenantId: string, context?: InventoryScope,
 ): Promise<{ item_id: string; item_name: string; total_quantity: number; avg_cost: number }[]> {
-  return db('inventory_items')
+  let query = db('inventory_items')
+    .leftJoin('warehouses', 'inventory_items.warehouse_id', 'warehouses.id')
     .where('inventory_items.tenant_id', tenantId)
+    .whereNull('inventory_items.deleted_at');
+  if (context?.principal && context.scope) query = applyScopePolicy('inventory', query, context.principal, context.scope) as typeof query;
+  return query
     .whereNull('inventory_items.deleted_at')
     .where('inventory_items.quantity', '>', 0)
     .select(
@@ -262,11 +282,14 @@ export async function getStockValuation(
 
 // ── #12: FIFO valuation — cost based on receipt transactions in order ──
 export async function getFifoValuation(
-  tenantId: string,
+  tenantId: string, context?: InventoryScope,
 ): Promise<{ item_id: string; item_name: string; total_quantity: number; fifo_cost: number }[]> {
-  const items = await db('inventory_items')
+  let itemQuery = db('inventory_items')
+    .leftJoin('warehouses', 'inventory_items.warehouse_id', 'warehouses.id')
     .where('inventory_items.tenant_id', tenantId)
-    .whereNull('inventory_items.deleted_at')
+    .whereNull('inventory_items.deleted_at');
+  if (context?.principal && context.scope) itemQuery = applyScopePolicy('inventory', itemQuery, context.principal, context.scope) as typeof itemQuery;
+  const items = await itemQuery
     .where('inventory_items.quantity', '>', 0)
     .select('inventory_items.id', 'inventory_items.name', 'inventory_items.quantity as total_quantity')
     .orderBy('inventory_items.name');
@@ -307,17 +330,23 @@ export async function getFifoValuation(
 // ── Purchase Orders ──
 
 export async function findPurchaseOrders(
-  tenantId: string, status?: string,
+  tenantId: string, status?: string, context?: InventoryScope,
 ): Promise<PurchaseOrderRow[]> {
   let query = db('purchase_orders')
+    .leftJoin('warehouses', 'purchase_orders.warehouse_id', 'warehouses.id')
     .where('purchase_orders.tenant_id', tenantId)
     .whereNull('purchase_orders.deleted_at');
+  if (context?.principal && context.scope) query = applyScopePolicy('inventory_purchase_orders', query, context.principal, context.scope) as typeof query;
   if (status) query = query.andWhere('purchase_orders.status', status);
-  return query.orderBy('created_at', 'desc').limit(50);
+  return query.select('purchase_orders.*').orderBy('purchase_orders.created_at', 'desc').limit(50);
 }
 
-export async function findPurchaseOrderById(poId: string, tenantId: string): Promise<PurchaseOrderRow | undefined> {
-  return db('purchase_orders').where({ id: poId, tenant_id: tenantId }).first();
+export async function findPurchaseOrderById(poId: string, tenantId: string, context?: InventoryScope): Promise<PurchaseOrderRow | undefined> {
+  let query = db('purchase_orders')
+    .leftJoin('warehouses', 'purchase_orders.warehouse_id', 'warehouses.id')
+    .where({ 'purchase_orders.id': poId, 'purchase_orders.tenant_id': tenantId });
+  if (context?.principal && context.scope) query = applyScopePolicy('inventory_purchase_orders', query, context.principal, context.scope) as typeof query;
+  return query.select('purchase_orders.*').first();
 }
 
 export async function findPurchaseOrderItems(poId: string, tenantId: string): Promise<PurchaseOrderItemRow[]> {

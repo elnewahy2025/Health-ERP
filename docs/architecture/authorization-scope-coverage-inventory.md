@@ -1,11 +1,11 @@
 # Authorization Scope-Coverage Inventory
 
 **Reviewed:** 2026-08-17  
-**Baseline commit:** `3a98e7a`
+**Latest reviewed commit:** pending next-scope increment after `8cb6f39`
 
 ## Current runtime call sites
 
-The centralized `applyScopePolicy()` registry is currently invoked by the patient repository for list, quick-search, and trigram-search paths, and by the appointment repository for list, daily-summary, and bulk-cancellation paths. These are the first production integrations of the new module-specific policy layer.
+The centralized `applyScopePolicy()` registry is now invoked by patient and appointment repositories, EMR and billing handlers, laboratory and radiology order paths, pharmacy inventory/prescription paths, HR employee/attendance/leave paths, compliance lists and patient-consent paths, audit list/detail/filter/export paths, and inventory item/transaction/alert/valuation/purchase-order paths.
 
 ## Remaining high-risk coverage targets
 
@@ -14,18 +14,18 @@ The centralized `applyScopePolicy()` registry is currently invoked by the patien
 | EMR | 16 | Critical | Patient/encounter list, detail, search, timeline, and export paths. |
 | Billing | 14 | Critical | Invoice/payment list, detail, search, aging/aggregate, and export paths. |
 | Reports | 9 | Critical | Report data, dashboards, aggregates, and export/download paths. |
-| Inventory | 24 | High | Stock, item, movement, purchase, and bulk-adjustment paths. |
-| Compliance | 7 | High | Policy, audit, consent, and breach list/detail/export paths. |
-| HR | 5 | High | Employee list/detail/search and sensitive export paths. |
-| Laboratory | 5 | High | Lab-order list/detail/search and result access paths. |
-| Pharmacy | 5 | High | Prescription list/detail/dispense and inventory mutation paths. |
+| Inventory | 24 | **Expanded** | Item, transaction, alert, valuation, and purchase-order list/detail paths now use warehouse branch context. Stock mutation and receive paths still require a complete write-path ownership matrix. |
+| Compliance | 7 | **Expanded** | Policy, audit, consent, and breach list paths now use centralized tenant/patient policies; all update/export variants still require a full matrix. |
+| HR | 5 | **Expanded** | Employee, attendance, and leave list/write paths now use new branch/department context; payroll and all sensitive employee detail/export paths remain. |
+| Laboratory | 5 | **Expanded** | Lab-order list/status/result paths now invoke patient-linked scope policy. |
+| Pharmacy | 5 | **Expanded** | Inventory list/stock and prescription list/create/dispense paths now use branch/patient-linked policies; migration `044` adds inventory branch context. |
 | Radiology | 3 | High | Radiology-order list/detail/report paths. |
-| Audit | 4 | Critical | Audit list/detail/action filters and export paths. |
+| Audit | 4 | **Expanded** | Audit list/detail/action-filter/export paths now invoke the centralized tenant policy. |
 | Documents | 0 detected | High | Module directory was absent in the current source tree; route registration and storage paths require separate verification. |
 
 ## Cross-cutting findings
 
-The current modules generally enforce `tenant_id` directly, but most do not pass the authenticated principal and effective logical scope into `applyScopePolicy()`. Consequently, branch, department, assigned-patient, and self scopes are not uniformly applied to list, detail, search, aggregate, export, dashboard, and bulk-action paths.
+The remaining modules now pass authenticated principals and effective logical scopes into the policy registry on their principal list/detail paths. Coverage is still not universal: inventory write/receive paths, HR payroll, compliance updates/exports, and other modules/query categories require additional endpoint-by-endpoint proof. Migrations `044_pharmacy_scope_context.ts`, `045_hr_scope_context.ts`, and `046_inventory_scope_context.ts` add nullable branch/department context without mutating legacy rows.
 
 The next implementation pass should introduce a small repository-level helper or module adapter per high-risk module rather than duplicating permission logic in individual handlers. Each adapter must apply tenant isolation first, then branch/department/assigned/self constraints, before count, aggregate, export, or pagination operations are executed.
 
