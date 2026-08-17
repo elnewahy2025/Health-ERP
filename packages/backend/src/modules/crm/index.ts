@@ -15,7 +15,7 @@ export async function registerCrmModule(app: FastifyInstance) {
     return sendSuccess(reply, rows.map((c: Record<string, unknown>) => ({ id: c.id, name: c.name, type: c.type, status: c.status, description: c.description, startDate: c.start_date, endDate: c.end_date, budget: Number(c.budget), targetCount: c.target_count, reachedCount: c.reached_count, conversionCount: c.conversion_count })));
   });
 
-  app.post('/api/v1/crm/campaigns', { preHandler: [authenticate, authorize('crm.view')] }, async (request, reply) => {
+  app.post('/api/v1/crm/campaigns', { preHandler: [authenticate, authorize('crm.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
     const [camp] = await db('crm_campaigns').insert({ tenant_id: tenantId, name: body.name, type: body.type || 'email', description: body.description, start_date: body.startDate, end_date: body.endDate, budget: body.budget || 0, target_count: body.targetCount || 0, created_by: ctx.userId }).returning('*');
     return sendSuccess(reply, { id: camp.id, name: camp.name }, 'Campaign created', 201);

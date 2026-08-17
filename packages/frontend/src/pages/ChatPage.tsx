@@ -9,6 +9,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
+import { Can } from '../components/auth/Authorization';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -259,10 +260,12 @@ export default function ChatPage() {
             <p className="text-sm text-gray-500">{t('chat.subtitle')}</p>
           </div>
         </div>
-        <Button onClick={() => setShowNewConv(true)}>
-          <Plus className="w-4 h-4 mr-1" />
-          {t('chat.newConversation')}
-        </Button>
+        <Can permission="chat.create">
+          <Button onClick={() => setShowNewConv(true)}>
+            <Plus className="w-4 h-4 mr-1" />
+            {t('chat.newConversation')}
+          </Button>
+        </Can>
       </div>
 
       {/* Chat Layout */}
@@ -392,13 +395,15 @@ export default function ChatPage() {
                       onKeyDown={handleKeyDown}
                     />
                   </div>
-                  <Button
-                    onClick={() => void handleSend()}
-                    disabled={sending || !newMessage.trim()}
-                    size="lg"
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
+                  <Can permission="chat.create">
+                    <Button
+                      onClick={() => void handleSend()}
+                      disabled={sending || !newMessage.trim()}
+                      size="lg"
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </Can>
                 </div>
                 <p className="text-xs text-gray-400 mt-1">{t('chat.pressEnter')}</p>
               </div>
@@ -425,9 +430,11 @@ export default function ChatPage() {
             <Button variant="secondary" onClick={() => setShowNewConv(false)}>
               {t('common.cancel')}
             </Button>
-            <Button onClick={() => void handleCreateConv()}>
-              {t('chat.createConv')}
-            </Button>
+            <Can permission="chat.create">
+              <Button onClick={() => void handleCreateConv()}>
+                {t('chat.createConv')}
+              </Button>
+            </Can>
           </div>
         }
       >

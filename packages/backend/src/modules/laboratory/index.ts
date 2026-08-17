@@ -6,7 +6,7 @@ import { PatientNotFoundError } from '@healthcare/shared/errors';
 import { authenticate } from '../auth-guard.js';
 import { authorize, type Principal } from '../../services/authorization.js';
 import { applyScopePolicy } from '../../services/scope-policy.js';
-import type { PermissionScope } from '@healthcare/shared/authz';
+import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 import { ForbiddenError } from '@healthcare/shared/errors';
 import { logAudit } from '../../services/audit.js';
 
@@ -42,8 +42,8 @@ interface LabOrderRow {
 }
 
 export async function registerLaboratoryModule(app: FastifyInstance) {
-  const resolveLabScope = (principal: Principal): PermissionScope =>
-    principal.grants.find((grant) => grant.permission === 'laboratory.view' || grant.permission === '*')?.scope || 'tenant';
+  const resolveLabScope = (principal: Principal, permission = 'laboratory.view'): PermissionScope =>
+    principal.grants.find((grant) => grant.permission === '*' || permissionKeyMatches(grant.permission, permission))?.scope || 'tenant';
 
   app.get('/api/v1/lab/catalog', { preHandler: [authenticate, authorize('laboratory.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
@@ -55,7 +55,7 @@ export async function registerLaboratoryModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/lab/catalog', { preHandler: [authenticate, authorize('laboratory.view')] }, async (request, reply) => {
+  app.post('/api/v1/lab/catalog', { preHandler: [authenticate, authorize('laboratory.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -84,7 +84,7 @@ export async function registerLaboratoryModule(app: FastifyInstance) {
     return sendSuccess(reply, orders.map(mapLabOrder));
   });
 
-  app.post('/api/v1/lab/orders', { preHandler: [authenticate, authorize('laboratory.view')] }, async (request, reply) => {
+  app.post('/api/v1/lab/orders', { preHandler: [authenticate, authorize('laboratory.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -110,13 +110,13 @@ export async function registerLaboratoryModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: order.id, orderNumber: order.order_number }, 'Lab order created', 201);
   });
 
-  app.put('/api/v1/lab/orders/:id/status', { preHandler: [authenticate, authorize('laboratory.view')] }, async (request, reply) => {
+  app.put('/api/v1/lab/orders/:id/status', { preHandler: [authenticate, authorize('laboratory.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
     const body = request.body as Record<string, unknown>;
     const principal = getCtx(request).principal;
-    const scope = resolveLabScope(principal);
+    const scope = resolveLabScope(principal, 'laboratory.edit');
     const accessible = await applyScopePolicy('laboratory', db('lab_orders').join('patients', 'lab_orders.patient_id', 'patients.id').where({ 'lab_orders.id': id, 'lab_orders.tenant_id': tenantId }), principal, scope).first();
     if (!accessible) throw new ForbiddenError('You do not have access to this lab order');
     const update: Record<string, unknown> = { status: body.status, updated_at: new Date() };
@@ -130,13 +130,13 @@ export async function registerLaboratoryModule(app: FastifyInstance) {
     return sendSuccess(reply, null, "Lab order updated");
   });
 
-  app.post('/api/v1/lab/orders/:id/results', { preHandler: [authenticate, authorize('laboratory.view')] }, async (request, reply) => {
+  app.post('/api/v1/lab/orders/:id/results', { preHandler: [authenticate, authorize('laboratory.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
     const { tests } = request.body as Record<string, unknown>;
     const principal = getCtx(request).principal;
-    const scope = resolveLabScope(principal);
+    const scope = resolveLabScope(principal, 'laboratory.edit');
     const accessible = await applyScopePolicy('laboratory', db('lab_orders').join('patients', 'lab_orders.patient_id', 'patients.id').where({ 'lab_orders.id': id, 'lab_orders.tenant_id': tenantId }), principal, scope).first();
     if (!accessible) throw new ForbiddenError('You do not have access to this lab order');
     if (Array.isArray(tests) && tests.length) {

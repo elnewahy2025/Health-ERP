@@ -3,6 +3,8 @@ import { z } from 'zod';
 import {
   PERMISSION_CATALOG,
   SEED_ROLES,
+  HOSPITAL_ROLE_CATALOG,
+  hospitalRoleTemplate,
   expandRoleGrants,
   expandGrantKey,
   allPermissionKeys,
@@ -70,24 +72,40 @@ export async function registerRbacModule(app: FastifyInstance) {
         id: null,
         slug: String(row.slug),
         name: String(row.name),
-        level: String(row.slug) === 'super_administrator' ? 'system' : 'tenant',
+        level: String(row.level || (String(row.slug) === 'super_administrator' ? 'system' : 'tenant')),
         scopeDefault: String(row.default_scope),
         description: row.description || null,
         isSystem: true,
         grants: typeof row.grants === 'string' ? JSON.parse(row.grants) : (row.grants || {}),
         denials: typeof row.denials === 'string' ? JSON.parse(row.denials) : (row.denials || []),
       }))
-      : Object.entries(SEED_ROLES).map(([slug, template]) => ({
-        id: null,
-        slug,
-        name: slug.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        level: template.level,
-        scopeDefault: template.scopeDefault,
-        description: template.description || null,
-        isSystem: true,
-        grants: expandRoleGrants(template),
-        denials: [],
-      }));
+      : [
+        ...Object.entries(SEED_ROLES).map(([slug, template]) => ({
+          id: null,
+          slug,
+          name: slug.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+          level: template.level,
+          scopeDefault: template.scopeDefault,
+          description: template.description || null,
+          isSystem: true,
+          grants: expandRoleGrants(template),
+          denials: [],
+        })),
+        ...HOSPITAL_ROLE_CATALOG.map(([slug, name]) => {
+          const template = hospitalRoleTemplate(slug);
+          return {
+            id: null,
+            slug,
+            name,
+            level: template?.level || 'tenant',
+            scopeDefault: template?.scopeDefault || 'tenant',
+            description: template?.description || null,
+            isSystem: true,
+            grants: template ? Object.entries(template.grants).flatMap(([permission, scopes]) => scopes.map((scope) => ({ permission, scope }))) : [],
+            denials: [],
+          };
+        }),
+      ];
 
     const dbRoles = await db('roles').where({ tenant_id: tenantId }).select('*');
     const merged: Array<Record<string, unknown>> = [];
@@ -129,7 +147,9 @@ export async function registerRbacModule(app: FastifyInstance) {
       ? await db('role_template_catalog').where({ slug: body.templateSlug, is_system: true }).first()
       : null;
     const fallback = SEED_ROLES[body.templateSlug];
-    if (!catalogRow && !fallback) return sendError(reply, 'System role template not found', 404);
+    const catalogFallback = hospitalRoleTemplate(body.templateSlug);
+    const fallbackTemplate = catalogFallback || fallback;
+    if (!catalogRow && !fallbackTemplate) return sendError(reply, 'System role template not found', 404);
 
     const grantRows: Array<{ permission: string; scope: PermissionScope; effect: 'ALLOW' | 'DENY' }> = [];
     if (catalogRow) {
@@ -142,7 +162,7 @@ export async function registerRbacModule(app: FastifyInstance) {
         grantRows.push(...expandPermissionInputs([denial.permission], denial.scope, 'DENY'));
       }
     } else {
-      grantRows.push(...expandRoleGrants(fallback!).map((grant) => ({ permission: grant.permission, scope: grant.scope, effect: 'ALLOW' as const })));
+      grantRows.push(...Object.entries(fallbackTemplate!.grants).flatMap(([permission, scopes]) => scopes.flatMap((scope) => expandPermissionInputs([permission], scope, 'ALLOW'))));
     }
     const isSuper = hasPermission(principal, '*');
     if (!isSuper) {
@@ -158,11 +178,11 @@ export async function registerRbacModule(app: FastifyInstance) {
         tenant_id: tenantId,
         name: body.name,
         slug: body.slug,
-        description: catalogRow?.description || fallback?.description || null,
+        description: catalogRow?.description || fallbackTemplate?.description || null,
         permissions: '[]',
         is_system: false,
         level: 'custom',
-        scope_default: catalogRow?.default_scope || fallback?.scopeDefault || 'tenant',
+        scope_default: catalogRow?.default_scope || fallbackTemplate?.scopeDefault || 'tenant',
       }).returning('*');
       for (const grant of grantRows) {
         await trx('role_permissions').insert({ role_id: created.id, tenant_id: tenantId, permission: grant.permission, scope: grant.scope, effect: grant.effect });

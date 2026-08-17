@@ -356,8 +356,8 @@ export const SEED_ROLES: Record<string, RoleTemplate> = {
 
 /**
  * Enterprise hospital role catalog. Existing SEED_ROLES remain the backward-
- * compatible seed slugs; these templates provide stable system-template names
- * for the expanded role-management API without inventing new permission keys.
+ * compatible legacy slugs. The 39 hospital templates now have explicit grant
+ * maps so role names correspond to independently reviewable job functions.
  */
 export const HOSPITAL_ROLE_CATALOG = [
   ['super_administrator', 'Super Administrator', 'system', 'system', 'super_admin'],
@@ -401,11 +401,281 @@ export const HOSPITAL_ROLE_CATALOG = [
   ['patient_portal_user', 'Patient Portal User', 'tenant', 'self', 'patient'],
 ] as const;
 
+export const HOSPITAL_ROLE_GRANTS: Record<string, Record<string, readonly PermissionScope[]>> = {
+  super_administrator: { '*': ['system'] },
+  tenant_administrator: { '*': ['tenant'] },
+  hospital_executive: {
+    'reports.*': ['tenant'], 'analytics_dashboard.view': ['tenant'], 'patients.view': ['tenant'],
+    'appointments.view': ['tenant'], 'emr.view': ['tenant'], 'billing.view': ['tenant'],
+    'financial_reports.view': ['tenant'], 'hr.view': ['tenant'], 'compliance.view': ['tenant'],
+  },
+  hospital_operations_manager: {
+    'reports.*': ['tenant'], 'analytics_dashboard.*': ['tenant'], 'patients.view': ['tenant'],
+    'appointments.view': ['tenant'], 'appointments.edit': ['tenant'], 'emr.view': ['tenant'],
+    'workflow.*': ['tenant'], 'inventory.view': ['tenant'], 'branches.view': ['tenant'],
+  },
+  branch_manager: {
+    'patients.view': ['branch'], 'patients.edit': ['branch'], 'appointments.*': ['branch'],
+    'queue.*': ['branch'], 'billing.view': ['branch'], 'pharmacy.view': ['branch'],
+    'inventory.*': ['branch'], 'hr.view': ['branch'], 'reports.view': ['branch'],
+    'reports.export': ['branch'], 'branches.view': ['branch'], 'branches.manage': ['branch'],
+  },
+  department_head: {
+    'patients.view': ['department'], 'patients.edit': ['department'], 'appointments.view': ['department'],
+    'emr.view': ['department'], 'emr.edit': ['department'], 'nursing.*': ['department'],
+    'laboratory.view': ['department'], 'radiology.view': ['department'], 'pharmacy.view': ['department'],
+    'hr.view': ['department'], 'hr.edit': ['department'], 'reports.view': ['department'],
+    'workflow.view': ['department'], 'workflow.edit': ['department'],
+  },
+  medical_director: {
+    'patients.view': ['tenant'], 'appointments.view': ['tenant'], 'emr.view': ['tenant'],
+    'emr.edit': ['tenant'], 'emr.approve': ['tenant'], 'laboratory.view': ['tenant'],
+    'radiology.view': ['tenant'], 'pharmacy.view': ['tenant'], 'reports.*': ['tenant'],
+    'analytics_dashboard.*': ['tenant'], 'clinical_ai.*': ['tenant'], 'referrals.*': ['tenant'],
+    'compliance.view': ['tenant'],
+  },
+  physician: {
+    'patients.view': ['assigned_patients'], 'patients.edit': ['assigned_patients'],
+    'appointments.view': ['assigned_patients'], 'appointments.edit': ['assigned_patients'],
+    'emr.*': ['assigned_patients'], 'laboratory.view': ['assigned_patients'],
+    'laboratory.print': ['assigned_patients'], 'radiology.view': ['assigned_patients'],
+    'pharmacy.view': ['assigned_patients'], 'billing.view': ['assigned_patients'],
+    'insurance.view': ['assigned_patients'], 'chat.*': ['assigned_patients'],
+    'documents.view': ['assigned_patients'], 'documents.download': ['assigned_patients'],
+  },
+  consultant_physician: {
+    'patients.view': ['assigned_patients'], 'patients.edit': ['assigned_patients'],
+    'appointments.*': ['assigned_patients'], 'emr.*': ['assigned_patients'],
+    'laboratory.*': ['assigned_patients'], 'radiology.view': ['assigned_patients'],
+    'pharmacy.view': ['assigned_patients'], 'billing.view': ['assigned_patients'],
+    'insurance.view': ['assigned_patients'], 'referrals.*': ['assigned_patients'],
+    'telemedicine.*': ['assigned_patients'], 'clinical_ai.*': ['assigned_patients'],
+    'chat.*': ['assigned_patients'], 'documents.*': ['assigned_patients'],
+  },
+  resident_physician: {
+    'patients.view': ['assigned_patients'], 'appointments.view': ['assigned_patients'],
+    'appointments.edit': ['assigned_patients'], 'emr.view': ['assigned_patients'],
+    'emr.create': ['assigned_patients'], 'emr.edit': ['assigned_patients'],
+    'laboratory.view': ['assigned_patients'], 'radiology.view': ['assigned_patients'],
+    'pharmacy.view': ['assigned_patients'], 'billing.view': ['assigned_patients'],
+    'nursing.view': ['assigned_patients'], 'chat.view': ['assigned_patients'],
+    'documents.view': ['assigned_patients'],
+  },
+  nurse_manager: {
+    'patients.view': ['department'], 'patients.edit': ['department'], 'appointments.view': ['department'],
+    'emr.view': ['department'], 'emr.create': ['department'], 'emr.edit': ['department'],
+    'nursing.*': ['department'], 'queue.*': ['branch'], 'laboratory.view': ['department'],
+    'pharmacy.view': ['department'], 'hr.view': ['department'], 'hr.edit': ['department'],
+    'reports.view': ['department'],
+  },
+  registered_nurse: {
+    'patients.view': ['department'], 'patients.edit': ['department'], 'appointments.view': ['department'],
+    'emr.view': ['department'], 'emr.create': ['department'], 'nursing.view': ['department'],
+    'nursing.create': ['department'], 'nursing.edit': ['department'], 'queue.*': ['branch'],
+    'laboratory.view': ['department'], 'pharmacy.view': ['department'],
+  },
+  nurse_assistant: {
+    'patients.view': ['assigned_patients'], 'appointments.view': ['assigned_patients'],
+    'emr.view': ['assigned_patients'], 'nursing.view': ['assigned_patients'],
+    'nursing.create': ['assigned_patients'], 'queue.view': ['branch'],
+    'laboratory.view': ['assigned_patients'], 'pharmacy.view': ['assigned_patients'],
+  },
+  pharmacist: {
+    'pharmacy.*': ['branch'], 'inventory.view': ['branch'], 'inventory.edit': ['branch'],
+    'patients.view': ['branch'], 'emr.view': ['branch'], 'documents.view': ['branch'],
+  },
+  pharmacy_technician: {
+    'pharmacy.view': ['branch'], 'pharmacy.create': ['branch'], 'pharmacy.edit': ['branch'],
+    'pharmacy.print': ['branch'], 'inventory.view': ['branch'], 'inventory.edit': ['branch'],
+    'barcodes.view': ['branch'], 'barcodes.create': ['branch'], 'patients.view': ['branch'],
+    'emr.view': ['branch'],
+  },
+  laboratory_manager: {
+    'laboratory.*': ['department'], 'patients.view': ['department'], 'emr.view': ['department'],
+    'departments.view': ['department'], 'departments.manage': ['department'],
+    'reports.view': ['department'], 'reports.export': ['department'], 'audit.view': ['department'],
+  },
+  laboratory_technician: {
+    'laboratory.view': ['department'], 'laboratory.create': ['department'],
+    'laboratory.edit': ['department'], 'laboratory.print': ['department'],
+    'patients.view': ['department'], 'emr.view': ['department'],
+  },
+  radiology_manager: {
+    'radiology.*': ['department'], 'patients.view': ['department'], 'emr.view': ['department'],
+    'departments.view': ['department'], 'departments.manage': ['department'],
+    'reports.view': ['department'], 'reports.export': ['department'], 'audit.view': ['department'],
+  },
+  radiologist: {
+    'radiology.view': ['department'], 'radiology.create': ['department'], 'radiology.edit': ['department'],
+    'radiology.approve': ['department'], 'radiology.reject': ['department'], 'radiology.print': ['department'],
+    'radiology.export': ['department'], 'patients.view': ['department'], 'emr.view': ['department'],
+    'reports.view': ['department'],
+  },
+  radiology_technician: {
+    'radiology.view': ['department'], 'radiology.create': ['department'], 'radiology.edit': ['department'],
+    'radiology.print': ['department'], 'patients.view': ['department'], 'emr.view': ['department'],
+    'documents.create': ['department'],
+  },
+  medical_records_officer: {
+    'documents.*': ['department'], 'patients.view': ['department'], 'patients.edit': ['department'],
+    'emr.view': ['department'], 'emr.edit': ['department'], 'forms.*': ['department'],
+    'audit.view': ['department'], 'reports.view': ['department'],
+  },
+  medical_coder: {
+    'billing.view': ['branch'], 'billing.edit': ['branch'], 'insurance.view': ['branch'],
+    'patients.view': ['branch'], 'emr.view': ['branch'], 'documents.view': ['branch'],
+    'documents.download': ['branch'], 'reports.view': ['branch'],
+  },
+  receptionist: {
+    'patients.*': ['branch'], 'appointments.*': ['branch'], 'billing.view': ['branch'],
+    'billing.create': ['branch'], 'queue.*': ['branch'], 'insurance.view': ['branch'],
+    'communications.view': ['branch'], 'communications.create': ['branch'], 'emr.view': ['branch'],
+  },
+  appointment_coordinator: {
+    'patients.view': ['branch'], 'patients.create': ['branch'], 'patients.edit': ['branch'],
+    'appointments.*': ['branch'], 'queue.view': ['branch'], 'queue.edit': ['branch'],
+    'billing.view': ['branch'], 'insurance.view': ['branch'], 'communications.view': ['branch'],
+    'notifications.create': ['branch'],
+  },
+  triage_officer: {
+    'queue.*': ['branch'], 'patients.view': ['branch'], 'patients.edit': ['branch'],
+    'appointments.view': ['branch'], 'nursing.view': ['branch'], 'nursing.create': ['branch'],
+    'emr.view': ['branch'], 'referrals.view': ['branch'], 'referrals.create': ['branch'],
+    'laboratory.view': ['branch'], 'pharmacy.view': ['branch'],
+  },
+  billing_manager: {
+    'billing.*': ['branch'], 'insurance.view': ['branch'], 'patients.view': ['branch'],
+    'reports.view': ['branch'], 'reports.export': ['branch'], 'expenses.*': ['branch'],
+    'eta_invoicing.*': ['branch'], 'audit.view': ['branch'],
+  },
+  billing_officer: {
+    'billing.view': ['branch'], 'billing.create': ['branch'], 'billing.edit': ['branch'],
+    'billing.approve': ['branch'], 'insurance.view': ['branch'], 'patients.view': ['branch'],
+    'expenses.view': ['branch'], 'eta_invoicing.view': ['branch'],
+  },
+  accountant: {
+    'billing.view': ['tenant'], 'billing.export': ['tenant'], 'reports.view': ['tenant'],
+    'reports.export': ['tenant'], 'financial_reports.*': ['tenant'], 'expenses.*': ['tenant'],
+    'eta_invoicing.*': ['tenant'], 'data_export.view': ['tenant'], 'data_export.export': ['tenant'],
+  },
+  insurance_manager: {
+    'insurance.*': ['tenant'], 'insurance_claims.*': ['tenant'], 'billing.view': ['tenant'],
+    'reports.view': ['tenant'], 'reports.export': ['tenant'], 'patients.view': ['tenant'],
+    'compliance.view': ['tenant'], 'documents.view': ['tenant'],
+  },
+  insurance_claims_officer: {
+    'insurance.view': ['branch'], 'insurance_claims.view': ['branch'], 'insurance_claims.create': ['branch'],
+    'insurance_claims.edit': ['branch'], 'insurance_claims.approve': ['branch'], 'insurance_claims.reject': ['branch'],
+    'billing.view': ['branch'], 'patients.view': ['branch'], 'documents.view': ['branch'],
+    'reports.view': ['branch'],
+  },
+  hr_manager: {
+    'hr.*': ['tenant'], 'reports.view': ['tenant'], 'reports.export': ['tenant'],
+    'analytics_dashboard.view': ['tenant'], 'users.view': ['tenant'], 'compliance.view': ['tenant'],
+    'audit.view': ['tenant'], 'documents.view': ['tenant'],
+  },
+  hr_officer: {
+    'hr.view': ['department'], 'hr.create': ['department'], 'hr.edit': ['department'],
+    'hr.export': ['department'], 'documents.view': ['department'], 'documents.create': ['department'],
+    'documents.edit': ['department'], 'reports.view': ['department'], 'users.view': ['department'],
+  },
+  inventory_manager: {
+    'inventory.*': ['branch'], 'branches.view': ['branch'], 'reports.view': ['branch'],
+    'reports.export': ['branch'], 'expenses.view': ['branch'], 'expenses.create': ['branch'],
+    'barcodes.*': ['branch'], 'audit.view': ['branch'],
+  },
+  procurement_officer: {
+    'inventory.view': ['branch'], 'inventory.create': ['branch'], 'inventory.edit': ['branch'],
+    'expenses.view': ['branch'], 'expenses.create': ['branch'], 'expenses.edit': ['branch'],
+    'reports.view': ['branch'], 'barcodes.view': ['branch'], 'integrations.view': ['branch'],
+  },
+  compliance_officer: {
+    'compliance.*': ['tenant'], 'compliance_reports.*': ['tenant'], 'audit.view': ['tenant'],
+    'audit.export': ['tenant'], 'documents.view': ['tenant'], 'documents.manage': ['tenant'],
+    'reports.view': ['tenant'], 'data_export.view': ['tenant'],
+  },
+  reporting_bi_analyst: {
+    'bi.*': ['tenant'], 'analytics_dashboard.*': ['tenant'], 'reports.*': ['tenant'],
+    'financial_reports.view': ['tenant'], 'financial_reports.export': ['tenant'],
+    'advanced_reporting.*': ['tenant'], 'data_warehouse.*': ['tenant'], 'data_export.export': ['tenant'],
+  },
+  it_system_administrator: {
+    'users.*': ['tenant'], 'roles.*': ['tenant'], 'settings.*': ['tenant'],
+    'integrations.*': ['tenant'], 'api_keys.*': ['tenant'], 'system_monitor.*': ['tenant'],
+    'sessions.*': ['tenant'], 'developer_portal.*': ['tenant'], 'dr_backup.*': ['tenant'],
+    'data_warehouse.view': ['tenant'], 'audit.*': ['tenant'],
+  },
+  patient_portal_administrator: {
+    'patient_portal.*': ['tenant'], 'online_booking.*': ['tenant'], 'patient_self_service.*': ['tenant'],
+    'patient_messages.*': ['tenant'], 'notifications.*': ['tenant'], 'crm.*': ['tenant'],
+    'communications.*': ['tenant'], 'users.view': ['tenant'], 'audit.view': ['tenant'],
+  },
+  patient_portal_user: {
+    'patients.view': ['self'], 'appointments.view': ['self'], 'emr.view': ['self'],
+    'laboratory.view': ['self'], 'radiology.view': ['self'], 'pharmacy.view': ['self'],
+    'billing.view': ['self'], 'documents.view': ['self'], 'documents.download': ['self'],
+    'notifications.view': ['self'], 'chat.view': ['self'], 'chat.create': ['self'],
+    'patient_portal.view': ['self'],
+  },
+};
+
 export function hospitalRoleTemplate(slug: string): RoleTemplate | null {
   const entry = HOSPITAL_ROLE_CATALOG.find(([catalogSlug]) => catalogSlug === slug);
   if (!entry) return null;
-  const [, , level, scopeDefault, baseSlug] = entry;
-  const base = SEED_ROLES[baseSlug];
-  if (!base) return null;
-  return { ...base, level: level as RoleTemplate['level'], scopeDefault: scopeDefault as PermissionScope };
+  const [, name, level, scopeDefault] = entry;
+  const grants = HOSPITAL_ROLE_GRANTS[slug];
+  if (!grants) return null;
+  return {
+    level: level as RoleTemplate['level'],
+    scopeDefault: scopeDefault as PermissionScope,
+    description: `${name} role template`,
+    grants,
+  };
+}
+
+export function hospitalRoleGrantSignature(slug: string): string | null {
+  const template = hospitalRoleTemplate(slug);
+  if (!template) return null;
+  return Object.entries(template.grants)
+    .flatMap(([permission, scopes]) => scopes.map((scope) => `${permission}:${scope}`))
+    .sort()
+    .join('|');
+}
+
+export function validateHospitalRoleCatalog(): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  const seenSlugs = new Set<string>();
+  const seenGrantSignatures = new Map<string, string>();
+  for (const [slug] of HOSPITAL_ROLE_CATALOG) {
+    if (seenSlugs.has(slug)) errors.push(`Duplicate role slug: ${slug}`);
+    seenSlugs.add(slug);
+    const template = hospitalRoleTemplate(slug);
+    if (!template) {
+      errors.push(`Missing explicit grants for role: ${slug}`);
+      continue;
+    }
+    const signature = hospitalRoleGrantSignature(slug);
+    if (signature && seenGrantSignatures.has(signature)) {
+      errors.push(`Duplicate effective grant map: ${slug} and ${seenGrantSignatures.get(signature)}`);
+    } else if (signature) {
+      seenGrantSignatures.set(signature, slug);
+    }
+    for (const permission of Object.keys(template.grants)) {
+      if (permission === '*') continue;
+      const separator = permission.indexOf('.');
+      const module = separator === -1 ? permission : permission.slice(0, separator);
+      const action = separator === -1 ? '' : permission.slice(separator + 1);
+      const actions = PERMISSION_CATALOG[module];
+      if (!actions || !action || (action !== '*' && !actions.includes(action as PermissionAction))) {
+        errors.push(`Invalid permission key ${permission} in ${slug}`);
+      }
+    }
+  }
+  if (seenSlugs.size !== 39) errors.push(`Expected 39 role slugs, found ${seenSlugs.size}`);
+  return { valid: errors.length === 0, errors };
+}
+
+if (typeof process !== 'undefined' && process.env.NODE_ENV === 'test') {
+  const validation = validateHospitalRoleCatalog();
+  if (!validation.valid) throw new Error(validation.errors.join('; '));
 }

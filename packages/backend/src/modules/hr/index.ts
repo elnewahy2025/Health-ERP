@@ -5,13 +5,13 @@ import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize, type Principal } from '../../services/authorization.js';
 import { applyScopePolicy } from '../../services/scope-policy.js';
-import type { PermissionScope } from '@healthcare/shared/authz';
+import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 import { ForbiddenError } from '@healthcare/shared/errors';
 import { logAudit } from '../../services/audit.js';
 
 export async function registerHrModule(app: FastifyInstance) {
-  const resolveHrScope = (principal: Principal): PermissionScope =>
-    principal.grants.find((grant) => grant.permission === 'hr.view' || grant.permission === '*')?.scope || 'tenant';
+  const resolveHrScope = (principal: Principal, permission = 'hr.view'): PermissionScope =>
+    principal.grants.find((grant) => grant.permission === '*' || permissionKeyMatches(grant.permission, permission))?.scope || 'tenant';
 
   app.get('/api/v1/hr/employees', { preHandler: [authenticate, authorize('hr.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
@@ -31,12 +31,22 @@ export async function registerHrModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/hr/employees', { preHandler: [authenticate, authorize('hr.view')] }, async (request, reply) => {
+  app.post('/api/v1/hr/employees', { preHandler: [authenticate, authorize('hr.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
+    const principal = ctx.principal;
+    const scope = resolveHrScope(principal, 'hr.create');
+    const requestedDepartmentId = body.departmentId ? String(body.departmentId) : null;
+    const requestedBranchId = body.branchId ? String(body.branchId) : null;
+    if (scope === 'department' && requestedDepartmentId !== principal.departmentId) {
+      throw new ForbiddenError('Employee creation is limited to the active department');
+    }
+    if (scope === 'branch' && (!requestedBranchId || !principal.branches.includes(requestedBranchId))) {
+      throw new ForbiddenError('Employee creation is limited to assigned branches');
+    }
     const empCode = "EMP-" + Date.now().toString(36).toUpperCase();
-    const [emp] = await db('employees').insert({ tenant_id: tenantId, employee_code: body.employeeCode || empCode, first_name: body.firstName, last_name: body.lastName, email: body.email, phone: body.phone, department: body.department, department_id: body.departmentId || null, branch_id: body.branchId || null, position: body.position, employment_type: body.employmentType || 'full_time', hire_date: body.hireDate, base_salary: body.baseSalary || 0, pay_frequency: body.payFrequency || 'monthly', created_by: ctx.userId }).returning('*');
+    const [emp] = await db('employees').insert({ tenant_id: tenantId, employee_code: body.employeeCode || empCode, first_name: body.firstName, last_name: body.lastName, email: body.email, phone: body.phone, department: body.department, department_id: scope === 'department' ? principal.departmentId : requestedDepartmentId, branch_id: scope === 'branch' ? requestedBranchId : requestedBranchId, position: body.position, employment_type: body.employmentType || 'full_time', hire_date: body.hireDate, base_salary: body.baseSalary || 0, pay_frequency: body.payFrequency || 'monthly', created_by: ctx.userId }).returning('*');
 
     await logAudit({ tenantId, userId: ctx.userId, action: 'hr.employee_created', entityType: 'employee', entityId: emp.id, metadata: { employeeCode: empCode, department: body.department }, ipAddress: request.ip, userAgent: request.headers['user-agent'] as string });
 
@@ -76,7 +86,7 @@ export async function registerHrModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/hr/leave-requests', { preHandler: [authenticate, authorize('hr.view')] }, async (request, reply) => {
+  app.post('/api/v1/hr/leave-requests', { preHandler: [authenticate, authorize('hr.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -84,7 +94,7 @@ export async function registerHrModule(app: FastifyInstance) {
     const end = new Date(String(body.endDate));
     const days = Math.ceil((end.getTime() - start.getTime()) / 86400000) + 1;
     const principal = ctx.principal;
-    const scope = resolveHrScope(principal);
+    const scope = resolveHrScope(principal, 'hr.create');
     const employee = await applyScopePolicy('hr', db('employees').where({ 'employees.id': body.employeeId, 'employees.tenant_id': tenantId }), principal, scope).first();
     if (!employee) throw new ForbiddenError('You do not have access to this employee');
     const [lr] = await db('leave_requests').insert({ tenant_id: tenantId, employee_id: body.employeeId, leave_type: body.leaveType || 'annual', start_date: body.startDate, end_date: body.endDate, total_days: days, reason: body.reason, created_by: ctx.userId }).returning('*');
@@ -94,7 +104,7 @@ export async function registerHrModule(app: FastifyInstance) {
     return sendSuccess(reply, lr, 'Leave request submitted', 201);
   });
 
-  app.put('/api/v1/hr/leave-requests/:id', { preHandler: [authenticate, authorize('hr.edit')] }, async (request, reply) => {
+  app.put('/api/v1/hr/leave-requests/:id', { preHandler: [authenticate, authorize('hr.approve')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -102,7 +112,7 @@ export async function registerHrModule(app: FastifyInstance) {
     const status = body.status as string | undefined;
     const managerNotes = body.managerNotes as string | undefined;
     const principal = ctx.principal;
-    const scope = resolveHrScope(principal);
+    const scope = resolveHrScope(principal, 'hr.approve');
     const accessible = await applyScopePolicy('hr_leave', db('leave_requests').leftJoin('employees', 'leave_requests.employee_id', 'employees.id').where({ 'leave_requests.id': id, 'leave_requests.tenant_id': tenantId }), principal, scope).first();
     if (!accessible) throw new ForbiddenError('You do not have access to this leave request');
     await db('leave_requests').where({ id, tenant_id: tenantId }).update({ status: status || 'approved', manager_notes: managerNotes || null, approved_by: ctx.userId, approved_at: new Date(), updated_at: new Date() });

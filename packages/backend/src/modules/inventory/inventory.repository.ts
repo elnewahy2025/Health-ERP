@@ -55,7 +55,7 @@ export async function findWarehouseById(warehouseId: string, tenantId: string, c
 }
 
 export async function createWarehouse(
-  tenantId: string, data: { name: string; code: string; type: string },
+  tenantId: string, data: { name: string; code: string; type: string; branch_id?: string | null },
 ): Promise<WarehouseRow> {
   const [wh] = await db('warehouses')
     .insert({ tenant_id: tenantId, ...data })

@@ -188,6 +188,67 @@ const inventoryPolicy: ScopePolicy = (qb, principal, scope) =>
     branchColumn: 'warehouses.branch_id',
   });
 
+const nursingPolicy: ScopePolicy = (qb, principal, scope) =>
+  scopeQuery(qb, principal, {
+    scope,
+    tenantColumn: 'nursing_tasks.tenant_id',
+    branchColumn: 'patients.branch_id',
+    departmentColumn: 'patients.department_id',
+  });
+
+const queuePolicy: ScopePolicy = (qb, principal, scope) =>
+  scopeQuery(qb, principal, {
+    scope,
+    tenantColumn: 'queue_entries.tenant_id',
+    branchColumn: 'queue_entries.branch_id',
+  });
+
+const expensesPolicy: ScopePolicy = (qb, principal, scope) =>
+  scopeQuery(qb, principal, {
+    scope,
+    tenantColumn: 'expenses.tenant_id',
+    branchColumn: 'expenses.branch_id',
+  });
+
+const reportsPolicy: ScopePolicy = (qb, principal, scope) => {
+  const constrained = scopeQuery(qb, principal, {
+    scope: scope === 'branch' || scope === 'branches' ? 'tenant' : scope,
+    tenantColumn: 'report_definitions.tenant_id',
+    departmentColumn: 'report_definitions.department_id',
+  });
+  if ((scope === 'branch' || scope === 'branches') && principal.branches.length > 0) {
+    return constrained.andWhere(function reportBranchScope() {
+      this.whereIn('report_definitions.branch_id', principal.branches).orWhereNull('report_definitions.branch_id');
+    });
+  }
+  if (scope === 'department' && principal.departmentId) {
+    return constrained.andWhere(function reportDepartmentScope() {
+      this.where('report_definitions.department_id', principal.departmentId)
+        .orWhereNull('report_definitions.department_id');
+    });
+  }
+  return constrained;
+};
+
+const insuranceClaimsPolicy: ScopePolicy = (qb, principal, scope) => {
+  const constrained = scopeQuery(qb, principal, {
+    scope,
+    tenantColumn: 'insurance_claims.tenant_id',
+    branchColumn: 'patients.branch_id',
+    departmentColumn: 'patients.department_id',
+  });
+  if (scope === 'assigned_patients') {
+    return constrained.whereExists(function assignedInsurancePatients() {
+      this.select(1)
+        .from('appointments')
+        .whereRaw('appointments.patient_id = insurance_claims.patient_id')
+        .andWhere('appointments.tenant_id', principal.tenantId)
+        .andWhere('appointments.doctor_id', principal.id);
+    });
+  }
+  return constrained;
+};
+
 const billingPolicy: ScopePolicy = (qb, principal, scope) => {
   const constrained = scopeQuery(qb, principal, {
     scope,
@@ -219,9 +280,13 @@ export const SCOPE_POLICIES: Record<string, ScopePolicy> = {
   inventory_warehouses: inventoryWarehousePolicy,
   inventory_purchase_orders: inventoryPurchaseOrderPolicy,
   billing: billingPolicy,
+  insurance_claims: insuranceClaimsPolicy,
+  expenses: expensesPolicy,
+  queue: queuePolicy,
+  nursing: nursingPolicy,
   compliance: tenantOnly,
   compliance_consent: complianceConsentPolicy,
-  reports: tenantOnly,
+  reports: reportsPolicy,
   audit: tenantOnly,
   documents: patientsPolicy,
   laboratory: laboratoryPolicy,

@@ -7,9 +7,14 @@ import { findTenantRow } from '../../utils/tenant-scope.js';
 import type { InsuranceCompanyRow, InsuranceClaimRow } from "../types.js";
 import { logAudit } from '../../services/audit.js';
 import { authenticate } from '../auth-guard.js';
-import { authorize } from '../../services/authorization.js';
+import { authorize, hasPermission, type Principal } from '../../services/authorization.js';
+import { applyScopePolicy } from '../../services/scope-policy.js';
+import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
+import { ForbiddenError } from '@healthcare/shared/errors';
 
 export async function registerInsuranceClaimsModule(app: FastifyInstance) {
+  const resolveClaimsScope = (principal: Principal, permission = 'insurance_claims.view'): PermissionScope =>
+    principal.grants.find((grant) => grant.permission === '*' || permissionKeyMatches(grant.permission, permission))?.scope || 'tenant';
 
   app.get('/api/v1/insurance-companies', { preHandler: [authenticate, authorize('insurance.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
@@ -20,7 +25,7 @@ export async function registerInsuranceClaimsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/insurance-companies', { preHandler: [authenticate, authorize('insurance.view')] }, async (request, reply) => {
+  app.post('/api/v1/insurance-companies', { preHandler: [authenticate, authorize('insurance.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const body = z.object({
       name: z.string().min(2), code: z.string().min(2).max(50),
@@ -37,7 +42,10 @@ export async function registerInsuranceClaimsModule(app: FastifyInstance) {
   app.get('/api/v1/insurance-claims', { preHandler: [authenticate, authorize('insurance_claims.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const query = z.object({ page: z.coerce.number().optional().default(1), limit: z.coerce.number().optional().default(20), status: z.string().optional(), insuranceId: z.string().uuid().optional(), patientId: z.string().uuid().optional() }).parse(request.query);
-    const qb = db('insurance_claims').leftJoin('patients', 'insurance_claims.patient_id', 'patients.id').leftJoin('insurance_companies', 'insurance_claims.insurance_id', 'insurance_companies.id').leftJoin('invoices', 'insurance_claims.invoice_id', 'invoices.id').where('insurance_claims.tenant_id', tenantId).whereNull('insurance_claims.deleted_at');
+    const principal = getCtx(request).principal;
+    const scope = resolveClaimsScope(principal, 'insurance_claims.view');
+    let qb = db('insurance_claims').leftJoin('patients', 'insurance_claims.patient_id', 'patients.id').leftJoin('insurance_companies', 'insurance_claims.insurance_id', 'insurance_companies.id').leftJoin('invoices', 'insurance_claims.invoice_id', 'invoices.id').where('insurance_claims.tenant_id', tenantId).whereNull('insurance_claims.deleted_at');
+    qb = applyScopePolicy('insurance_claims', qb, principal, scope) as typeof qb;
     if (query.status) qb.andWhere('insurance_claims.status', query.status);
     if (query.insuranceId) qb.andWhere('insurance_claims.insurance_id', query.insuranceId);
     if (query.patientId) qb.andWhere('insurance_claims.patient_id', query.patientId);
@@ -46,11 +54,13 @@ export async function registerInsuranceClaimsModule(app: FastifyInstance) {
     return sendPaginated(reply, claims.map((c: Record<string, unknown>) => ({ id: c.id, claimNumber: c.claim_number, status: c.status, patientName: c.pf ? `${c.pf} ${c.pl}` : null, patientMrn: c.mrn, companyName: c.cname, invoiceNumber: c.invoice_number, claimedAmount: Number(c.claimed_amount), approvedAmount: Number(c.approved_amount), paidAmount: Number(c.paid_amount), submissionDate: c.submission_date, responseDate: c.response_date, denialReason: c.denial_reason, notes: c.notes, createdAt: c.created_at })), Number((total as Record<string, unknown>)?.count || 0), query.page, query.limit);
   });
 
-  app.post('/api/v1/insurance-claims', { preHandler: [authenticate, authorize('insurance_claims.view')] }, async (request, reply) => {
+  app.post('/api/v1/insurance-claims', { preHandler: [authenticate, authorize('insurance_claims.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request);
     const body = z.object({ patientId: z.string().uuid(), invoiceId: z.string().uuid(), insuranceId: z.string().uuid(), claimedAmount: z.number().positive(), notes: z.string().optional() }).parse(request.body);
-    const patient = await findTenantRow('patients', body.patientId, tenantId);
-    if (!patient) return reply.status(404).send({ success: false, error: 'Patient not found' });
+    const principal = ctx.principal;
+    const scope = resolveClaimsScope(principal, 'insurance_claims.create');
+    const patient = await applyScopePolicy('patients', db('patients').where({ 'patients.id': body.patientId, 'patients.tenant_id': tenantId }), principal, scope).first();
+    if (!patient) return reply.status(404).send({ success: false, error: 'Patient not found or outside your scope' });
     const invoice = await findTenantRow('invoices', body.invoiceId, tenantId);
     if (!invoice) return reply.status(404).send({ success: false, error: 'Invoice not found' });
     const count = await db('insurance_claims').where({ tenant_id: tenantId }).count('id as c').first();
@@ -64,7 +74,9 @@ export async function registerInsuranceClaimsModule(app: FastifyInstance) {
   app.post('/api/v1/insurance-claims/:id/submit', { preHandler: [authenticate, authorize('insurance_claims.approve')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-    const claim = await findTenantRow('insurance_claims', id, tenantId);
+    const principal = getCtx(request).principal;
+    const scope = resolveClaimsScope(principal, 'insurance_claims.approve');
+    const claim = await applyScopePolicy('insurance_claims', db('insurance_claims').join('patients', 'insurance_claims.patient_id', 'patients.id').where({ 'insurance_claims.id': id, 'insurance_claims.tenant_id': tenantId }), principal, scope).first();
     if (!claim) return reply.code(404).send({ error: 'Not found' });
     if (claim.status !== 'draft') return reply.code(400).send({ error: 'Only draft claims can be submitted' });
     await db('insurance_claims').where({ id, tenant_id: tenantId }).update({ status: 'submitted', submission_date: new Date().toISOString().split('T')[0], updated_at: new Date() });
@@ -75,7 +87,11 @@ export async function registerInsuranceClaimsModule(app: FastifyInstance) {
     const tenantId = getTenantId(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const { status, approvedAmount, paidAmount, denialReason } = z.object({ status: z.enum(['acknowledged', 'in_review', 'approved', 'denied', 'paid']), approvedAmount: z.number().optional(), paidAmount: z.number().optional(), denialReason: z.string().optional() }).parse(request.body);
-    const existing = await findTenantRow('insurance_claims', id, tenantId);
+    const principal = getCtx(request).principal;
+    const requiredPermission = status === 'denied' ? 'insurance_claims.reject' : 'insurance_claims.approve';
+    if (!hasPermission(principal, requiredPermission, 'branch')) throw new ForbiddenError('Claim status decision permission is required');
+    const scope = resolveClaimsScope(principal, requiredPermission);
+    const existing = await applyScopePolicy('insurance_claims', db('insurance_claims').join('patients', 'insurance_claims.patient_id', 'patients.id').where({ 'insurance_claims.id': id, 'insurance_claims.tenant_id': tenantId }), principal, scope).first();
     if (!existing) return reply.code(404).send({ error: 'Not found' });
     const update: Record<string, unknown> = { status, updated_at: new Date() };
     if (approvedAmount !== undefined) update.approved_amount = approvedAmount;
@@ -92,7 +108,10 @@ export async function registerInsuranceClaimsModule(app: FastifyInstance) {
 
   app.get('/api/v1/insurance-claims/summary', { preHandler: [authenticate, authorize('insurance_claims.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
-    const s = await db('insurance_claims').where({ tenant_id: tenantId }).whereNull('deleted_at').select(db.raw('COUNT(*) as total'), db.raw('COALESCE(SUM(claimed_amount),0) as total_claimed'), db.raw('COALESCE(SUM(approved_amount),0) as total_approved'), db.raw('COALESCE(SUM(paid_amount),0) as total_paid'), db.raw('COUNT(CASE WHEN status=\'draft\' THEN 1 END) as draft'), db.raw('COUNT(CASE WHEN status=\'submitted\' THEN 1 END) as submitted'), db.raw('COUNT(CASE WHEN status=\'approved\' THEN 1 END) as approved'), db.raw('COUNT(CASE WHEN status=\'denied\' THEN 1 END) as denied'), db.raw('COUNT(CASE WHEN status=\'paid\' THEN 1 END) as paid')).first();
+    const principal = getCtx(request).principal;
+    const scope = resolveClaimsScope(principal, 'insurance_claims.view');
+    const claims = applyScopePolicy('insurance_claims', db('insurance_claims').join('patients', 'insurance_claims.patient_id', 'patients.id').where({ 'insurance_claims.tenant_id': tenantId }).whereNull('insurance_claims.deleted_at'), principal, scope);
+    const s = await claims.select(db.raw('COUNT(*) as total'), db.raw('COALESCE(SUM(claimed_amount),0) as total_claimed'), db.raw('COALESCE(SUM(approved_amount),0) as total_approved'), db.raw('COALESCE(SUM(paid_amount),0) as total_paid'), db.raw('COUNT(CASE WHEN status=\'draft\' THEN 1 END) as draft'), db.raw('COUNT(CASE WHEN status=\'submitted\' THEN 1 END) as submitted'), db.raw('COUNT(CASE WHEN status=\'approved\' THEN 1 END) as approved'), db.raw('COUNT(CASE WHEN status=\'denied\' THEN 1 END) as denied'), db.raw('COUNT(CASE WHEN status=\'paid\' THEN 1 END) as paid')).first();
     return sendSuccess(reply, s);
   });
 }

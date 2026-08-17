@@ -5,7 +5,7 @@ import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize, canAccessPatient, type Principal } from '../../services/authorization.js';
 import { applyScopePolicy } from '../../services/scope-policy.js';
-import type { PermissionScope } from '@healthcare/shared/authz';
+import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 import { ForbiddenError } from '@healthcare/shared/errors';
 import { logAudit } from '../../services/audit.js';
 
@@ -73,8 +73,8 @@ interface BreachLogRow {
 }
 
 export async function registerComplianceModule(app: FastifyInstance) {
-  const resolveComplianceScope = (principal: Principal): PermissionScope =>
-    principal.grants.find((grant) => grant.permission === 'compliance.view' || grant.permission === '*')?.scope || 'tenant';
+  const resolveComplianceScope = (principal: Principal, permission = 'compliance.view'): PermissionScope =>
+    principal.grants.find((grant) => grant.permission === '*' || permissionKeyMatches(grant.permission, permission))?.scope || 'tenant';
 
   // Policies
   app.get('/api/v1/compliance/policies', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
@@ -95,7 +95,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/compliance/policies', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
+  app.post('/api/v1/compliance/policies', { preHandler: [authenticate, authorize('compliance.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -163,7 +163,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/compliance/audits', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
+  app.post('/api/v1/compliance/audits', { preHandler: [authenticate, authorize('compliance.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -229,7 +229,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/compliance/consents', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
+  app.post('/api/v1/compliance/consents', { preHandler: [authenticate, authorize('compliance.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -272,7 +272,7 @@ export async function registerComplianceModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/compliance/breaches', { preHandler: [authenticate, authorize('compliance.view')] }, async (request, reply) => {
+  app.post('/api/v1/compliance/breaches', { preHandler: [authenticate, authorize('compliance.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;

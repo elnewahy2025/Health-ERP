@@ -7,14 +7,18 @@ import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
 import { applyScopePolicy } from '../../services/scope-policy.js';
 import type { ReportScheduleRow, ReportExecutionRow } from "../types.js";
+import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 
 export async function registerReportsModule(app: FastifyInstance) {
+  const resolveReportScope = (principal: { grants: Array<{ permission: string; scope: PermissionScope }> }, permission = 'reports.view'): PermissionScope =>
+    principal.grants.find((grant) => grant.permission === '*' || permissionKeyMatches(grant.permission, permission))?.scope || 'tenant';
+
   // ── Report Definitions ──
   app.get('/api/v1/reports', { preHandler: [authenticate, authorize('reports.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { category } = request.query as { category?: string };
     const principal = getCtx(request).principal;
     let q = db('report_definitions').where('report_definitions.tenant_id', tenantId);
-    q = applyScopePolicy('reports', q, principal, 'tenant') as typeof q;
+    q = applyScopePolicy('reports', q, principal, resolveReportScope(principal, 'reports.view')) as typeof q;
     if (category) q = q.andWhere('category', category);
     const reports = await q.orderBy('name');
     const parseList = (v: unknown): unknown[] => {
@@ -31,7 +35,7 @@ export async function registerReportsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/reports', { preHandler: [authenticate, authorize('reports.view')] }, async (request, reply) => {
+  app.post('/api/v1/reports', { preHandler: [authenticate, authorize('reports.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
     const baseSlug = body.slug || (body.name as string).toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
     let slug = baseSlug;
@@ -53,9 +57,10 @@ export async function registerReportsModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: rep.id, name: rep.name, slug: rep.slug }, 'Report definition created', 201);
   });
 
-  app.put('/api/v1/reports/:id', { preHandler: [authenticate, authorize('reports.edit')] }, async (request, reply) => {
+  app.put('/api/v1/reports/:id', { preHandler: [authenticate, authorize('reports.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
-    const existing = await findTenantRow('report_definitions', id, tenantId);
+    const principal = getCtx(request).principal;
+    const existing = await applyScopePolicy('reports', db('report_definitions').where({ 'report_definitions.id': id, 'report_definitions.tenant_id': tenantId }), principal, resolveReportScope(principal, 'reports.manage')).first();
     if (!existing) return reply.status(404).send({ success: false, error: 'Report not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.name) update.name = body.name; if (body.description !== undefined) update.description = body.description;
@@ -68,9 +73,10 @@ export async function registerReportsModule(app: FastifyInstance) {
     return sendSuccess(reply, null, 'Report updated');
   });
 
-  app.delete('/api/v1/reports/:id', { preHandler: [authenticate, authorize('reports.edit')] }, async (request, reply) => {
+  app.delete('/api/v1/reports/:id', { preHandler: [authenticate, authorize('reports.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string };
-    const existing = await findTenantRow('report_definitions', id, tenantId);
+    const principal = getCtx(request).principal;
+    const existing = await applyScopePolicy('reports', db('report_definitions').where({ 'report_definitions.id': id, 'report_definitions.tenant_id': tenantId }), principal, resolveReportScope(principal, 'reports.manage')).first();
     if (!existing) return reply.status(404).send({ success: false, error: 'Report not found' });
     await db('report_schedules').where({ report_id: id, tenant_id: tenantId }).del();
     await db('report_executions').where({ report_id: id, tenant_id: tenantId }).del();
@@ -82,7 +88,7 @@ export async function registerReportsModule(app: FastifyInstance) {
   app.get('/api/v1/reports/:id/schedules', { preHandler: [authenticate, authorize('reports.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string };
     const principal = getCtx(request).principal;
-    const schedules = await applyScopePolicy('reports', db('report_schedules').where({ tenant_id: tenantId, report_id: id }), principal, 'tenant').orderBy('created_at', 'desc');
+    const schedules = await applyScopePolicy('reports', db('report_schedules').join('report_definitions', 'report_schedules.report_id', 'report_definitions.id').where({ 'report_schedules.tenant_id': tenantId, 'report_schedules.report_id': id }), principal, resolveReportScope(principal, 'reports.view')).orderBy('created_at', 'desc');
     return sendSuccess(reply, schedules.map((s: Record<string, unknown>) => ({
       id: s.id, reportId: s.report_id, cron: s.cron,
       recipients: s.recipients, format: s.format, params: s.params,
@@ -91,9 +97,10 @@ export async function registerReportsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/reports/:id/schedules', { preHandler: [authenticate, authorize('reports.view')] }, async (request, reply) => {
+  app.post('/api/v1/reports/:id/schedules', { preHandler: [authenticate, authorize('reports.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
-    const report = await db('report_definitions').where({ id, tenant_id: tenantId }).first();
+    const principal = getCtx(request).principal;
+    const report = await applyScopePolicy('reports', db('report_definitions').where({ 'report_definitions.id': id, 'report_definitions.tenant_id': tenantId }), principal, resolveReportScope(principal, 'reports.manage')).first();
     if (!report) return reply.status(404).send({ success: false, error: 'Report not found' });
     const [s] = await db('report_schedules').insert({
       tenant_id: tenantId, report_id: id, cron: body.cron || '0 8 * * 1',
@@ -103,9 +110,10 @@ export async function registerReportsModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: s.id }, 'Schedule created', 201);
   });
 
-  app.put('/api/v1/reports/schedules/:id', { preHandler: [authenticate, authorize('reports.edit')] }, async (request, reply) => {
+  app.put('/api/v1/reports/schedules/:id', { preHandler: [authenticate, authorize('reports.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
-    const existing = await findTenantRow('report_schedules', id, tenantId);
+    const principal = getCtx(request).principal;
+    const existing = await applyScopePolicy('reports', db('report_schedules').join('report_definitions', 'report_schedules.report_id', 'report_definitions.id').where({ 'report_schedules.id': id, 'report_schedules.tenant_id': tenantId }), principal, resolveReportScope(principal, 'reports.manage')).first();
     if (!existing) return reply.status(404).send({ success: false, error: 'Schedule not found' });
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.cron) update.cron = body.cron; if (body.recipients) update.recipients = JSON.stringify(body.recipients);
@@ -119,7 +127,7 @@ export async function registerReportsModule(app: FastifyInstance) {
   app.get('/api/v1/reports/:id/executions', { preHandler: [authenticate, authorize('reports.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string };
     const principal = getCtx(request).principal;
-    const execs = await applyScopePolicy('reports', db('report_executions').where({ tenant_id: tenantId, report_id: id }), principal, 'tenant').orderBy('created_at', 'desc').limit(20);
+    const execs = await applyScopePolicy('reports', db('report_executions').join('report_definitions', 'report_executions.report_id', 'report_definitions.id').where({ 'report_executions.tenant_id': tenantId, 'report_executions.report_id': id }), principal, resolveReportScope(principal, 'reports.view')).orderBy('created_at', 'desc').limit(20);
     return sendSuccess(reply, execs.map((e: Record<string, unknown>) => ({
       id: e.id, reportId: e.report_id, status: e.status, format: e.format,
       error: e.error, rowCount: e.row_count, trigger: e.trigger,
@@ -127,9 +135,10 @@ export async function registerReportsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/reports/:id/execute', { preHandler: [authenticate, authorize('reports.view')] }, async (request, reply) => {
+  app.post('/api/v1/reports/:id/execute', { preHandler: [authenticate, authorize('reports.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
-    const report = await db('report_definitions').where({ id, tenant_id: tenantId }).first();
+    const principal = getCtx(request).principal;
+    const report = await applyScopePolicy('reports', db('report_definitions').where({ 'report_definitions.id': id, 'report_definitions.tenant_id': tenantId }), principal, resolveReportScope(principal, 'reports.manage')).first();
     if (!report) return reply.status(404).send({ success: false, error: 'Report not found' });
     const [exec] = await db('report_executions').insert({
       tenant_id: tenantId, report_id: id, status: 'pending',
@@ -145,7 +154,7 @@ export async function registerReportsModule(app: FastifyInstance) {
     const { id, format } = request.params as { id: string; format: string };
     const tenantId = getTenantId(request);
     const principal = getCtx(request).principal;
-    const exec = await applyScopePolicy('reports', db('report_executions').where({ id, tenant_id: tenantId }), principal, 'tenant').first();
+    const exec = await applyScopePolicy('reports', db('report_executions').join('report_definitions', 'report_executions.report_id', 'report_definitions.id').where({ 'report_executions.id': id, 'report_executions.tenant_id': tenantId }), principal, resolveReportScope(principal, 'reports.export')).first();
     if (!exec) return reply.status(404).send({ success: false, error: 'Execution not found' });
     if (exec.status !== 'completed') return reply.status(400).send({ success: false, error: 'Report not ready' });
     // In production, stream the generated file

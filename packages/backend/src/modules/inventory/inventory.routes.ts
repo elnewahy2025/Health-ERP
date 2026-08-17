@@ -30,7 +30,7 @@ export async function registerInventoryRoutes(app: FastifyInstance) {
   app.put('/api/v1/inventory/items/:itemId/stock', { preHandler: [authenticate, authorize('inventory.edit')] }, updateStock);
 
   // ── #6: Dispensing ──
-  app.post('/api/v1/inventory/dispense', { preHandler: [authenticate, authorize('inventory.create')] }, dispenseStock);
+  app.post('/api/v1/inventory/dispense', { preHandler: [authenticate, authorize('inventory.edit')] }, dispenseStock);
 
   // ── #13: Adjustments ──
   app.post('/api/v1/inventory/adjustments', { preHandler: [authenticate, authorize('inventory.edit')] }, createAdjustment);

@@ -23,7 +23,7 @@ export async function registerFormsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/forms/definitions', { preHandler: [authenticate, authorize('forms.view')] }, async (request, reply) => {
+  app.post('/api/v1/forms/definitions', { preHandler: [authenticate, authorize('forms.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
     const slug = body.slug || (body.name as string).toLowerCase().replace(/\s+/g, '_');
     const [def] = await db('form_definitions').insert({
@@ -35,7 +35,7 @@ export async function registerFormsModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: def.id, name: def.name, slug: def.slug }, 'Form definition created', 201);
   });
 
-  app.put('/api/v1/forms/definitions/:id', { preHandler: [authenticate, authorize('forms.view')] }, async (request, reply) => {
+  app.put('/api/v1/forms/definitions/:id', { preHandler: [authenticate, authorize('forms.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const existing = await findTenantRow('form_definitions', id, tenantId);
     if (!existing) return reply.status(404).send({ success: false, error: 'Form definition not found' });
@@ -80,7 +80,7 @@ export async function registerFormsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/forms/submissions', { preHandler: [authenticate, authorize('forms.view')] }, async (request, reply) => {
+  app.post('/api/v1/forms/submissions', { preHandler: [authenticate, authorize('forms.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
     const [sub] = await db('form_submissions').insert({
       tenant_id: tenantId, form_id: body.formId, patient_id: body.patientId || null,

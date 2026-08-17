@@ -6,6 +6,7 @@ import { Plus, BarChart3, MessageSquare } from 'lucide-react';
 import { sanitizeNumber, sanitizeString } from '../lib/sanitize';
 import { formatDateTime } from '../lib/format';
 import toast from 'react-hot-toast';
+import { Can } from '../components/auth/Authorization';
 
 type TabType = 'campaigns' | 'feedback';
 
@@ -141,9 +142,11 @@ export default function CrmPage() {
             {t('crm.campaignCount', { count: campaigns.length })} · {t('crm.avgRating', { rating: avgRating })}
           </p>
         </div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowCampaignModal(true)}>
-          {t('crm.newCampaign')}
-        </Button>
+        <Can permission="crm.create">
+          <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowCampaignModal(true)}>
+            {t('crm.newCampaign')}
+          </Button>
+        </Can>
       </div>
 
       {/* Tab Buttons */}
@@ -243,7 +246,9 @@ export default function CrmPage() {
       <Modal open={showCampaignModal} onClose={closeCampaignModal} title={t('crm.newCampaign')} size="lg"
         footer={<>
           <Button variant="secondary" onClick={closeCampaignModal}>{t('common.cancel')}</Button>
-          <Button loading={saving} onClick={() => { const f = document.getElementById('campaign-form'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          <Can permission="crm.create">
+            <Button loading={saving} onClick={() => { const f = document.getElementById('campaign-form'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          </Can>
         </>}
       >
         <form id="campaign-form" onSubmit={handleCreateCampaign} className="space-y-4">

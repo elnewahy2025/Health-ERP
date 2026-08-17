@@ -13,6 +13,9 @@ import {
   expandGrantKey,
   normalizeLegacyPermission,
   PERMISSION_CATALOG,
+  HOSPITAL_ROLE_CATALOG,
+  hospitalRoleTemplate,
+  validateHospitalRoleCatalog,
 } from '@healthcare/shared/authz';
 
 function principal(grants: Principal['grants'], roles: string[] = []): Principal {
@@ -163,6 +166,30 @@ describe('shared permission catalog', () => {
     expect(PERMISSION_CATALOG.users).toEqual(expect.arrayContaining(['view', 'create', 'edit', 'delete', 'assign', 'manage']));
     expect(PERMISSION_CATALOG.roles).toEqual(expect.arrayContaining(['view', 'create', 'edit', 'delete', 'assign', 'manage']));
     expect(allPermissionKeys().length).toBeGreaterThan(200);
+  });
+
+  it('defines 39 valid and distinct hospital role grant maps', () => {
+    const validation = validateHospitalRoleCatalog();
+    expect(validation).toEqual({ valid: true, errors: [] });
+    expect(HOSPITAL_ROLE_CATALOG).toHaveLength(39);
+    const signatures = HOSPITAL_ROLE_CATALOG.map(([slug]) => {
+      const template = hospitalRoleTemplate(slug)!;
+      return Object.entries(template.grants)
+        .flatMap(([permission, scopes]) => scopes.map((scope) => `${permission}:${scope}`))
+        .sort()
+        .join('|');
+    });
+    expect(new Set(signatures).size).toBe(39);
+  });
+
+  it('keeps named operational roles on their intended modules and scopes', () => {
+    expect(hospitalRoleTemplate('pharmacist')?.grants['pharmacy.*']).toEqual(['branch']);
+    expect(hospitalRoleTemplate('pharmacy_technician')?.grants['pharmacy.approve']).toBeUndefined();
+    expect(hospitalRoleTemplate('pharmacy_technician')?.grants['pharmacy.create']).toEqual(['branch']);
+    expect(hospitalRoleTemplate('inventory_manager')?.grants['inventory.*']).toEqual(['branch']);
+    expect(hospitalRoleTemplate('compliance_officer')?.grants['compliance.*']).toEqual(['tenant']);
+    expect(hospitalRoleTemplate('insurance_claims_officer')?.grants['insurance_claims.approve']).toEqual(['branch']);
+    expect(hospitalRoleTemplate('reporting_bi_analyst')?.grants['bi.*']).toEqual(['tenant']);
   });
 });
 

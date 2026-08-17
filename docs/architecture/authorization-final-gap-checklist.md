@@ -2,7 +2,7 @@
 
 **Reviewed:** 2026-08-18
 **Branch:** `main`
-**Implementation baseline:** `a04bd28`
+**Implementation checkpoint:** explicit 39-role authorization refactor pending final commit
 
 ## Completed implementation targets
 
@@ -14,14 +14,14 @@
 | Wildcard permissions | Exact, module wildcard, and global wildcard matching remains compatible with the existing catalog and mutation APIs. | Complete |
 | RBAC permission naming | `roles.update` is the documented guard; `roles.edit` remains compatible through shared normalization. | Complete |
 | RBAC lifecycle | Custom create/update/delete, template clone, membership-aware assignment/removal, privilege ceilings, system-role protection, audit, cache invalidation, and session revocation. | Complete |
-| Hospital role catalog | All 39 predefined templates are centralized in shared authz and seeded by migration 042. | Complete |
-| Scope policies | Patients, appointments, EMR, billing, laboratory, radiology, pharmacy, HR, compliance, audit, inventory, and reports have runtime policy integrations and scope-context migrations where required. | Complete for defined modules |
+| Hospital role catalog | All 39 predefined templates are centralized in shared authz, each has an explicit grant map, the generated matrix confirms 39 unique complete grant signatures, migration 042 seeds the catalog, and migration 047 upgrades existing system rows. | Complete |
+| Scope policies | Patients, appointments, EMR, billing, laboratory, radiology, pharmacy, HR, compliance, audit, inventory, reports, queue, nursing, insurance claims, expenses, and report-linked operations have runtime policy integrations and scope-context migrations where required. | Complete for defined modules |
 | Query isolation regressions | Tenant, branch, department, assigned-patient, report, audit, inventory, wildcard, and denial cases are covered by unit/regression tests. | Complete |
 | Frontend primitives | `Can`, `ProtectedRoute`, `filterMenu`, `AuthorizationContext`, `useAuthorization`, membership switcher, protected routes, and permission-aware navigation. | Complete |
-| Frontend action gates | Sensitive controls in Patients, DMS, BI, appointments, billing, laboratory, pharmacy, HR, inventory, radiology, reports, and audit export are gated. Roles retains equivalent `useAuth().can()` checks. | Complete for exposed controls |
+| Frontend action gates | Sensitive controls in Patients, DMS, BI, appointments, billing, laboratory, pharmacy, HR, inventory, radiology, nursing, CRM, chat, forms, data export, integrations, branches, reports, and audit export are gated. Roles retains equivalent permission checks. | Complete for exposed controls |
 | Audit architecture | Existing `logAudit()` is reused for membership, role, assignment, denial, switch, and permission mutation events. | Complete |
 | Authorization caching | Versioned Redis cache is membership-safe; status is checked before cache read; mutations bump versions and invalidate keys. | Complete |
-| Security tests | JWT claim tests, precedence tests, scope-policy tests, and an opt-in PostgreSQL migration/seed/isolation suite are committed. | Complete in code |
+| Security tests | JWT claim tests, explicit 39-role uniqueness tests, precedence tests, 12 scope-policy tests, module regressions, and an opt-in PostgreSQL migration/seed/isolation suite are committed. | Complete in code |
 
 ## External execution prerequisite
 
@@ -36,7 +36,7 @@ The suite runs migrations, seeds two tenants and memberships, validates cross-te
 
 ## Acceptance decision
 
-> **The authorization implementation is complete in code and has passed all available unit, frontend, type-check, precedence, and scope-policy validation. PostgreSQL-backed migration and integration execution remains a required CI/release gate.**
+> **The authorization implementation is complete in code, all 39 catalog roles have distinct explicit grant signatures, and all available unit, frontend, type-check, precedence, and scope-policy validation has passed. PostgreSQL-backed migration and integration execution remains a required CI/release gate.**
 
 No frontend or backend path should treat a successful UI check as a security decision. Every protected API remains responsible for authentication, authorization, scope policy, tenant ownership, and audit behavior.
 

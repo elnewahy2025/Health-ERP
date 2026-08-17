@@ -20,7 +20,7 @@ export async function registerApiGatewayModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/api-keys', { preHandler: [authenticate, authorize('api_keys.view')] }, async (request, reply) => {
+  app.post('/api/v1/api-keys', { preHandler: [authenticate, authorize('api_keys.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
     const rawKey = 'vh_' + crypto.randomBytes(32).toString('base64url');
     const prefix = rawKey.slice(0, 12);
@@ -50,7 +50,7 @@ export async function registerApiGatewayModule(app: FastifyInstance) {
     return sendSuccess(reply, null, 'API key updated');
   });
 
-  app.delete('/api/v1/api-keys/:id', { preHandler: [authenticate, authorize('api_keys.edit')] }, async (request, reply) => {
+  app.delete('/api/v1/api-keys/:id', { preHandler: [authenticate, authorize('api_keys.delete')] }, async (request, reply) => {
     await db('api_key_logs').where({ api_key_id: (request.params as { id: string }).id }).del();
     await db('api_keys').where({ id: (request.params as { id: string }).id }).del();
     return sendSuccess(reply, null, 'API key deleted');
@@ -92,7 +92,7 @@ export async function registerApiGatewayModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/cache-configs', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
+  app.post('/api/v1/cache-configs', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const body = request.body as Record<string, unknown>;
     const [c] = await db('cache_configs').insert({
       tenant_id: tenantId, endpoint_pattern: body.endpointPattern,
@@ -101,7 +101,7 @@ export async function registerApiGatewayModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: c.id, endpointPattern: c.endpoint_pattern }, 'Cache config added', 201);
   });
 
-  app.put('/api/v1/cache-configs/:id', { preHandler: [authenticate, authorize('settings.edit')] }, async (request, reply) => {
+  app.put('/api/v1/cache-configs/:id', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
     const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.ttlSeconds) update.ttl_seconds = body.ttlSeconds;

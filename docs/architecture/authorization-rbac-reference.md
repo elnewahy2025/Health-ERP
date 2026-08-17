@@ -138,7 +138,9 @@ The frontend must expose an active membership/tenant/branch context switcher onl
 
 ## 7. Role catalog — TARGET STATE
 
-The existing twelve roles remain compatible. Add system role templates for the following 39-role catalog, merging names only where current semantics match and avoiding duplicate slugs. System templates have `systemRole=true` and `tenantId=null`; tenant custom roles have `systemRole=false` and the active tenant ID. Tenant administrators may clone and customize templates but may not mutate global templates.
+The existing twelve roles remain compatible. Add system role templates for the following 39-role catalog, without collapsing distinct hospital job functions into shared grant packages. System templates have `systemRole=true` and `tenantId=null`; tenant custom roles have `systemRole=false` and the active tenant ID. Tenant administrators may clone and customize templates but may not mutate global templates.
+
+Each of the 39 catalog roles must have an explicit, independently reviewable grant map. Roles may share individual permission keys where the job function genuinely overlaps, but no two distinct catalog roles may be identical across their complete `(permission, scope)` set. The catalog default scope is descriptive only; every sensitive grant must carry the correct module-specific scope. A role’s description, slug, or default-scope label is not evidence of access unless its explicit grants enforce it.
 
 | # | Role template | Default scope | Primary access |
 |---:|---|---|---|
@@ -234,6 +236,7 @@ The main risks are an incorrect legacy backfill, hidden reliance on tenant JWT c
 |---|---|---|
 | 2026-08-17 | Extend the existing Knex/Fastify/shared authorization architecture rather than introduce a new framework | Repository already has normalized RBAC, RLS, guards, audit, and tests |
 | 2026-08-17 | Retain existing permission keys and scope names | Prevents destructive authorization behavior changes and protects existing modules |
+| 2026-08-18 | Replace shared 39-role base inheritance with explicit role grant maps | Distinct hospital job functions must produce distinct effective rights; existing `SEED_ROLES` remain as legacy compatibility templates while the 39 system catalog becomes authoritative for new role clones |
 | 2026-08-17 | Treat the active bootstrap as authoritative over the legacy auth plugin | `src/index.ts` is the registered application composition root; the plugin has a conflicting claim model |
 | 2026-08-17 | Add memberships additively and preserve legacy tenant fields during migration | Existing users and sessions must not be broken by a schema cutover |
 

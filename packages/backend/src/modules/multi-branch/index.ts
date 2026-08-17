@@ -53,7 +53,7 @@ export async function registerMultiBranchModule(app: FastifyInstance) {
   });
 
   // Create branch
-  app.post('/api/v1/branches', { preHandler: [authenticate, authorize('branches.view')] }, async (request, reply) => {
+  app.post('/api/v1/branches', { preHandler: [authenticate, authorize('branches.manage')] }, async (request, reply) => {
     const ctx = getCtx(request);
     const parsed = branchSchema.safeParse(request.body);
     if (!parsed.success) return sendError(reply, parsed.error.message, 400);
@@ -65,7 +65,7 @@ export async function registerMultiBranchModule(app: FastifyInstance) {
   });
 
   // Update branch
-  app.put('/api/v1/branches/:id', { preHandler: [authenticate, authorize('branches.view')] }, async (request, reply) => {
+  app.put('/api/v1/branches/:id', { preHandler: [authenticate, authorize('branches.manage')] }, async (request, reply) => {
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
     const parsed = branchSchema.partial().safeParse(request.body);
@@ -80,7 +80,7 @@ export async function registerMultiBranchModule(app: FastifyInstance) {
   });
 
   // Delete branch (soft delete)
-  app.delete('/api/v1/branches/:id', { preHandler: [authenticate, authorize('branches.view')] }, async (request, reply) => {
+  app.delete('/api/v1/branches/:id', { preHandler: [authenticate, authorize('branches.manage')] }, async (request, reply) => {
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
     const [row] = await db('branches').where({ id, tenant_id: ctx.tenantId }).update({ is_active: false, updated_at: new Date() }).returning('*');

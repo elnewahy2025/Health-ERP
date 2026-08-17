@@ -23,6 +23,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Can } from '../components/auth/Authorization';
 
 type TabType = 'connections' | 'webhooks' | 'catalog';
 
@@ -219,13 +220,15 @@ export default function IntegrationsPage() {
                       {formatDateTime(c.lastSyncAt) || 'Never'}
                     </td>
                     <td className="p-3">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => void handleTestConnection(c.id)}
-                      >
-                        {t('intg.test')}
-                      </Button>
+                      <Can permission="integrations.manage">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void handleTestConnection(c.id)}
+                        >
+                          {t('intg.test')}
+                        </Button>
+                      </Can>
                     </td>
                   </tr>
                 ))

@@ -43,7 +43,7 @@ export async function registerCommunicationsModule(app: FastifyInstance) {
   });
 
   // Create a custom template (tenant-specific)
-  app.post('/api/v1/notification-templates', { preHandler: [authenticate, authorize('communications.view')] }, async (request, reply) => {
+  app.post('/api/v1/notification-templates', { preHandler: [authenticate, authorize('communications.create')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const body = z.object({
       code: z.string().min(2).max(100), name: z.string().min(1).max(200),

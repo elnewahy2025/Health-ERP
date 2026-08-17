@@ -8,6 +8,7 @@ import {
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
 import { formatDateTime } from '../lib/format';
+import { Can } from '../components/auth/Authorization';
 
 type ExportTab = 'export' | 'jobs' | 'definitions';
 
@@ -156,9 +157,11 @@ export default function DataExportPage() {
                   value={selectedFormat}
                   onChange={(e) => setSelectedFormat(e.target.value)}
                 />
-                <Button className="w-full" loading={running} onClick={handleExport}>
-                  <Download className="w-4 h-4" /> {t('dataExport.exportButton', { module: selectedModule, format: selectedFormat.toUpperCase() })}
-                </Button>
+                <Can permission="data_export.export">
+                  <Button className="w-full" loading={running} onClick={handleExport}>
+                    <Download className="w-4 h-4" /> {t('dataExport.exportButton', { module: selectedModule, format: selectedFormat.toUpperCase() })}
+                  </Button>
+                </Can>
               </div>
             </CardBody>
           </Card>
@@ -231,11 +234,13 @@ export default function DataExportPage() {
                     <td><Badge>{sanitizeString(j.trigger)}</Badge></td>
                     <td className="text-xs">{formatDateTime(j.startedAt)}</td>
                     <td>
-                      {j.status === 'completed' && (
-                        <Button variant="ghost" size="sm">
-                          <Download className="w-3 h-3" />
-                        </Button>
-                      )}
+                      <Can permission="data_export.export">
+                        {j.status === 'completed' && (
+                          <Button variant="ghost" size="sm">
+                            <Download className="w-3 h-3" />
+                          </Button>
+                        )}
+                      </Can>
                     </td>
                   </tr>
                 ))
@@ -248,9 +253,11 @@ export default function DataExportPage() {
       {tab === 'definitions' && (
         <div>
           <div className="flex gap-2 mb-4">
-            <Button>
-              <Plus className="w-4 h-4" /> {t('dataExport.newDefinition')}
-            </Button>
+            <Can permission="data_export.create">
+              <Button>
+                <Plus className="w-4 h-4" /> {t('dataExport.newDefinition')}
+              </Button>
+            </Can>
           </div>
           <div className="table-container">
             <table>

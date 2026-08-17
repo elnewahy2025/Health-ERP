@@ -326,7 +326,7 @@ export default function InventoryPage() {
             {t('inventory.itemsCount', { count: items.length })}, {pos.length} {t('inventory.purchaseOrders').toLowerCase()}
           </p>
         </div>
-        <Can permission={tab === 'items' ? 'inventory.create' : tab === 'warehouses' ? 'inventory.manage' : 'inventory.create'}>
+        <Can permission={tab === 'items' ? 'inventory.create' : tab === 'warehouses' ? 'inventory.create' : 'inventory.create'}>
           <Button icon={<Plus className="w-4 h-4" />} onClick={openNewModal}>
             {tab === 'items' ? newItemLabel : tab === 'warehouses' ? newWhLabel : newPoLabel}
           </Button>
@@ -543,7 +543,7 @@ export default function InventoryPage() {
       <Modal open={showWarehouseModal} onClose={closeWarehouseModal} title={t('inventory.newWarehouse')} size="md"
         footer={<>
           <Button variant="secondary" onClick={closeWarehouseModal}>{t('common.cancel')}</Button>
-          <Can permission="inventory.manage">
+          <Can permission="inventory.create">
             <Button loading={saving} onClick={() => { const f = document.getElementById('warehouse-form'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
           </Can>
         </>}

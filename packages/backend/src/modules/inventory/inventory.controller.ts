@@ -1,6 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
-import type { PermissionScope } from '@healthcare/shared/authz';
+import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 import type { Principal } from '../../services/authorization.js';
 import { sendSuccess } from '../../utils/response.js';
 import { ValidationError, NotFoundError } from '@healthcare/shared/errors';
@@ -18,11 +18,11 @@ import {
   createPurchaseOrderSchema, receivePurchaseOrderSchema,
 } from './inventory.schema.js';
 
-function inventoryContext(request: FastifyRequest): { principal: Principal; scope: PermissionScope } {
+function inventoryContext(request: FastifyRequest, permission = 'inventory.view'): { principal: Principal; scope: PermissionScope } {
   const principal = getCtx(request).principal;
   return {
     principal,
-    scope: principal.grants.find((grant) => grant.permission === 'inventory.view' || grant.permission === '*')?.scope || 'tenant',
+    scope: principal.grants.find((grant) => grant.permission === '*' || permissionKeyMatches(grant.permission, permission))?.scope || 'tenant',
   };
 }
 
@@ -99,8 +99,11 @@ export async function listWarehouses(request: FastifyRequest, reply: FastifyRepl
 export async function createWarehouse(request: FastifyRequest, reply: FastifyReply) {
   const body = createWarehouseSchema.parse(request.body);
   const tenantId = getTenantId(request);
-  const { userId } = getCtx(request);
-  const warehouse = await repo.createWarehouse(tenantId, body);
+  const { userId, principal } = getCtx(request);
+  const context = inventoryContext(request, 'inventory.create');
+  const branchId = context.scope === 'branch' ? principal.branches[0] : null;
+  if (context.scope === 'branch' && !branchId) throw new ValidationError('An active branch is required to create a warehouse');
+  const warehouse = await repo.createWarehouse(tenantId, { ...body, branch_id: branchId });
   await logAudit({ tenantId, userId, action: 'inventory.warehouse.created', entityType: 'warehouse', entityId: warehouse.id });
   return sendSuccess(reply, mapWarehouse(warehouse), 'Warehouse created', 201);
 }
@@ -141,6 +144,8 @@ export async function createItem(request: FastifyRequest, reply: FastifyReply) {
   const body = createInventoryItemSchema.parse(request.body);
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
+  const warehouse = await repo.findWarehouseById(body.warehouseId, tenantId, inventoryContext(request, 'inventory.create'));
+  if (!warehouse) throw new NotFoundError('Accessible warehouse', body.warehouseId);
   const item = await repo.createInventoryItem(tenantId, {
     warehouse_id: body.warehouseId, sku: body.sku, name: body.name,
     category: body.category || null, unit: body.unit, quantity: body.quantity,
@@ -177,7 +182,7 @@ export async function updateStock(request: FastifyRequest, reply: FastifyReply) 
 
   // ── #2: Prevent dispensing expired items ──
   if (body.type === 'dispensing' || body.type === 'issue') {
-    const item = await repo.findInventoryItemById(itemId, tenantId, inventoryContext(request));
+    const item = await repo.findInventoryItemById(itemId, tenantId, inventoryContext(request, 'inventory.edit'));
     if (item?.expiry_date) {
       const today = new Date().toISOString().split('T')[0];
       if (item.expiry_date < today) {
@@ -229,7 +234,7 @@ export async function createAdjustment(request: FastifyRequest, reply: FastifyRe
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
 
-  const item = await repo.findInventoryItemById(body.itemId, tenantId, inventoryContext(request));
+  const item = await repo.findInventoryItemById(body.itemId, tenantId, inventoryContext(request, 'inventory.edit'));
   if (!item) throw new NotFoundError('Inventory item', body.itemId);
 
   // Prevent negative stock on adjustment
@@ -265,7 +270,7 @@ export async function transferStock(request: FastifyRequest, reply: FastifyReply
     throw new ValidationError('Source and destination warehouses must be different');
   }
 
-  const warehouseContext = inventoryContext(request);
+  const warehouseContext = inventoryContext(request, 'inventory.create');
   const sourceWarehouse = await repo.findWarehouseById(body.fromWarehouseId, tenantId, warehouseContext);
   const destinationWarehouse = await repo.findWarehouseById(body.toWarehouseId, tenantId, warehouseContext);
   if (!sourceWarehouse || !destinationWarehouse) throw new NotFoundError('Accessible warehouse', !sourceWarehouse ? body.fromWarehouseId : body.toWarehouseId);
@@ -278,7 +283,7 @@ export async function transferStock(request: FastifyRequest, reply: FastifyReply
   if (!deductResult) throw new ValidationError('Insufficient stock for transfer');
 
   // Add to destination — find or create item in destination warehouse
-  let destItem = (await repo.findInventoryItems(tenantId, { warehouseId: body.toWarehouseId, ...inventoryContext(request) }))
+  let destItem = (await repo.findInventoryItems(tenantId, { warehouseId: body.toWarehouseId, ...inventoryContext(request, 'inventory.create') }))
     .find(i => i.sku === item.sku);
 
   if (!destItem) {
@@ -379,7 +384,7 @@ export async function dispenseStock(request: FastifyRequest, reply: FastifyReply
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
 
-  const item = await repo.findInventoryItemById(body.itemId, tenantId, inventoryContext(request));
+  const item = await repo.findInventoryItemById(body.itemId, tenantId, inventoryContext(request, 'inventory.edit'));
   if (!item) throw new NotFoundError('Inventory item', body.itemId);
 
   // ── #2: Prevent dispensing expired items ──
@@ -432,7 +437,7 @@ export async function bulkStockReceipt(request: FastifyRequest, reply: FastifyRe
   const errors: string[] = [];
 
   for (const entry of body.items) {
-    const item = await repo.findInventoryItemById(entry.itemId, tenantId);
+    const item = await repo.findInventoryItemById(entry.itemId, tenantId, inventoryContext(request, 'inventory.create'));
     if (!item) {
       errors.push(`Item ${entry.itemId} not found`);
       continue;
@@ -497,6 +502,10 @@ export async function createPurchaseOrder(request: FastifyRequest, reply: Fastif
   const body = createPurchaseOrderSchema.parse(request.body);
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
+  if (body.warehouseId) {
+    const warehouse = await repo.findWarehouseById(body.warehouseId, tenantId, inventoryContext(request, 'inventory.create'));
+    if (!warehouse) throw new NotFoundError('Accessible warehouse', body.warehouseId);
+  }
   const poNumber = `PO-${Date.now().toString(36).toUpperCase()}`;
   let totalAmount = 0;
   for (const item of body.items) totalAmount += item.quantityOrdered * item.unitCost;
@@ -522,7 +531,7 @@ export async function receivePurchaseOrder(request: FastifyRequest, reply: Fasti
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
 
-  const purchaseOrder = await repo.findPurchaseOrderById(poId, tenantId, inventoryContext(request));
+  const purchaseOrder = await repo.findPurchaseOrderById(poId, tenantId, inventoryContext(request, 'inventory.edit'));
   if (!purchaseOrder) throw new NotFoundError('Purchase order', poId);
 
   for (const received of body.items) {

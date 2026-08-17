@@ -33,7 +33,7 @@ export async function registerDataExportModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/export/definitions', { preHandler: [authenticate, authorize('data_export.view')] }, async (request, reply) => {
+  app.post('/api/v1/export/definitions', { preHandler: [authenticate, authorize('data_export.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -56,7 +56,7 @@ export async function registerDataExportModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: def.id, name: def.name }, 'Export definition created', 201);
   });
 
-  app.delete('/api/v1/export/definitions/:id', { preHandler: [authenticate, authorize('data_export.edit')] }, async (request, reply) => {
+  app.delete('/api/v1/export/definitions/:id', { preHandler: [authenticate, authorize('data_export.delete')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -80,7 +80,7 @@ export async function registerDataExportModule(app: FastifyInstance) {
   });
 
   // ── Run Export ──
-  app.post('/api/v1/export/run', { preHandler: [authenticate, authorize('data_export.create')] }, async (request, reply) => {
+  app.post('/api/v1/export/run', { preHandler: [authenticate, authorize('data_export.export')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;

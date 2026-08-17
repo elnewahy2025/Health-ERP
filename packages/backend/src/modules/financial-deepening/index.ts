@@ -8,9 +8,14 @@ import { logAudit } from '../../services/audit.js';
 import { getEnv } from '@healthcare/shared/config';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
+import { applyScopePolicy } from '../../services/scope-policy.js';
+import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
+import { ForbiddenError } from '@healthcare/shared/errors';
 
 export async function registerFinancialDeepeningModule(app: FastifyInstance) {
   const env = getEnv();
+  const resolveExpenseScope = (principal: { grants: Array<{ permission: string; scope: PermissionScope }> }, permission = 'expenses.view'): PermissionScope =>
+    principal.grants.find((grant) => grant.permission === '*' || permissionKeyMatches(grant.permission, permission))?.scope || 'tenant';
 
   // ==================== EXPENSE CATEGORIES ====================
 
@@ -25,7 +30,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     return sendSuccess(reply, categories);
   });
 
-  app.post('/api/v1/expense-categories', { preHandler: [authenticate, authorize('expenses.view')] }, async (request, reply) => {
+  app.post('/api/v1/expense-categories', { preHandler: [authenticate, authorize('expenses.create')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const body = z.object({
       name: z.string().min(1), code: z.string().min(1).max(50),
@@ -51,8 +56,11 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
       fromDate: z.string().optional(), toDate: z.string().optional(),
     }).parse(request.query);
 
+    const principal = getCtx(request).principal;
+    const scope = resolveExpenseScope(principal, 'expenses.view');
     let dbQuery = db('expenses').leftJoin('expense_categories', 'expenses.category_id', 'expense_categories.id')
       .where('expenses.tenant_id', tenantId);
+    dbQuery = applyScopePolicy('expenses', dbQuery, principal, scope) as typeof dbQuery;
 
     if (query.status) dbQuery = dbQuery.andWhere('expenses.status', query.status);
     if (query.categoryId) dbQuery = dbQuery.andWhere('expenses.category_id', query.categoryId);
@@ -70,8 +78,10 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     return sendPaginated(reply, data, Number(total?.count || 0), query.page, query.limit);
   });
 
-  app.post('/api/v1/expenses', { preHandler: [authenticate, authorize('expenses.view')] }, async (request, reply) => {
+  app.post('/api/v1/expenses', { preHandler: [authenticate, authorize('expenses.create')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
+    const principal = getCtx(request).principal;
+    const expenseScope = resolveExpenseScope(principal, 'expenses.create');
     const body = z.object({
       title: z.string().min(1), amount: z.number().positive(),
       categoryId: z.string().uuid().optional().nullable(),
@@ -85,13 +95,17 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
       taxAmount: z.number().optional().default(0),
     }).parse(request.body);
 
+    if (expenseScope === 'branch' && (!body.branchId || !principal.branches.includes(body.branchId))) {
+      throw new ForbiddenError('Expense creation is limited to assigned branches');
+    }
+
     // Generate expense number
     const count = await db('expenses').where({ tenant_id: tenantId }).count('id as count').first();
     const expenseNumber = `EXP-${String(Number(count?.count || 0) + 1).padStart(5, '0')}`;
 
     const [expense] = await db('expenses').insert({
       tenant_id: tenantId, title: body.title, amount: body.amount,
-      category_id: body.categoryId || null, branch_id: body.branchId || null,
+      category_id: body.categoryId || null, branch_id: expenseScope === 'branch' ? body.branchId : (body.branchId || null),
       expense_date: body.expenseDate || new Date().toISOString().split('T')[0],
       description: body.description || null, payment_method: body.paymentMethod,
       vendor_name: body.vendorName || null, vendor_tax_id: body.vendorTaxId || null,
@@ -113,7 +127,9 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
       paymentMethod: z.string().optional(), vendorName: z.string().optional(),
     }).parse(request.body);
 
-    const existing = await db('expenses').where({ id, tenant_id: tenantId }).first();
+    const principal = getCtx(request).principal;
+    const scope = resolveExpenseScope(principal, 'expenses.edit');
+    const existing = await applyScopePolicy('expenses', db('expenses').where({ id, tenant_id: tenantId }), principal, scope).first();
     if (!existing) return sendError(reply, 'Expense not found', 404);
 
     const updates: Record<string, unknown> = {};
@@ -140,7 +156,10 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     const { tenantId } = getCtx(request);
     const query = z.object({ fromDate: z.string().optional(), toDate: z.string().optional() }).parse(request.query);
 
+    const principal = getCtx(request).principal;
+    const scope = resolveExpenseScope(principal, 'expenses.view');
     let baseQuery = db('expenses').where({ tenant_id: tenantId, status: 'paid' });
+    baseQuery = applyScopePolicy('expenses', baseQuery, principal, scope) as typeof baseQuery;
     if (query.fromDate) baseQuery = baseQuery.andWhere('expense_date', '>=', query.fromDate);
     if (query.toDate) baseQuery = baseQuery.andWhere('expense_date', '<=', query.toDate);
 
@@ -149,7 +168,8 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     const byMonth = await baseQuery.clone()
       .select(db.raw("to_char(expense_date, 'YYYY-MM') as month"))
       .sum('amount as total').groupByRaw("to_char(expense_date, 'YYYY-MM')").orderByRaw('month');
-    const pendingCount = await db('expenses').where({ tenant_id: tenantId, status: 'pending' }).count('id as count').first();
+    const pendingQuery = applyScopePolicy('expenses', db('expenses').where({ tenant_id: tenantId, status: 'pending' }), principal, scope);
+    const pendingCount = await pendingQuery.count('id as count').first();
 
     return sendSuccess(reply, {
       totalExpenses: Number((totalExpenses as Record<string, unknown>)?.total || 0),

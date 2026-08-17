@@ -26,7 +26,7 @@ export async function registerDashboardWidgetsModule(app: FastifyInstance) {
     return sendSuccess(reply, { layout: defaultLayout, preferences: {}, role: primaryRole });
   });
 
-  app.post('/api/v1/dashboard/widgets', { preHandler: [authenticate, authorize('analytics_dashboard.view')] }, async (request, reply) => {
+  app.post('/api/v1/dashboard/widgets', { preHandler: [authenticate, authorize('analytics_dashboard.manage')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const body = z.object({
       layout: z.array(z.object({ id: z.string(), order: z.number(), visible: z.boolean(), size: z.enum(['small', 'medium', 'large']).optional() })),

@@ -23,7 +23,7 @@ export async function registerComplianceReportsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/compliance/reports', { preHandler: [authenticate, authorize('compliance_reports.view')] }, async (request, reply) => {
+  app.post('/api/v1/compliance/reports', { preHandler: [authenticate, authorize('compliance_reports.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
     const [rep] = await db('compliance_reports').insert({
       tenant_id: tenantId, title: body.title, type: body.type || 'internal',
@@ -34,7 +34,7 @@ export async function registerComplianceReportsModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: rep.id, title: rep.title, type: rep.type }, 'Compliance report generated', 201);
   });
 
-  app.put('/api/v1/compliance/reports/:id', { preHandler: [authenticate, authorize('compliance_reports.edit')] }, async (request, reply) => {
+  app.put('/api/v1/compliance/reports/:id', { preHandler: [authenticate, authorize('compliance_reports.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const existing = await findTenantRow('compliance_reports', id, tenantId);
     if (!existing) return reply.status(404).send({ success: false, error: 'Report not found' });
@@ -84,7 +84,7 @@ export async function registerComplianceReportsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/compliance/retention-policies', { preHandler: [authenticate, authorize('compliance_reports.view')] }, async (request, reply) => {
+  app.post('/api/v1/compliance/retention-policies', { preHandler: [authenticate, authorize('compliance_reports.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const body = request.body as Record<string, unknown>;
     const [p] = await db('data_retention_policies').insert({
       tenant_id: tenantId, entity: body.entity, retention_days: body.retentionDays || 365,
@@ -93,7 +93,7 @@ export async function registerComplianceReportsModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: p.id, entity: p.entity }, 'Retention policy created', 201);
   });
 
-  app.put('/api/v1/compliance/retention-policies/:id', { preHandler: [authenticate, authorize('compliance_reports.edit')] }, async (request, reply) => {
+  app.put('/api/v1/compliance/retention-policies/:id', { preHandler: [authenticate, authorize('compliance_reports.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const existing = await findTenantRow('data_retention_policies', id, tenantId);
     if (!existing) return reply.status(404).send({ success: false, error: 'Retention policy not found' });
@@ -116,7 +116,7 @@ export async function registerComplianceReportsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/compliance/baa', { preHandler: [authenticate, authorize('compliance_reports.view')] }, async (request, reply) => {
+  app.post('/api/v1/compliance/baa', { preHandler: [authenticate, authorize('compliance_reports.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const body = request.body as Record<string, unknown>;
     const [baa] = await db('business_associate_agreements').insert({
       tenant_id: tenantId, organization_name: body.organizationName,
@@ -128,7 +128,7 @@ export async function registerComplianceReportsModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: baa.id, organizationName: baa.organization_name }, 'BAA created', 201);
   });
 
-  app.put('/api/v1/compliance/baa/:id', { preHandler: [authenticate, authorize('compliance_reports.edit')] }, async (request, reply) => {
+  app.put('/api/v1/compliance/baa/:id', { preHandler: [authenticate, authorize('compliance_reports.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const existing = await findTenantRow('business_associate_agreements', id, tenantId);
     if (!existing) return reply.status(404).send({ success: false, error: 'BAA not found' });

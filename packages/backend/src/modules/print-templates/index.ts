@@ -32,7 +32,7 @@ export async function registerPrintTemplatesModule(app: FastifyInstance) {
     });
   });
 
-  app.post('/api/v1/print/templates', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
+  app.post('/api/v1/print/templates', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const body = request.body as Record<string, unknown>;
     const code = String(body.code || '').trim();
     const existing = await db('print_templates').where({ tenant_id: tenantId, code }).first();

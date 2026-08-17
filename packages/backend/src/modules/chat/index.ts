@@ -54,7 +54,7 @@ export async function registerChatModule(app: FastifyInstance) {
   });
 
   // Mark conversation as read
-  app.post('/api/v1/chat/conversations/:id/read', { preHandler: [authenticate, authorize('chat.view')] }, async (request, reply) => {
+  app.post('/api/v1/chat/conversations/:id/read', { preHandler: [authenticate, authorize('chat.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -68,7 +68,7 @@ export async function registerChatModule(app: FastifyInstance) {
   });
 
   // Send a message
-  app.post('/api/v1/chat/conversations/:id/messages', { preHandler: [authenticate, authorize('chat.view')] }, async (request, reply) => {
+  app.post('/api/v1/chat/conversations/:id/messages', { preHandler: [authenticate, authorize('chat.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -80,7 +80,7 @@ export async function registerChatModule(app: FastifyInstance) {
   });
 
   // Create a conversation
-  app.post('/api/v1/chat/conversations', { preHandler: [authenticate, authorize('chat.view')] }, async (request, reply) => {
+  app.post('/api/v1/chat/conversations', { preHandler: [authenticate, authorize('chat.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { participantIds, name } = request.body as { participantIds: string[]; name?: string };

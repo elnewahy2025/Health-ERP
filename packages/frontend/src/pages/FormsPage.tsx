@@ -6,6 +6,7 @@ import { Plus, ClipboardList, FileJson } from 'lucide-react';
 import { sanitizeString } from '../lib/sanitize';
 import { formatDateTime } from '../lib/format';
 import toast from 'react-hot-toast';
+import { Can } from '../components/auth/Authorization';
 
 type TabType = 'definitions' | 'submissions';
 
@@ -126,9 +127,11 @@ export default function FormsPage() {
             {t('forms.formCount', { count: definitions.length })}, {t('forms.submissionCount', { count: submissions.length })}
           </p>
         </div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>
-          {t('forms.newForm')}
-        </Button>
+        <Can permission="forms.create">
+          <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>
+            {t('forms.newForm')}
+          </Button>
+        </Can>
       </div>
 
       {/* Tab Buttons */}
@@ -224,7 +227,9 @@ export default function FormsPage() {
       <Modal open={showModal} onClose={closeModal} title={t('forms.newForm')} size="lg"
         footer={<>
           <Button variant="secondary" onClick={closeModal}>{t('common.cancel')}</Button>
-          <Button loading={saving} onClick={() => { const f = document.getElementById('form-def'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          <Can permission="forms.create">
+            <Button loading={saving} onClick={() => { const f = document.getElementById('form-def'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          </Can>
         </>}
       >
         <form id="form-def" onSubmit={handleCreate} className="space-y-4">

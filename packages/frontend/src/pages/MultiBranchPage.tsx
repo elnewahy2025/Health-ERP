@@ -8,6 +8,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { Can } from '../components/auth/Authorization';
 
 interface Branch {
   id: string;
@@ -217,9 +218,11 @@ export default function MultiBranchPage() {
           <h1 className="text-2xl font-bold text-gray-900">{t('branches.title')}</h1>
           <p className="text-sm text-gray-500 mt-1">{t('branches.subtitle')}</p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="w-4 h-4" /> {t('branches.addBranch')}
-        </Button>
+        <Can permission="branches.manage">
+          <Button onClick={openCreate}>
+            <Plus className="w-4 h-4" /> {t('branches.addBranch')}
+          </Button>
+        </Can>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -321,12 +324,14 @@ export default function MultiBranchPage() {
                   <Button size="sm" variant="secondary" onClick={() => navigate(`/branches/${b.id}`)} className="flex-1">
                     <Eye className="w-3.5 h-3.5" /> {t('branches.view')}
                   </Button>
-                  <Button size="sm" variant="secondary" onClick={() => handleEdit(b)} className="flex-1">
-                    <Edit3 className="w-3.5 h-3.5" /> {t('branches.edit')}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => { setDeleteBranch(b); setShowDeleteModal(true); }}>
-                    <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                  </Button>
+                  <Can permission="branches.manage">
+                    <Button size="sm" variant="secondary" onClick={() => handleEdit(b)} className="flex-1">
+                      <Edit3 className="w-3.5 h-3.5" /> {t('branches.edit')}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => { setDeleteBranch(b); setShowDeleteModal(true); }}>
+                      <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                    </Button>
+                  </Can>
                 </div>
               </CardBody>
             </Card>
@@ -357,9 +362,11 @@ export default function MultiBranchPage() {
           </div>
           <div className="flex justify-end gap-3 pt-4 border-t">
             <Button variant="secondary" onClick={() => { setShowModal(false); setEditBranch(null); }}>{t('branches.cancel')}</Button>
-            <Button onClick={handleSubmit} loading={saving} disabled={saving}>
-              {editBranch ? t('branches.update') : t('branches.create')}
-            </Button>
+            <Can permission="branches.manage">
+              <Button onClick={handleSubmit} loading={saving} disabled={saving}>
+                {editBranch ? t('branches.update') : t('branches.create')}
+              </Button>
+            </Can>
           </div>
         </div>
       </Modal>
@@ -369,7 +376,9 @@ export default function MultiBranchPage() {
           <p className="text-sm text-gray-600">{t('branches.confirmDelete')}</p>
           <div className="flex gap-2">
             <Button variant="secondary" className="flex-1" onClick={() => { setShowDeleteModal(false); setDeleteBranch(null); }}>{t('branches.cancel')}</Button>
-            <Button variant="danger" className="flex-1" onClick={handleDelete} loading={deleting}>{t('branches.delete')}</Button>
+            <Can permission="branches.manage">
+              <Button variant="danger" className="flex-1" onClick={handleDelete} loading={deleting}>{t('branches.delete')}</Button>
+            </Can>
           </div>
         </div>
       </Modal>

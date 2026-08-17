@@ -4,15 +4,15 @@ import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { PatientNotFoundError } from '@healthcare/shared/errors';
 import { authenticate } from '../auth-guard.js';
-import { authorize, type Principal } from '../../services/authorization.js';
+import { authorize, hasPermission, type Principal } from '../../services/authorization.js';
 import { applyScopePolicy } from '../../services/scope-policy.js';
-import type { PermissionScope } from '@healthcare/shared/authz';
+import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 import { ForbiddenError } from '@healthcare/shared/errors';
 import { logAudit } from '../../services/audit.js';
 
 export async function registerRadiologyModule(app: FastifyInstance) {
-  const resolveRadiologyScope = (principal: Principal): PermissionScope =>
-    principal.grants.find((grant) => grant.permission === 'radiology.view' || grant.permission === '*')?.scope || 'tenant';
+  const resolveRadiologyScope = (principal: Principal, permission = 'radiology.view'): PermissionScope =>
+    principal.grants.find((grant) => grant.permission === '*' || permissionKeyMatches(grant.permission, permission))?.scope || 'tenant';
 
   app.get('/api/v1/radiology/orders', { preHandler: [authenticate, authorize('radiology.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
@@ -28,7 +28,7 @@ export async function registerRadiologyModule(app: FastifyInstance) {
     return sendSuccess(reply, orders.map(mapOrder));
   });
 
-  app.post('/api/v1/radiology/orders', { preHandler: [authenticate, authorize('radiology.view')] }, async (request, reply) => {
+  app.post('/api/v1/radiology/orders', { preHandler: [authenticate, authorize('radiology.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -48,13 +48,17 @@ export async function registerRadiologyModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: order.id, orderNumber: order.order_number }, 'Radiology order created', 201);
   });
 
-  app.put('/api/v1/radiology/orders/:id', { preHandler: [authenticate, authorize('radiology.view')] }, async (request, reply) => {
+  app.put('/api/v1/radiology/orders/:id', { preHandler: [authenticate, authorize('radiology.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
     const body = request.body as Record<string, unknown>;
     const principal = getCtx(request).principal;
-    const scope = resolveRadiologyScope(principal);
+    const requiresApproval = Boolean(body.findings || body.impression || body.report || body.status === 'completed' || body.status === 'rejected');
+    if (requiresApproval && !hasPermission(principal, 'radiology.approve', 'department')) {
+      throw new ForbiddenError('Radiology report approval permission is required for final findings or disposition');
+    }
+    const scope = resolveRadiologyScope(principal, requiresApproval ? 'radiology.approve' : 'radiology.edit');
     const accessible = await applyScopePolicy('radiology', db('radiology_orders').join('patients', 'radiology_orders.patient_id', 'patients.id').where({ 'radiology_orders.id': id, 'radiology_orders.tenant_id': tenantId }), principal, scope).first();
     if (!accessible) throw new ForbiddenError('You do not have access to this radiology order');
     const update: Record<string, unknown> = { updated_at: new Date() };

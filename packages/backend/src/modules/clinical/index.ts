@@ -6,7 +6,7 @@ import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { findTenantRow } from '../../utils/tenant-scope.js';
 import { logAudit } from '../../services/audit.js';
 import { authenticate } from '../auth-guard.js';
-import { authorize } from '../../services/authorization.js';
+import { authorize, canAccessPatient } from '../../services/authorization.js';
 
 export async function registerClinicalModule(app: FastifyInstance) {
 
@@ -42,13 +42,13 @@ export async function registerClinicalModule(app: FastifyInstance) {
     return sendSuccess(reply, allergies.map((a: Record<string, unknown>) => ({ id: a.id, allergen: a.allergen, severity: a.severity, reaction: a.reaction, notes: a.notes, createdAt: a.created_at })));
   });
 
-  app.post('/api/v1/patients/:patientId/allergies', { preHandler: [authenticate, authorize('emr.view')] }, async (request, reply) => {
+  app.post('/api/v1/patients/:patientId/allergies', { preHandler: [authenticate, authorize('emr.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { patientId } = z.object({ patientId: z.string().uuid() }).parse(request.params);
     const body = z.object({ allergen: z.string().min(1), severity: z.enum(['mild', 'moderate', 'severe', 'anaphylaxis']).optional().default('moderate'), reaction: z.string().optional(), notes: z.string().optional() }).parse(request.body);
     const patient = await findTenantRow('patients', patientId, tenantId);
-    if (!patient) return reply.status(404).send({ success: false, error: 'Patient not found' });
+    if (!patient || !(await canAccessPatient(ctx.principal, patient as { id: string; tenant_id: string; branch_id?: string | null; department_id?: string | null }))) return reply.status(404).send({ success: false, error: 'Patient not found or outside your scope' });
     const [allergy] = await db('patient_allergies').insert({ tenant_id: tenantId, patient_id: patientId, allergen: body.allergen, severity: body.severity, reaction: body.reaction, notes: body.notes, recorded_by: ctx.userId }).returning('*');
 
     await logAudit({ tenantId, userId: ctx.userId, action: 'clinical.allergy_created', entityType: 'patient_allergy', entityId: allergy.id, metadata: { patientId, allergen: body.allergen }, ipAddress: request.ip, userAgent: request.headers['user-agent'] as string });

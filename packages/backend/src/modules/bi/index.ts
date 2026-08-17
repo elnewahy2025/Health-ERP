@@ -22,7 +22,7 @@ export async function registerBiModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/bi/dashboards', { preHandler: [authenticate, authorize('bi.view')] }, async (request, reply) => {
+  app.post('/api/v1/bi/dashboards', { preHandler: [authenticate, authorize('bi.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const body = request.body as Record<string, unknown>;
     const slug = body.slug || (body.name as string).toLowerCase().replace(/\s+/g, '_');
     const [d] = await db('dashboard_definitions').insert({
@@ -33,7 +33,7 @@ export async function registerBiModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: d.id, name: d.name, slug: d.slug }, 'Dashboard created', 201);
   });
 
-  app.put('/api/v1/bi/dashboards/:id', { preHandler: [authenticate, authorize('bi.edit')] }, async (request, reply) => {
+  app.put('/api/v1/bi/dashboards/:id', { preHandler: [authenticate, authorize('bi.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const existing = await findTenantRow('dashboard_definitions', id, tenantId);
     if (!existing) return reply.status(404).send({ success: false, error: 'Dashboard not found' });
@@ -46,7 +46,7 @@ export async function registerBiModule(app: FastifyInstance) {
     return sendSuccess(reply, null, 'Dashboard updated');
   });
 
-  app.delete('/api/v1/bi/dashboards/:id', { preHandler: [authenticate, authorize('bi.edit')] }, async (request, reply) => {
+  app.delete('/api/v1/bi/dashboards/:id', { preHandler: [authenticate, authorize('bi.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string };
     const existing = await findTenantRow('dashboard_definitions', id, tenantId);
     if (!existing) return reply.status(404).send({ success: false, error: 'Dashboard not found' });
@@ -66,7 +66,7 @@ export async function registerBiModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/bi/dashboards/:id/widgets', { preHandler: [authenticate, authorize('bi.view')] }, async (request, reply) => {
+  app.post('/api/v1/bi/dashboards/:id/widgets', { preHandler: [authenticate, authorize('bi.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const dashboard = await findTenantRow('dashboard_definitions', id, tenantId);
     if (!dashboard) return reply.status(404).send({ success: false, error: 'Dashboard not found' });
@@ -80,7 +80,7 @@ export async function registerBiModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: w.id, title: w.title }, 'Widget added', 201);
   });
 
-  app.put('/api/v1/bi/widgets/:id', { preHandler: [authenticate, authorize('bi.edit')] }, async (request, reply) => {
+  app.put('/api/v1/bi/widgets/:id', { preHandler: [authenticate, authorize('bi.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const existing = await findTenantRow('dashboard_widgets', id, tenantId);
     if (!existing) return reply.status(404).send({ success: false, error: 'Widget not found' });
@@ -94,7 +94,7 @@ export async function registerBiModule(app: FastifyInstance) {
     return sendSuccess(reply, null, 'Widget updated');
   });
 
-  app.delete('/api/v1/bi/widgets/:id', { preHandler: [authenticate, authorize('bi.edit')] }, async (request, reply) => {
+  app.delete('/api/v1/bi/widgets/:id', { preHandler: [authenticate, authorize('bi.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string };
     const existing = await findTenantRow('dashboard_widgets', id, tenantId);
     if (!existing) return reply.status(404).send({ success: false, error: 'Widget not found' });

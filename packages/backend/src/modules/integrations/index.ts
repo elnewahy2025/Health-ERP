@@ -36,7 +36,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/integrations/connections', { preHandler: [authenticate, authorize('integrations.view')] }, async (request, reply) => {
+  app.post('/api/v1/integrations/connections', { preHandler: [authenticate, authorize('integrations.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const body = request.body as Record<string, unknown>;
     const [conn] = await db('integration_connections').insert({
       tenant_id: tenantId, definition_id: body.definitionId, name: body.name,
@@ -46,7 +46,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: conn.id, name: conn.name }, 'Integration connection created', 201);
   });
 
-  app.put('/api/v1/integrations/connections/:id', { preHandler: [authenticate, authorize('integrations.edit')] }, async (request, reply) => {
+  app.put('/api/v1/integrations/connections/:id', { preHandler: [authenticate, authorize('integrations.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const existing = await findTenantRow('integration_connections', id, tenantId);
     if (!existing) return reply.status(404).send({ success: false, error: 'Connection not found' });
@@ -67,7 +67,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
     return sendSuccess(reply, { status: 'connected' }, 'Connection test successful');
   });
 
-  app.delete('/api/v1/integrations/connections/:id', { preHandler: [authenticate, authorize('integrations.edit')] }, async (request, reply) => {
+  app.delete('/api/v1/integrations/connections/:id', { preHandler: [authenticate, authorize('integrations.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string };
     const existing = await findTenantRow('integration_connections', id, tenantId);
     if (!existing) return reply.status(404).send({ success: false, error: 'Connection not found' });
@@ -92,7 +92,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/integrations/webhooks', { preHandler: [authenticate, authorize('integrations.view')] }, async (request, reply) => {
+  app.post('/api/v1/integrations/webhooks', { preHandler: [authenticate, authorize('integrations.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const body = request.body as Record<string, unknown>;
     if (body.url) {
       const urlCheck = validateWebhookUrl(body.url as string);
@@ -108,7 +108,7 @@ export async function registerIntegrationsModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: wh.id, name: wh.name }, 'Webhook created', 201);
   });
 
-  app.put('/api/v1/integrations/webhooks/:id', { preHandler: [authenticate, authorize('integrations.edit')] }, async (request, reply) => {
+  app.put('/api/v1/integrations/webhooks/:id', { preHandler: [authenticate, authorize('integrations.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
     const existing = await findTenantRow('webhooks', id, tenantId);
     if (!existing) return reply.status(404).send({ success: false, error: 'Webhook not found' });
