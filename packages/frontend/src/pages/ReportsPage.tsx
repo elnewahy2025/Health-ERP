@@ -27,6 +27,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Can } from '../components/auth/Authorization';
 
 type TabType = 'reports' | 'schedules' | 'executions';
 
@@ -271,9 +272,11 @@ export default function ReportsPage() {
           </p>
         </div>
         {tab === 'reports' && (
-          <Button onClick={() => { setShowReportModal(true); setFormErrors({}); }}>
-            <Plus className="w-4 h-4 mr-1" /> {t('reports.newReport')}
-          </Button>
+          <Can permission="reports.manage">
+            <Button onClick={() => { setShowReportModal(true); setFormErrors({}); }}>
+              <Plus className="w-4 h-4 mr-1" /> {t('reports.newReport')}
+            </Button>
+          </Can>
         )}
       </div>
 
@@ -361,20 +364,22 @@ export default function ReportsPage() {
                         >
                           {t('reports.view')}
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => void handleExecuteReport(r.id)}
-                        >
-                          <Play className="w-3 h-3" />
-                        </Button>
-                        <button
-                          onClick={() => void handleDeleteReport(r.id)}
-                          className="text-red-400 hover:text-red-600 text-xs px-2"
-                          aria-label="Delete"
-                        >
-                          ×
-                        </button>
+                        <Can permission="reports.manage">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void handleExecuteReport(r.id)}
+                          >
+                            <Play className="w-3 h-3" />
+                          </Button>
+                          <button
+                            onClick={() => void handleDeleteReport(r.id)}
+                            className="text-red-400 hover:text-red-600 text-xs px-2"
+                            aria-label="Delete"
+                          >
+                            ×
+                          </button>
+                        </Can>
                       </div>
                     </td>
                   </tr>
@@ -490,9 +495,11 @@ export default function ReportsPage() {
                     </td>
                     <td className="p-3">
                       {e.status === 'completed' ? (
-                        <Button variant="ghost" size="sm">
-                          <Download className="w-3 h-3" />
-                        </Button>
+                        <Can permission="reports.export">
+                          <Button variant="ghost" size="sm">
+                            <Download className="w-3 h-3" />
+                          </Button>
+                        </Can>
                       ) : (
                         '-'
                       )}
@@ -514,11 +521,13 @@ export default function ReportsPage() {
         footer={
           <div className="flex justify-end gap-2">
             {selectedReport && (
-              <Button
-                onClick={() => void handleExecuteReport(selectedReport.id)}
-              >
-                <Play className="w-3 h-3 mr-1" /> {t('reports.runNow')}
-              </Button>
+              <Can permission="reports.manage">
+                <Button
+                  onClick={() => void handleExecuteReport(selectedReport.id)}
+                >
+                  <Play className="w-3 h-3 mr-1" /> {t('reports.runNow')}
+                </Button>
+              </Can>
             )}
           </div>
         }
@@ -588,9 +597,11 @@ export default function ReportsPage() {
             >
               {t('common.cancel')}
             </Button>
-            <Button onClick={handleCreateReport} loading={submitting}>
-              {t('common.create')}
-            </Button>
+            <Can permission="reports.manage">
+              <Button onClick={handleCreateReport} loading={submitting}>
+                {t('common.create')}
+              </Button>
+            </Can>
           </div>
         }
       >
@@ -644,9 +655,11 @@ export default function ReportsPage() {
             >
               {t('common.cancel')}
             </Button>
-            <Button onClick={handleCreateSchedule} loading={submitting}>
-              {t('common.create')}
-            </Button>
+            <Can permission="reports.manage">
+              <Button onClick={handleCreateSchedule} loading={submitting}>
+                {t('common.create')}
+              </Button>
+            </Can>
           </div>
         }
       >
