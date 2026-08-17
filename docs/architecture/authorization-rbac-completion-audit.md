@@ -3,7 +3,7 @@
 **Repository:** `elnewahy2025/Health-ERP`  
 **Reviewed:** 2026-08-17  
 **Branch:** `main`  
-**HEAD:** pending remaining-work increment after `3a98e7a`
+**HEAD:** `69f739b`
 **Review basis:** Attached authorization specification, repository source, migrations, runtime call sites, tests, and build/type-check results.
 
 ## Executive conclusion
