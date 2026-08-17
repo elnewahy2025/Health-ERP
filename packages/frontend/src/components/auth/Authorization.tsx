@@ -1,18 +1,20 @@
 import type { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../../stores/authStore';
+import { useAuth, type PermissionScope } from '../../stores/authStore';
 
 export interface CanProps {
   permission?: string;
   anyOf?: string[];
+  /** Minimum operational scope required for this UX control. Backend remains authoritative. */
+  scope?: PermissionScope;
   children: ReactNode;
   fallback?: ReactNode;
 }
 
 /** UX-only gate; the backend remains the security authority. */
-export function Can({ permission, anyOf, children, fallback = null }: CanProps) {
+export function Can({ permission, anyOf, scope, children, fallback = null }: CanProps) {
   const { can, canAny } = useAuth();
-  const allowed = permission ? can(permission) : anyOf ? canAny(anyOf) : false;
+  const allowed = permission ? can(permission, scope) : anyOf ? canAny(anyOf, scope) : false;
   return allowed ? <>{children}</> : <>{fallback}</>;
 }
 

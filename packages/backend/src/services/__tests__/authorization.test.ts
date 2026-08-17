@@ -8,6 +8,7 @@ import {
   patientAccessByScope,
   authorize,
 } from '../authorization.js';
+import { resolvePharmacyInventoryBranchId } from '../../modules/pharmacy/index.js';
 import {
   allPermissionKeys,
   expandGrantKey,
@@ -32,6 +33,22 @@ function principal(grants: Principal['grants'], roles: string[] = []): Principal
     status: 'active',
   };
 }
+
+describe('pharmacy inventory branch resolution', () => {
+  it('uses the active authenticated branch instead of a client-supplied branch', () => {
+    const p = principal([{ permission: 'pharmacy.create', scope: 'branch' }]);
+    p.membership = {
+      id: 'm1', userId: 'u1', tenantId: 't1', branchId: 'b1', departmentId: null, status: 'ACTIVE',
+    };
+    expect(resolvePharmacyInventoryBranchId(p)).toBe('b1');
+  });
+
+  it('fails closed when a branch-scoped principal has multiple branches but no active branch', () => {
+    const p = principal([{ permission: 'pharmacy.create', scope: 'branch' }]);
+    p.branches = ['b1', 'b2'];
+    expect(() => resolvePharmacyInventoryBranchId(p)).toThrow('active assigned branch');
+  });
+});
 
 describe('scopeCovers', () => {
   it('a broader scope covers a narrower one', () => {

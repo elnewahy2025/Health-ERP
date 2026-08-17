@@ -188,13 +188,18 @@ const inventoryPolicy: ScopePolicy = (qb, principal, scope) =>
     branchColumn: 'warehouses.branch_id',
   });
 
-const nursingPolicy: ScopePolicy = (qb, principal, scope) =>
-  scopeQuery(qb, principal, {
+const nursingPolicy: ScopePolicy = (qb, principal, scope) => {
+  const constrained = scopeQuery(qb, principal, {
     scope,
     tenantColumn: 'nursing_tasks.tenant_id',
     branchColumn: 'patients.branch_id',
     departmentColumn: 'patients.department_id',
   });
+  if (scope === 'assigned_patients') {
+    return constrained.andWhere('nursing_tasks.assigned_to', principal.id);
+  }
+  return constrained;
+};
 
 const queuePolicy: ScopePolicy = (qb, principal, scope) =>
   scopeQuery(qb, principal, {

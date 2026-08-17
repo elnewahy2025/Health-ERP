@@ -2,6 +2,11 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { authApi } from '../lib/api';
 import { setAccessToken, setCsrfToken } from '../lib/api/client';
 
+export interface UserGrant {
+  permission: string;
+  scope: PermissionScope;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -9,6 +14,7 @@ export interface User {
   lastName: string;
   roles: string[];
   permissions: string[];
+  grants?: UserGrant[];
   locale: 'ar' | 'en';
   status: string;
   mfaEnabled: boolean;
@@ -58,8 +64,8 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
   switchMembership: (membershipId: string) => Promise<void>;
   /** Centralized permission check. Server remains authoritative — this is the UX mirror only. */
-  can: (permission: string) => boolean;
-  canAny: (permissions: string[]) => boolean;
+  can: (permission: string, scope?: PermissionScope) => boolean;
+  canAny: (permissions: string[], scope?: PermissionScope) => boolean;
 }
 
 export const AuthorizationContext = createContext<AuthContextType | undefined>(undefined);
@@ -95,6 +101,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then((data) => {
         setUser(data.user);
         setTenant(data.tenant);
+        setMemberships(data.memberships || []);
+        setActiveMembership(data.activeMembership || null);
         setIsAuthenticated(true);
         localStorage.setItem('locale', data.user.locale);
       })
@@ -125,6 +133,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then((fresh) => {
         setUser(fresh.user);
         setTenant(fresh.tenant);
+        setMemberships(fresh.memberships || []);
+        setActiveMembership(fresh.activeMembership || null);
         localStorage.setItem('locale', fresh.user.locale);
       })
       .catch(() => {
@@ -177,8 +187,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser((prev) => prev ? { ...prev, locale } : null);
   }, []);
 
-  const can = useCallback((permission: string) => canUse(user?.permissions || [], permission), [user]);
-  const canAny = useCallback((permissions: string[]) => canAnyUse(user?.permissions || [], permissions), [user]);
+  const can = useCallback((permission: string, scope?: PermissionScope) => canUse(user?.permissions || [], permission, user?.grants, scope), [user]);
+  const canAny = useCallback((permissions: string[], scope?: PermissionScope) => canAnyUse(user?.permissions || [], permissions, user?.grants, scope), [user]);
 
   return (
     <AuthContext.Provider value={{ user, tenant, memberships, activeMembership, isAuthenticated, isLoading, login, register, logout, setLocale, refreshUser, switchMembership, can, canAny }}>
@@ -204,14 +214,46 @@ export function useAuthorization() {
  * returned by /auth/me (which are derived server-side from role_permissions +
  * user_permissions).
  */
-export function canUse(permissions: string[], permission: string): boolean {
-  if (!permissions || permissions.length === 0) return false;
-  if (permissions.includes('*')) return true;
-  if (permissions.includes(permission)) return true;
+const SCOPE_RANK: Record<PermissionScope, number> = {
+  self: 0,
+  assigned_patients: 1,
+  department: 2,
+  branch: 3,
+  branches: 4,
+  tenant: 5,
+  system: 6,
+};
+
+function grantMatchesPermission(grantPermission: string, permission: string): boolean {
+  if (grantPermission === '*') return true;
+  if (grantPermission === permission) return true;
   const [module] = permission.split('.');
-  return permissions.includes(`${module}.*`);
+  return grantPermission === `${module}.*`;
 }
 
-export function canAnyUse(permissions: string[], required: string[]): boolean {
-  return required.some((p) => canUse(permissions, p));
+function grantCoversScope(grantScope: PermissionScope, requestedScope: PermissionScope): boolean {
+  return SCOPE_RANK[grantScope] >= SCOPE_RANK[requestedScope];
+}
+
+export function canUse(
+  permissions: string[],
+  permission: string,
+  grants?: UserGrant[],
+  requestedScope?: PermissionScope,
+): boolean {
+  if (!permissions || permissions.length === 0) return false;
+  const permissionAllowed = permissions.includes('*') || permissions.includes(permission) || permissions.includes(`${permission.split('.')[0]}.*`);
+  if (!permissionAllowed) return false;
+  if (!requestedScope) return true;
+  // Scope-aware UI gates fail closed when the server did not provide grant metadata.
+  return Boolean(grants?.some((grant) => grantMatchesPermission(grant.permission, permission) && grantCoversScope(grant.scope, requestedScope)));
+}
+
+export function canAnyUse(
+  permissions: string[],
+  required: string[],
+  grants?: UserGrant[],
+  requestedScope?: PermissionScope,
+): boolean {
+  return required.some((p) => canUse(permissions, p, grants, requestedScope));
 }

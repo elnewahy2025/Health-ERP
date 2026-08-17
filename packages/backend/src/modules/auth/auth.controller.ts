@@ -37,8 +37,8 @@ function parseRoles(value: unknown): string[] {
 
 /**
  * Canonical authenticated-user payload shared by login, MFA verify, and me().
- * Permissions are the effective grants (roles + direct) derived server-side —
- * the frontend must never receive a stale/legacy shape that hides grants.
+ * Permissions and grant scopes are the effective grants (roles + direct) derived
+ * server-side — the frontend must never receive a stale/legacy shape that hides grants.
  */
 function buildUserResponse(user: Record<string, unknown>, principal: Principal | null) {
   return {
@@ -48,6 +48,7 @@ function buildUserResponse(user: Record<string, unknown>, principal: Principal |
     lastName: user.last_name,
     roles: principal?.roles || parseRoles(user.roles),
     permissions: principal ? uniquePermissionKeys(principal.grants) : [],
+    grants: principal?.grants.map((grant) => ({ permission: grant.permission, scope: grant.scope })) || [],
     branches: principal?.branches || [],
     employeeType: user.employee_type || 'staff',
     departmentId: user.department_id || null,

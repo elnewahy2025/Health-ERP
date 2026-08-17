@@ -10,6 +10,7 @@ import {
   PageLoader, EmptyState, Modal,
   type Column,
 } from '../components/ui';
+import { Can } from '../components/auth/Authorization';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
 import { formatDateTime } from '../lib/format';
@@ -367,10 +368,12 @@ export default function PharmacyAdvancedPage() {
           <p className="text-sm text-gray-500 mt-1">{t('pharmAdv.subtitle')}</p>
         </div>
         {tab === 'inventory' && (
-          <Button onClick={() => setShowAddModal(true)}>
-            <Plus className="w-4 h-4 mr-1" />
-            {t('pharmAdv.addDrug')}
-          </Button>
+          <Can permission="pharmacy.create" scope="branch">
+            <Button onClick={() => setShowAddModal(true)}>
+              <Plus className="w-4 h-4 mr-1" />
+              {t('pharmAdv.addDrug')}
+            </Button>
+          </Can>
         )}
       </div>
 
@@ -557,9 +560,11 @@ export default function PharmacyAdvancedPage() {
                             } as Record<string, unknown>)}
                           </p>
                         </div>
-                        <Button size="sm" variant="secondary">
-                          {t('pharmAdv.reorder')}
-                        </Button>
+                        <Can permission="pharmacy.edit" scope="branch">
+                          <Button size="sm" variant="secondary">
+                            {t('pharmAdv.reorder')}
+                          </Button>
+                        </Can>
                       </div>
                     ))}
                   </div>
@@ -581,9 +586,11 @@ export default function PharmacyAdvancedPage() {
             <Button variant="secondary" onClick={() => setShowAddModal(false)}>
               {t('common.cancel')}
             </Button>
-            <Button onClick={() => void handleAddDrug()} loading={addLoading} disabled={addLoading}>
-              {t('common.save')}
-            </Button>
+            <Can permission="pharmacy.create" scope="branch">
+              <Button onClick={() => void handleAddDrug()} loading={addLoading} disabled={addLoading}>
+                {t('common.save')}
+              </Button>
+            </Can>
           </div>
         }
       >

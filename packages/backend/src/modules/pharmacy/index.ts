@@ -31,6 +31,15 @@ export function resolvePharmacyScope(principal: Principal, permission = 'pharmac
   return principal.grants.find((grant) => grant.permission === '*' || permissionKeyMatches(grant.permission, permission))?.scope || 'tenant';
 }
 
+export function resolvePharmacyInventoryBranchId(principal: Principal, permission = 'pharmacy.create'): string | null {
+  const scope = resolvePharmacyScope(principal, permission);
+  if (scope !== 'branch' && scope !== 'branches') return null;
+  const activeBranchId = principal.membership?.branchId;
+  if (activeBranchId && principal.branches.includes(activeBranchId)) return activeBranchId;
+  if (principal.branches.length === 1) return principal.branches[0];
+  throw new ForbiddenError('A branch-scoped pharmacy operation requires an active assigned branch');
+}
+
 interface PharmacyPrescriptionItemRow {
   id: string;
   prescription_id: string;
@@ -66,7 +75,8 @@ export async function registerPharmacyModule(app: FastifyInstance) {
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
     const [item] = await db('pharmacy_inventory').insert({
-      tenant_id: tenantId, drug_name: body.drugName, generic_name: body.genericName,
+      tenant_id: tenantId, branch_id: resolvePharmacyInventoryBranchId(ctx.principal),
+      drug_name: body.drugName, generic_name: body.genericName,
       brand_name: body.brandName, dosage_form: body.dosageForm, strength: body.strength,
       stock_quantity: body.stockQuantity || 0, reorder_level: body.reorderLevel || 10,
       unit_price: body.unitPrice || 0, batch_number: body.batchNumber,

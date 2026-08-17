@@ -172,7 +172,7 @@ interface Prescription {
     <div>
       <div className="page-header">
         <div><h1 className="page-title">{t('pharmacy.title')}</h1></div>
-        <Can permission="pharmacy.create">
+        <Can permission="pharmacy.create" scope="branch">
           <button onClick={() => tab === 'inventory' ? setShowNewDrugModal(true) : setShowNewRxModal(true)} className="btn-primary">
             {tab === 'inventory' ? <><Package className="w-4 h-4" />{t('pharmacy.addDrug')}</> : <><Plus className="w-4 h-4" />{t('pharmacy.newPrescription')}</>}
           </button>
@@ -224,7 +224,7 @@ interface Prescription {
                     <td>{p.items?.length || 0} items</td>
                     <td><span className={`badge ${p.status === 'dispensed' ? 'badge-success' : 'badge-info'}`}>{p.status}</span></td>
                     <td className="text-xs">{formatDateTime(p.createdAt)}</td>
-                    <td><Can permission="pharmacy.approve">{p.status !== 'dispensed' && <button onClick={() => handleDispense(p.id)} className="btn-ghost btn-sm text-green-600">{t('pharmacy.dispense')}</button>}</Can></td>
+                    <td><Can permission="pharmacy.approve" scope="branch">{p.status !== 'dispensed' && <button onClick={() => handleDispense(p.id)} className="btn-ghost btn-sm text-green-600">{t('pharmacy.dispense')}</button>}</Can></td>
                   </tr>
                 ))}
             </tbody>
@@ -235,7 +235,7 @@ interface Prescription {
       <Modal open={showNewDrugModal} onClose={() => setShowNewDrugModal(false)} title={t('pharmacy.addDrug')} size="lg"
         footer={<>
           <button onClick={() => setShowNewDrugModal(false)} className="btn-secondary">{t('common.cancel')}</button>
-          <Can permission="pharmacy.create">
+          <Can permission="pharmacy.create" scope="branch">
             <button type="submit" form="drug-form" disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}</button>
           </Can>
         </>}>
@@ -266,7 +266,7 @@ interface Prescription {
       <Modal open={showNewRxModal} onClose={() => { setShowNewRxModal(false); resetRxForm(); }} title={t('pharmacy.newPrescription')} size="xl"
         footer={<>
           <button onClick={() => { setShowNewRxModal(false); resetRxForm(); }} className="btn-secondary">{t('common.cancel')}</button>
-          <Can permission="pharmacy.create">
+          <Can permission="pharmacy.create" scope="branch">
             <button type="submit" form="rx-form" disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}</button>
           </Can>
         </>}>

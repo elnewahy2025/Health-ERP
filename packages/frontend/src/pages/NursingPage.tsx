@@ -110,7 +110,7 @@ export default function NursingPage() {
     <div>
       <div className="page-header">
         <div><h1 className="page-title">{t('nursing.title')}</h1><p className="text-gray-500 mt-1">{tasks.length} tasks</p></div>
-        <Can permission="nursing.create">
+        <Can permission="nursing.create" scope="assigned_patients">
           <button onClick={() => setShowNewModal(true)} className="btn-primary"><Plus className="w-4 h-4" />{t('nursing.newTask')}</button>
         </Can>
       </div>
@@ -136,7 +136,7 @@ export default function NursingPage() {
                   <td className="text-xs">{formatDateTime(task.dueAt) || '-'}</td>
                   <td>
                     <div className="flex gap-1">
-                      <Can permission="nursing.edit">
+                      <Can permission="nursing.edit" scope="assigned_patients">
                         {task.status === 'pending' && <button onClick={() => handleUpdateStatus(task.id, 'in_progress')} disabled={actionLoading === task.id} className="btn-ghost btn-sm text-blue-600">
                           {actionLoading === task.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}Start</button>}
                         {task.status === 'in_progress' && <button onClick={() => handleUpdateStatus(task.id, 'completed')} disabled={actionLoading === task.id} className="btn-ghost btn-sm text-green-600">
@@ -153,7 +153,7 @@ export default function NursingPage() {
       <Modal open={showNewModal} onClose={() => { setShowNewModal(false); resetForm(); }} title={t('nursing.newTask')} size="lg"
         footer={<>
           <button onClick={() => { setShowNewModal(false); resetForm(); }} className="btn-secondary">{t('common.cancel')}</button>
-          <Can permission="nursing.create">
+          <Can permission="nursing.create" scope="assigned_patients">
             <button type="submit" form="nursing-form" disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}</button>
           </Can>
         </>}>

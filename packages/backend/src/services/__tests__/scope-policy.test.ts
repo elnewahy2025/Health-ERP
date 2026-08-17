@@ -168,6 +168,12 @@ describe('granular operational role scopes', () => {
     ]);
   });
 
+  it('constrains assigned-patient nursing tasks to the authenticated assignee', () => {
+    const query = new FakeQuery();
+    applyScopePolicy('nursing', query as any, principal([{ permission: 'nursing.view', scope: 'assigned_patients' }]), 'assigned_patients');
+    expect(query.calls).toContainEqual({ method: 'andWhere', args: ['nursing_tasks.assigned_to', 'user-1'] });
+  });
+
   it('constrains nursing tasks by department and branch', () => {
     const departmentQuery = new FakeQuery();
     applyScopePolicy('nursing', departmentQuery as any, principal([{ permission: 'nursing.edit', scope: 'department' }]), 'department');

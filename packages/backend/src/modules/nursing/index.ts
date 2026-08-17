@@ -3,7 +3,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
-import { authorize } from '../../services/authorization.js';
+import { authorize, type Principal } from '../../services/authorization.js';
 import { applyScopePolicy } from '../../services/scope-policy.js';
 import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 import { ForbiddenError } from '@healthcare/shared/errors';
@@ -12,6 +12,32 @@ import { ForbiddenError } from '@healthcare/shared/errors';
 export async function registerNursingModule(app: FastifyInstance) {
   const resolveNursingScope = (principal: { grants: Array<{ permission: string; scope: PermissionScope }> }, permission = 'nursing.view'): PermissionScope =>
     principal.grants.find((grant) => grant.permission === '*' || permissionKeyMatches(grant.permission, permission))?.scope || 'tenant';
+
+  async function resolveTaskAssignee(principal: Principal, tenantId: string, requestedAssignee: unknown): Promise<string> {
+    if (requestedAssignee === undefined || requestedAssignee === null || requestedAssignee === '' || requestedAssignee === principal.id) {
+      return principal.id;
+    }
+    if (typeof requestedAssignee !== 'string') throw new ForbiddenError('Invalid nursing task assignee');
+
+    const assignee = await db('users').where({ id: requestedAssignee, tenant_id: tenantId }).first();
+    if (!assignee) throw new ForbiddenError('Nursing task assignee is outside this tenant');
+
+    const manageGrants = principal.grants.filter((grant) => grant.permission === '*' || permissionKeyMatches(grant.permission, 'nursing.manage'));
+    for (const grant of manageGrants) {
+      if (grant.scope === 'system' || grant.scope === 'tenant') return requestedAssignee;
+      if (grant.scope === 'department' && principal.departmentId && String(assignee.department_id || '') === principal.departmentId) {
+        return requestedAssignee;
+      }
+      if ((grant.scope === 'branch' || grant.scope === 'branches') && principal.branches.length > 0) {
+        const branchLink = await db('user_branches')
+          .where({ user_id: requestedAssignee, tenant_id: tenantId })
+          .whereIn('branch_id', principal.branches)
+          .first();
+        if (branchLink) return requestedAssignee;
+      }
+    }
+    throw new ForbiddenError('You may only assign nursing tasks within your nursing management scope');
+  }
 
   app.get('/api/v1/nursing/tasks', { preHandler: [authenticate, authorize('nursing.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { status, assignedTo } = request.query as { assignedTo?: string; status?: string };
@@ -38,10 +64,11 @@ export async function registerNursingModule(app: FastifyInstance) {
     const principal = ctx.principal;
     const patient = await applyScopePolicy('patients', db('patients').where({ 'patients.id': body.patientId, 'patients.tenant_id': tenantId }), principal, resolveNursingScope(principal, 'nursing.create')).first();
     if (!patient) throw new ForbiddenError('Nursing task patient is outside your assigned scope');
+    const assignedTo = await resolveTaskAssignee(principal, tenantId, body.assignedTo);
     const [task] = await db('nursing_tasks').insert({
       tenant_id: tenantId, patient_id: body.patientId, title: body.title,
       description: body.description, category: body.category || 'general',
-      priority: body.priority || 'normal', assigned_to: body.assignedTo || ctx.userId,
+      priority: body.priority || 'normal', assigned_to: assignedTo,
       assigned_by: ctx.userId, due_at: body.dueAt || null,
     }).returning('*');
     return sendSuccess(reply, { id: task.id }, 'Task created', 201);
