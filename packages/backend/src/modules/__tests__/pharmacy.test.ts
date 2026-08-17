@@ -44,3 +44,38 @@ describe('Pharmacy Module', () => {
     expect(remainingRefills).toBe(1);
   });
 });
+
+
+describe('Pharmacy authorization scopes', () => {
+  it('resolves the scope for the requested pharmacy operation', async () => {
+    const { resolvePharmacyScope } = await import('../pharmacy/index.js');
+    const principal = {
+      id: 'user-1',
+      tenantId: 'tenant-1',
+      grants: [
+        { permission: 'pharmacy.view', scope: 'department' as const },
+        { permission: 'pharmacy.create', scope: 'branch' as const },
+        { permission: 'pharmacy.edit', scope: 'branch' as const },
+        { permission: 'pharmacy.approve', scope: 'branch' as const },
+      ],
+    } as any;
+
+    expect(resolvePharmacyScope(principal, 'pharmacy.view')).toBe('department');
+    expect(resolvePharmacyScope(principal, 'pharmacy.create')).toBe('branch');
+    expect(resolvePharmacyScope(principal, 'pharmacy.edit')).toBe('branch');
+    expect(resolvePharmacyScope(principal, 'pharmacy.approve')).toBe('branch');
+  });
+
+  it('allows a module wildcard to resolve every pharmacy operation', async () => {
+    const { resolvePharmacyScope } = await import('../pharmacy/index.js');
+    const principal = {
+      id: 'user-1',
+      tenantId: 'tenant-1',
+      grants: [{ permission: 'pharmacy.*', scope: 'branch' as const }],
+    } as any;
+
+    expect(resolvePharmacyScope(principal, 'pharmacy.create')).toBe('branch');
+    expect(resolvePharmacyScope(principal, 'pharmacy.edit')).toBe('branch');
+    expect(resolvePharmacyScope(principal, 'pharmacy.approve')).toBe('branch');
+  });
+});

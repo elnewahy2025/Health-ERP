@@ -5,7 +5,7 @@ import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize, canAccessPatient, type Principal } from '../../services/authorization.js';
 import { applyScopePolicy } from '../../services/scope-policy.js';
-import type { PermissionScope } from '@healthcare/shared/authz';
+import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 import { ForbiddenError } from '@healthcare/shared/errors';
 import { logAudit } from '../../services/audit.js';
 
@@ -27,6 +27,10 @@ interface PharmacyInventoryRow {
   status: string;
 }
 
+export function resolvePharmacyScope(principal: Principal, permission = 'pharmacy.view'): PermissionScope {
+  return principal.grants.find((grant) => grant.permission === '*' || permissionKeyMatches(grant.permission, permission))?.scope || 'tenant';
+}
+
 interface PharmacyPrescriptionItemRow {
   id: string;
   prescription_id: string;
@@ -43,9 +47,6 @@ interface PharmacyPrescriptionItemRow {
 }
 
 export async function registerPharmacyModule(app: FastifyInstance) {
-  const resolvePharmacyScope = (principal: Principal): PermissionScope =>
-    principal.grants.find((grant) => grant.permission === 'pharmacy.view' || grant.permission === '*')?.scope || 'tenant';
-
   // Inventory
   app.get('/api/v1/pharmacy/inventory', { preHandler: [authenticate, authorize('pharmacy.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
@@ -60,7 +61,7 @@ export async function registerPharmacyModule(app: FastifyInstance) {
     return sendSuccess(reply, items.map(mapDrug));
   });
 
-  app.post('/api/v1/pharmacy/inventory', { preHandler: [authenticate, authorize('pharmacy.view')] }, async (request, reply) => {
+  app.post('/api/v1/pharmacy/inventory', { preHandler: [authenticate, authorize('pharmacy.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -78,13 +79,13 @@ export async function registerPharmacyModule(app: FastifyInstance) {
     return sendSuccess(reply, mapDrug(item), 'Drug added', 201);
   });
 
-  app.put('/api/v1/pharmacy/inventory/:id/stock', { preHandler: [authenticate, authorize('pharmacy.view')] }, async (request, reply) => {
+  app.put('/api/v1/pharmacy/inventory/:id/stock', { preHandler: [authenticate, authorize('pharmacy.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
     const { quantity } = request.body as Record<string, unknown>;
     const principal = getCtx(request).principal;
-    const scope = resolvePharmacyScope(principal);
+    const scope = resolvePharmacyScope(principal, 'pharmacy.edit');
     const accessible = await applyScopePolicy('pharmacy_inventory', db('pharmacy_inventory').where({ id, tenant_id: tenantId }), principal, scope).first();
     if (!accessible) throw new ForbiddenError('You do not have access to this pharmacy inventory item');
     await db('pharmacy_inventory').where({ id, tenant_id: tenantId }).increment('stock_quantity', Number(quantity)).update({ updated_at: new Date() });
@@ -117,7 +118,7 @@ export async function registerPharmacyModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/pharmacy/prescriptions', { preHandler: [authenticate, authorize('pharmacy.view')] }, async (request, reply) => {
+  app.post('/api/v1/pharmacy/prescriptions', { preHandler: [authenticate, authorize('pharmacy.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const body = request.body as Record<string, unknown>;
@@ -142,13 +143,13 @@ export async function registerPharmacyModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: presc.id, prescriptionNumber: presc.prescription_number }, 'Prescription created', 201);
   });
 
-  app.post('/api/v1/pharmacy/prescriptions/:id/dispense', { preHandler: [authenticate, authorize('pharmacy.view')] }, async (request, reply) => {
+  app.post('/api/v1/pharmacy/prescriptions/:id/dispense', { preHandler: [authenticate, authorize('pharmacy.approve')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
     const { items } = request.body as Record<string, unknown>;
     const principal = getCtx(request).principal;
-    const scope = resolvePharmacyScope(principal);
+    const scope = resolvePharmacyScope(principal, 'pharmacy.approve');
     const accessible = await applyScopePolicy('pharmacy_prescriptions', db('pharmacy_prescriptions').join('patients', 'pharmacy_prescriptions.patient_id', 'patients.id').where({ 'pharmacy_prescriptions.id': id, 'pharmacy_prescriptions.tenant_id': tenantId }), principal, scope).first();
     if (!accessible) throw new ForbiddenError('You do not have access to this prescription');
     if (Array.isArray(items) && items.length) {
