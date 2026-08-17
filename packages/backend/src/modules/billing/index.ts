@@ -9,20 +9,24 @@ import { getEnv } from '@healthcare/shared/config';
 import { generateInvoiceNumber } from '@healthcare/shared/utils';
 import { authenticate } from '../auth-guard.js';
 import { authorize, hasPermission, assignedPatientIds, canAccessPatient, type Principal } from '../../services/authorization.js';
+import { applyScopePolicy } from '../../services/scope-policy.js';
+import type { PermissionScope } from '@healthcare/shared/authz';
 import { logAudit } from '../../services/audit.js';
 import type { InvoiceRow } from '../types.js';
 
 export async function registerBillingModule(app: FastifyInstance) {
   /** Scope for invoice lists: tenant-wide, branch-wide, or assigned patients. */
-  async function resolveBillingListScope(principal: Principal): Promise<{ branchIds?: string[]; patientIds?: string[] }> {
-    if (hasPermission(principal, 'billing.view', 'system') || hasPermission(principal, 'billing.view', 'tenant')) return {};
+  async function resolveBillingListScope(principal: Principal): Promise<{ branchIds?: string[]; patientIds?: string[]; scope: PermissionScope }> {
+    if (hasPermission(principal, 'billing.view', 'system') || hasPermission(principal, 'billing.view', 'tenant')) {
+      return { scope: hasPermission(principal, 'billing.view', 'system') ? 'system' : 'tenant' };
+    }
     if (hasPermission(principal, 'billing.view', 'branch') || hasPermission(principal, 'billing.view', 'branches')) {
-      return { branchIds: principal.branches };
+      return { branchIds: principal.branches, scope: principal.branches.length > 1 ? 'branches' : 'branch' };
     }
     if (hasPermission(principal, 'billing.view', 'assigned_patients') || hasPermission(principal, 'billing.view', 'department')) {
-      return { patientIds: await assignedPatientIds(principal) };
+      return { patientIds: await assignedPatientIds(principal), scope: 'assigned_patients' };
     }
-    return { patientIds: [] };
+    return { patientIds: [], scope: 'self' };
   }
 
   async function assertInvoiceAccess(principal: Principal, invoice: { tenant_id: string; patient_id: string; branch_id?: string | null }): Promise<void> {
@@ -52,6 +56,7 @@ export async function registerBillingModule(app: FastifyInstance) {
       .join('patients', 'invoices.patient_id', 'patients.id')
       .where('invoices.tenant_id', tenantId)
       .whereNull('invoices.deleted_at');
+    queryBuilder = applyScopePolicy('billing', queryBuilder, principal, scope.scope) as typeof queryBuilder;
 
     if (scope.branchIds && scope.branchIds.length > 0) queryBuilder = queryBuilder.whereIn('patients.branch_id', scope.branchIds);
     if (scope.branchIds && scope.branchIds.length === 0) queryBuilder = queryBuilder.where(db.raw('false'));
@@ -87,7 +92,9 @@ export async function registerBillingModule(app: FastifyInstance) {
     const { invoiceId } = request.params as { invoiceId: string };
     const tenantId = getTenantId(request);
 
-    const invoice = await db('invoices')
+    const { principal } = getCtx(request);
+    const detailScope = principal.grants.find((grant) => grant.permission === 'billing.view')?.scope || 'tenant';
+    let invoiceQuery = db('invoices')
       .join('patients', 'invoices.patient_id', 'patients.id')
       .where('invoices.id', invoiceId)
       .where('invoices.tenant_id', tenantId)
@@ -99,8 +106,9 @@ export async function registerBillingModule(app: FastifyInstance) {
         'patients.phone as patient_phone',
         'patients.email as patient_email',
         'patients.branch_id as patient_branch_id',
-      )
-      .first();
+      );
+    invoiceQuery = applyScopePolicy('billing', invoiceQuery, principal, detailScope as PermissionScope) as typeof invoiceQuery;
+    const invoice = await invoiceQuery.first();
 
     if (!invoice) {
       return reply.status(404).send({ success: false, error: 'Invoice not found' });
@@ -232,9 +240,14 @@ export async function registerBillingModule(app: FastifyInstance) {
     const start = startDate || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
     const end = endDate || new Date().toISOString().split('T')[0];
 
-    const revenue = await db('invoices')
-      .where('tenant_id', tenantId)
-      .whereNull('deleted_at')
+    const { principal } = getCtx(request);
+    const revenueScope = principal.grants.find((grant) => grant.permission === 'billing.view')?.scope || 'tenant';
+    let revenueQuery = db('invoices')
+      .join('patients', 'invoices.patient_id', 'patients.id')
+      .where('invoices.tenant_id', tenantId)
+      .whereNull('invoices.deleted_at');
+    revenueQuery = applyScopePolicy('billing', revenueQuery, principal, revenueScope as PermissionScope);
+    const revenue = revenueQuery
       .whereBetween('issued_at', [start, end])
       .select(
         db.raw('COALESCE(SUM(total), 0) as total_revenue'),

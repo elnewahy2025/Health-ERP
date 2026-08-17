@@ -3,14 +3,14 @@
 **Repository:** `elnewahy2025/Health-ERP`  
 **Reviewed:** 2026-08-17  
 **Branch:** `main`  
-**HEAD:** `a425341`
+**HEAD:** pending remaining-work increment after `3a98e7a`
 **Review basis:** Attached authorization specification, repository source, migrations, runtime call sites, tests, and build/type-check results.
 
 ## Executive conclusion
 
 > **No. The full specification is not complete.**
 
-The repository contains a committed reference architecture and an expanding authorization implementation. This increment closes several previously identified gaps: normal login, MFA, and refresh flows now bind tokens and persisted sessions to active memberships; the object-form authorization API is implemented; RBAC supports explicit allow/deny inputs and template cloning; patient and appointment high-risk query paths invoke module scope policies; and the active frontend route, sidebar, action, and membership-switcher paths use shared authorization primitives. Full enterprise completion is still not claimed because universal module coverage, complete security integration tests, and some membership/RBAC lifecycle operations remain.
+The repository contains a committed reference architecture and an expanding authorization implementation. The latest increment adds server-side validation of active session IDs for session-bound JWTs, persists membership changes on the verified session, integrates scope policies into EMR, billing, laboratory, and radiology paths, closes report export ownership checks, adds DMS and BI action-level gates, and adds scope-policy/JWT regression tests. Full enterprise completion is still not claimed because universal module coverage, complete security integration tests, and some membership/RBAC lifecycle operations remain.
 
 The implementation is therefore **not ready to be declared enterprise-complete**. It is more accurately classified as a **partially implemented authorization foundation**.
 
@@ -22,7 +22,7 @@ The implementation is therefore **not ready to be declared enterprise-complete**
 | Backend TypeScript build | Passed. |
 | Shared TypeScript build | Passed. |
 | Frontend TypeScript check | Passed. |
-| Backend tests | Passed: 24 test files, 186 tests. Redis emitted an expected optional-infrastructure connection warning; the audit test logs an expected mocked database error but passes. |
+| Backend tests | Passed: 25 test files, 189 tests. Redis emitted an expected optional-infrastructure connection warning; the audit test logs an expected mocked database error but passes. |
 | Frontend tests | Passed: 4 test files, 15 tests. React Router emitted future-version warnings. |
 | Database migration execution | **Not verified**; no connected production/staging PostgreSQL migration run was performed during this audit. |
 | Full authorization security matrix | **Not complete**; the repository does not contain the required comprehensive cross-tenant, cross-branch, cross-department, cache, membership-switching, wildcard-escalation, and endpoint-bypass suite. |
@@ -73,14 +73,14 @@ The implementation is therefore **not ready to be declared enterprise-complete**
 | Cache resolved authorization context | **Partial** | Redis-backed caching was added for `loadUserPrincipalByMembership()`. The legacy tenant loader is uncached, and runtime invalidation is not consistently called from every grant/role/membership mutation. |
 | Tenant/user/membership-safe key | **Done for new membership path** | Key includes user, membership, permission version, and membership timestamp. |
 | Invalidate on role/grant/membership changes | **Partial, improved** | RBAC user-permission and role-update mutations now call `invalidateAuthorizationCache()`. Membership status/branch/department mutation endpoints and full lifecycle tests remain absent. |
-| Revocation cannot be bypassed by stale cache | **Partial** | Membership status is checked before the membership cache read, which is a useful safeguard. However, full session revocation and all cache invalidation paths are not proven by integration tests. |
+| Revocation cannot be bypassed by stale cache | **Partial, improved** | Session-bound JWTs are now checked against active persistent sessions, and membership status is checked before the membership cache read. Full database-backed lifecycle tests remain outstanding. |
 
 ### 5. Scope architecture and data enforcement
 
 | Requirement | Status | Evidence and finding |
 |---|---|---|
 | Reusable data scopes | **Partial** | Existing `scopeQuery()` and new `scope-policy.ts` exist. |
-| Module-specific scope policies | **Partial** | Runtime calls now exist in patient and appointment list/search/summary/bulk paths. Remaining modules and query categories still require the same integration. |
+| Module-specific scope policies | **Partial, expanded** | Runtime calls now exist in patient, appointment, EMR, billing, laboratory, and radiology paths. Inventory, pharmacy, HR, compliance, audit, and remaining query categories still require integration. |
 | Apply scopes to every data-returning path | **Not done** | No repository-wide proof exists for all list, detail, search, export, report, aggregate, count, dashboard, analytics, and bulk-action paths. |
 | Tenant isolation | **Partial to strong** | Existing tenant filters, RLS support, and principal checks are present, but the requested zero-bypass audit is not complete. |
 | Branch isolation | **Partial** | Existing `scopeQuery()` supports branch filters, but policy application is not universal and membership branch context is not used consistently by all modules. |
@@ -96,7 +96,7 @@ The implementation is therefore **not ready to be declared enterprise-complete**
 | Protected routes | **Partial, improved** | `App.tsx` now delegates to the reusable `ProtectedRoute`; route-to-permission coverage still requires a full route audit. |
 | Permission-aware navigation | **Partial, improved** | Sidebar filtering now uses the shared `filterMenu()` helper and permission keys; all navigation/action mappings still require audit. |
 | Active membership/tenant/branch switcher UI | **Implemented, basic** | Header now exposes a backend-validated selector when multiple memberships are available; richer tenant/branch labels and mobile UX remain possible improvements. |
-| Action-level gating across modules | **Not done** | The implementation does not demonstrate complete gating for create, edit, delete, approve, reject, cancel, export, print, refund, prescribe, dispense, upload, and sensitive-data actions across all modules. |
+| Action-level gating across modules | **Partial, expanded** | Patients, DMS, and BI now use shared `Can` gates for sensitive create/manage/download/delete actions. Complete coverage for all protected modules and actions remains outstanding. |
 | No role-name-driven frontend authorization | **Mostly done** | Sidebar and route checks use permission keys rather than role names, although the overall UI audit remains incomplete. |
 
 ### 7. 39-role catalog and RBAC API
@@ -129,7 +129,7 @@ The implementation is therefore **not ready to be declared enterprise-complete**
 |---|---|
 | Fully complete | Discovery/reference document, baseline permission preservation, exact permission checks, global/module wildcard matching in the resolver, basic membership table migration, basic switch endpoint, existing tenant protections, baseline tests/builds. |
 | Partially complete | Membership runtime, JWT compatibility, explicit denials, caching, audit coverage, frontend route/sidebar authorization, 39-role catalog, migration assurance. |
-| Not complete | Universal scope-policy enforcement across every module/query path, complete action-level frontend gating, comprehensive security/integration testing, and full membership/RBAC lifecycle hardening. |
+| Not complete | Universal scope-policy enforcement across every module/query path, complete action-level frontend gating, comprehensive database-backed security/integration testing, inventory/pharmacy/HR/compliance/audit scope integration, and full membership/RBAC lifecycle hardening. |
 
 ## Final confirmation
 

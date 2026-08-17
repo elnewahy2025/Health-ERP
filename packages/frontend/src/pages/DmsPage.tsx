@@ -5,6 +5,7 @@ import { FileUpload, ImageViewer, Button, Select, Modal, EmptyState, PageLoader 
 import { FileText, Search, Download, Trash2, Eye, Image as ImageIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDate } from '../lib/format';
+import { Can } from '../components/auth/Authorization';
 
 const CATEGORY_COLORS: Record<string, string> = {
   lab_report: 'bg-blue-100 text-blue-800',
@@ -107,9 +108,11 @@ export default function DmsPage() {
           </h1>
           <p className="text-gray-500 mt-1">{t('dms.files', { count: documents.length })}</p>
         </div>
-        <Button icon={<FileText className="w-4 h-4" />} onClick={() => setShowUpload(!showUpload)}>
-          {showUpload ? t('dms.closeUpload') : t('dms.uploadFile')}
-        </Button>
+        <Can permission="dms.create">
+          <Button icon={<FileText className="w-4 h-4" />} onClick={() => setShowUpload(!showUpload)}>
+            {showUpload ? t('dms.closeUpload') : t('dms.uploadFile')}
+          </Button>
+        </Can>
       </div>
 
       {/* Upload Area */}
@@ -183,17 +186,21 @@ export default function DmsPage() {
                 <Button variant="ghost" size="sm" onClick={() => setViewingDoc(doc)} icon={<Eye className="w-3 h-3" />}>
                   {t('dms.view')}
                 </Button>
-                <a href={dmsApi.attachmentUrl(doc.id)} download>
-                  <Button variant="ghost" size="sm" icon={<Download className="w-3 h-3" />}>
-                    {t('dms.download')}
-                  </Button>
-                </a>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowDeleteConfirm(doc.id)}
-                  icon={<Trash2 className="w-3 h-3 text-red-500" />}
-                />
+                <Can permission="dms.export">
+                  <a href={dmsApi.attachmentUrl(doc.id)} download>
+                    <Button variant="ghost" size="sm" icon={<Download className="w-3 h-3" />}>
+                      {t('dms.download')}
+                    </Button>
+                  </a>
+                </Can>
+                <Can permission="dms.delete">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowDeleteConfirm(doc.id)}
+                    icon={<Trash2 className="w-3 h-3 text-red-500" />}
+                  />
+                </Can>
               </div>
 
               <p className="text-xs text-gray-400 mt-2">

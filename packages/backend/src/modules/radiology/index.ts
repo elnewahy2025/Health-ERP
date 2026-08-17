@@ -4,18 +4,26 @@ import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { PatientNotFoundError } from '@healthcare/shared/errors';
 import { authenticate } from '../auth-guard.js';
-import { authorize } from '../../services/authorization.js';
+import { authorize, type Principal } from '../../services/authorization.js';
+import { applyScopePolicy } from '../../services/scope-policy.js';
+import type { PermissionScope } from '@healthcare/shared/authz';
+import { ForbiddenError } from '@healthcare/shared/errors';
 import { logAudit } from '../../services/audit.js';
 
 export async function registerRadiologyModule(app: FastifyInstance) {
+  const resolveRadiologyScope = (principal: Principal): PermissionScope =>
+    principal.grants.find((grant) => grant.permission === 'radiology.view' || grant.permission === '*')?.scope || 'tenant';
+
   app.get('/api/v1/radiology/orders', { preHandler: [authenticate, authorize('radiology.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status, patientId } = request.query as { patientId?: string; status?: string };
-    let q = db('radiology_orders').where('radiology_orders.tenant_id', tenantId).whereNull('radiology_orders.deleted_at');
+    const principal = getCtx(request).principal;
+    const scope = resolveRadiologyScope(principal);
+    let q = db('radiology_orders').join('patients', 'radiology_orders.patient_id', 'patients.id').where('radiology_orders.tenant_id', tenantId).whereNull('radiology_orders.deleted_at');
+    q = applyScopePolicy('radiology', q, principal, scope) as typeof q;
     if (status) q = q.andWhere('radiology_orders.status', status);
     if (patientId) q = q.andWhere('radiology_orders.patient_id', patientId);
-    const orders = await q.join('patients', 'radiology_orders.patient_id', 'patients.id')
-      .select('radiology_orders.*', 'patients.first_name as p_first', 'patients.last_name as p_last', 'patients.medical_record_number')
+    const orders = await q.select('radiology_orders.*', 'patients.first_name as p_first', 'patients.last_name as p_last', 'patients.medical_record_number')
       .orderBy('created_at', 'desc').limit(50);
     return sendSuccess(reply, orders.map(mapOrder));
   });
@@ -45,6 +53,10 @@ export async function registerRadiologyModule(app: FastifyInstance) {
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
     const body = request.body as Record<string, unknown>;
+    const principal = getCtx(request).principal;
+    const scope = resolveRadiologyScope(principal);
+    const accessible = await applyScopePolicy('radiology', db('radiology_orders').join('patients', 'radiology_orders.patient_id', 'patients.id').where({ 'radiology_orders.id': id, 'radiology_orders.tenant_id': tenantId }), principal, scope).first();
+    if (!accessible) throw new ForbiddenError('You do not have access to this radiology order');
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.status) update.status = body.status;
     if (body.findings) update.findings = body.findings;

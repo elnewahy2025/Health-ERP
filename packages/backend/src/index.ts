@@ -23,6 +23,7 @@ import { errorHandler } from './core/error-handler.js';
 import { db } from './core/database.js';
 import { redis } from './core/redis.js';
 import { loadUserPrincipal, loadUserPrincipalByMembership, uniquePermissionKeys } from './services/authorization.js';
+import { findActiveSessionById } from './modules/auth/auth.repository.js';
 
 import { registerLaboratoryModule } from './modules/laboratory/index.js';
 import { registerRadiologyModule } from './modules/radiology/index.js';
@@ -156,11 +157,21 @@ async function buildApp() {
       return;
     }
     const tenantId = principal.tenantId;
+    const sessionId = token.session_id ? String(token.session_id) : undefined;
+    if (sessionId) {
+      const session = await findActiveSessionById(sessionId, userId, tenantId);
+      if (!session || (membershipId && session.membership_id && String(session.membership_id) !== membershipId)) {
+        reply.status(401).send({ success: false, error: 'Session is no longer active' });
+        return;
+      }
+    }
     req.tenantId = tenantId;
     req.ctx = {
       tenantId,
       userId,
       membershipId: principal.membershipId,
+      sessionId,
+      authorizationScope: undefined,
       roles: principal.roles,
       permissions: uniquePermissionKeys([...principal.grants, ...(principal.denials || [])]),
       branches: principal.branches,

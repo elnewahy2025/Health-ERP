@@ -31,6 +31,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Can } from '../components/auth/Authorization';
 
 type TabType = 'dashboards' | 'kpi';
 
@@ -263,9 +264,11 @@ export default function BiPage() {
           </p>
         </div>
         {tab === 'dashboards' && (
-          <Button onClick={() => { setShowDashboardModal(true); setFormErrors({}); }}>
-            <Plus className="w-4 h-4 mr-1" /> {t('bi.newDashboard')}
-          </Button>
+          <Can permission="bi.manage">
+            <Button onClick={() => { setShowDashboardModal(true); setFormErrors({}); }}>
+              <Plus className="w-4 h-4 mr-1" /> {t('bi.newDashboard')}
+            </Button>
+          </Can>
         )}
       </div>
 
@@ -337,16 +340,18 @@ export default function BiPage() {
                       {t('bi.refresh')}: {escapeHtml(d.refreshInterval)}
                       {d.isDefault ? ` · ${t('bi.default')}` : ''}
                     </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleDeleteDashboard(d.id);
-                      }}
-                      className="text-red-400 hover:text-red-600"
-                      aria-label="Delete"
-                    >
-                      ×
-                    </button>
+                    <Can permission="bi.manage">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleDeleteDashboard(d.id);
+                        }}
+                        className="text-red-400 hover:text-red-600"
+                        aria-label="Delete"
+                      >
+                        ×
+                      </button>
+                    </Can>
                   </div>
                 </div>
               ))}
@@ -360,12 +365,14 @@ export default function BiPage() {
                 <h2 className="text-lg font-semibold">
                   {escapeHtml(selectedDashboard.name)} — {t('bi.widgets')} ({widgets.length})
                 </h2>
-                <Button
-                  size="sm"
-                  onClick={() => { setShowWidgetModal(true); setFormErrors({}); }}
-                >
-                  <Plus className="w-4 h-4 mr-1" /> {t('bi.widgets')}
-                </Button>
+                <Can permission="bi.manage">
+                  <Button
+                    size="sm"
+                    onClick={() => { setShowWidgetModal(true); setFormErrors({}); }}
+                  >
+                    <Plus className="w-4 h-4 mr-1" /> {t('bi.widgets')}
+                  </Button>
+                </Can>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {widgets.map((w) => (
@@ -374,13 +381,15 @@ export default function BiPage() {
                       <h4 className="font-medium text-sm">{escapeHtml(w.title)}</h4>
                       <div className="flex items-center gap-2">
                         <Badge>{escapeHtml(w.widgetType)}</Badge>
-                        <button
-                          onClick={() => void handleDeleteWidget(w.id)}
-                          className="text-red-400 hover:text-red-600 text-xs"
-                          aria-label="Delete"
-                        >
-                          ×
-                        </button>
+                        <Can permission="bi.manage">
+                          <button
+                            onClick={() => void handleDeleteWidget(w.id)}
+                            className="text-red-400 hover:text-red-600 text-xs"
+                            aria-label="Delete"
+                          >
+                            ×
+                          </button>
+                        </Can>
                       </div>
                     </div>
                     <p className="text-xs text-gray-500">

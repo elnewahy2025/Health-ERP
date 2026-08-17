@@ -8,20 +8,24 @@ import { PatientNotFoundError, ForbiddenError } from '@healthcare/shared/errors'
 import { calculateBMI } from '@healthcare/shared/utils';
 import { authenticate } from '../auth-guard.js';
 import { authorize, hasPermission, assignedPatientIds, canAccessPatient, type Principal } from '../../services/authorization.js';
+import { applyScopePolicy } from '../../services/scope-policy.js';
+import type { PermissionScope } from '@healthcare/shared/authz';
 import { logAudit } from '../../services/audit.js';
 import type { EmrRecordRow } from '../types.js';
 
 export async function registerEmrModule(app: FastifyInstance) {
   /** Scope for EMR lists: tenant-wide, branch-wide, or assigned patients. */
-  async function resolveEmrListScope(principal: Principal): Promise<{ branchIds?: string[]; patientIds?: string[] }> {
-    if (hasPermission(principal, 'emr.view', 'system') || hasPermission(principal, 'emr.view', 'tenant')) return {};
+  async function resolveEmrListScope(principal: Principal): Promise<{ branchIds?: string[]; patientIds?: string[]; scope: PermissionScope }> {
+    if (hasPermission(principal, 'emr.view', 'system') || hasPermission(principal, 'emr.view', 'tenant')) {
+      return { scope: hasPermission(principal, 'emr.view', 'system') ? 'system' : 'tenant' };
+    }
     if (hasPermission(principal, 'emr.view', 'branch') || hasPermission(principal, 'emr.view', 'branches')) {
-      return { branchIds: principal.branches };
+      return { branchIds: principal.branches, scope: principal.branches.length > 1 ? 'branches' : 'branch' };
     }
     if (hasPermission(principal, 'emr.view', 'assigned_patients') || hasPermission(principal, 'emr.view', 'department')) {
-      return { patientIds: await assignedPatientIds(principal) };
+      return { patientIds: await assignedPatientIds(principal), scope: 'assigned_patients' };
     }
-    return { patientIds: [] };
+    return { patientIds: [], scope: 'self' };
   }
 
   async function assertEmrAccess(principal: Principal, record: { tenant_id: string; patient_id: string; doctor_id?: string | null; branch_id?: string | null }): Promise<void> {
@@ -52,6 +56,7 @@ export async function registerEmrModule(app: FastifyInstance) {
       .join('patients', 'emr_records.patient_id', 'patients.id')
       .where('emr_records.tenant_id', tenantId)
       .whereNull('emr_records.deleted_at');
+    queryBuilder = applyScopePolicy('emr', queryBuilder, principal, scope.scope) as typeof queryBuilder;
 
     if (scope.branchIds && scope.branchIds.length > 0) queryBuilder = queryBuilder.whereIn('patients.branch_id', scope.branchIds);
     if (scope.branchIds && scope.branchIds.length === 0) queryBuilder = queryBuilder.where(db.raw('false'));
@@ -86,11 +91,14 @@ export async function registerEmrModule(app: FastifyInstance) {
     const { emrId } = request.params as { emrId: string };
     const tenantId = getTenantId(request);
 
-    const record = await db('emr_records')
+    const { principal } = getCtx(request);
+    const detailScope = principal.grants.find((grant) => grant.permission === 'emr.view')?.scope || 'tenant';
+    let recordQuery = db('emr_records')
       .join('patients', 'emr_records.patient_id', 'patients.id')
       .where('emr_records.id', emrId)
-      .where('emr_records.tenant_id', tenantId)
-      .select(
+      .where('emr_records.tenant_id', tenantId);
+    recordQuery = applyScopePolicy('emr', recordQuery, principal, detailScope as PermissionScope) as typeof recordQuery;
+    const record = await recordQuery.select(
         'emr_records.*',
         'patients.first_name as patient_first_name',
         'patients.last_name as patient_last_name',

@@ -4,7 +4,10 @@ import { sendSuccess, sendPaginated } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { PatientNotFoundError } from '@healthcare/shared/errors';
 import { authenticate } from '../auth-guard.js';
-import { authorize } from '../../services/authorization.js';
+import { authorize, type Principal } from '../../services/authorization.js';
+import { applyScopePolicy } from '../../services/scope-policy.js';
+import type { PermissionScope } from '@healthcare/shared/authz';
+import { ForbiddenError } from '@healthcare/shared/errors';
 import { logAudit } from '../../services/audit.js';
 
 interface LabCatalogRow {
@@ -39,6 +42,9 @@ interface LabOrderRow {
 }
 
 export async function registerLaboratoryModule(app: FastifyInstance) {
+  const resolveLabScope = (principal: Principal): PermissionScope =>
+    principal.grants.find((grant) => grant.permission === 'laboratory.view' || grant.permission === '*')?.scope || 'tenant';
+
   app.get('/api/v1/lab/catalog', { preHandler: [authenticate, authorize('laboratory.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const catalog = await db('lab_catalog').where({ tenant_id: tenantId, is_active: true }).orderBy('test_name');
@@ -67,11 +73,13 @@ export async function registerLaboratoryModule(app: FastifyInstance) {
   app.get('/api/v1/lab/orders', { preHandler: [authenticate, authorize('laboratory.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const { status, patientId } = request.query as { patientId?: string; status?: string };
-    let q = db('lab_orders').where('lab_orders.tenant_id', tenantId).whereNull('lab_orders.deleted_at');
+    const principal = getCtx(request).principal;
+    const scope = resolveLabScope(principal);
+    let q = db('lab_orders').join('patients', 'lab_orders.patient_id', 'patients.id').where('lab_orders.tenant_id', tenantId).whereNull('lab_orders.deleted_at');
+    q = applyScopePolicy('laboratory', q, principal, scope) as typeof q;
     if (status) q = q.andWhere('lab_orders.status', status);
     if (patientId) q = q.andWhere('lab_orders.patient_id', patientId);
-    const orders = await q.join('patients', 'lab_orders.patient_id', 'patients.id')
-      .select('lab_orders.*', 'patients.first_name as p_first', 'patients.last_name as p_last', 'patients.medical_record_number')
+    const orders = await q.select('lab_orders.*', 'patients.first_name as p_first', 'patients.last_name as p_last', 'patients.medical_record_number')
       .orderBy('created_at', 'desc').limit(50);
     return sendSuccess(reply, orders.map(mapLabOrder));
   });
@@ -107,6 +115,10 @@ export async function registerLaboratoryModule(app: FastifyInstance) {
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
     const body = request.body as Record<string, unknown>;
+    const principal = getCtx(request).principal;
+    const scope = resolveLabScope(principal);
+    const accessible = await applyScopePolicy('laboratory', db('lab_orders').join('patients', 'lab_orders.patient_id', 'patients.id').where({ 'lab_orders.id': id, 'lab_orders.tenant_id': tenantId }), principal, scope).first();
+    if (!accessible) throw new ForbiddenError('You do not have access to this lab order');
     const update: Record<string, unknown> = { status: body.status, updated_at: new Date() };
     if (body.status === "collected") update.collected_at = new Date();
     if (body.status === "completed") update.completed_at = new Date();
@@ -123,6 +135,10 @@ export async function registerLaboratoryModule(app: FastifyInstance) {
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
     const { tests } = request.body as Record<string, unknown>;
+    const principal = getCtx(request).principal;
+    const scope = resolveLabScope(principal);
+    const accessible = await applyScopePolicy('laboratory', db('lab_orders').join('patients', 'lab_orders.patient_id', 'patients.id').where({ 'lab_orders.id': id, 'lab_orders.tenant_id': tenantId }), principal, scope).first();
+    if (!accessible) throw new ForbiddenError('You do not have access to this lab order');
     if (Array.isArray(tests) && tests.length) {
       for (const t of tests) {
         await db('lab_tests').where({ id: (t as Record<string, unknown>).id }).update({ result_value: (t as Record<string, unknown>).resultValue, status: (t as Record<string, unknown>).status || 'completed', notes: (t as Record<string, unknown>).notes });

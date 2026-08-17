@@ -161,6 +161,13 @@ export async function findActiveSessions(userId: string, tenantId: string) {
     .orderBy('last_activity_at', 'desc');
 }
 
+export async function findActiveSessionById(sessionId: string, userId: string, tenantId: string) {
+  return db('user_sessions')
+    .where({ id: sessionId, user_id: userId, tenant_id: tenantId, is_active: true })
+    .where('expires_at', '>', new Date())
+    .first();
+}
+
 export async function findSessionByTokenHash(tokenHash: string) {
   return db('user_sessions').where({ token_hash: tokenHash, is_active: true }).first();
 }
@@ -174,6 +181,12 @@ export async function updateSessionActivity(userId: string, tenantId: string, to
 
 export async function rotateSessionToken(sessionId: string, tokenHash: string) {
   await db('user_sessions').where({ id: sessionId, is_active: true }).update({ token_hash: tokenHash, last_activity_at: new Date() });
+}
+
+export async function updateSessionMembership(sessionId: string, userId: string, tenantId: string, membershipId: string) {
+  await db('user_sessions')
+    .where({ id: sessionId, user_id: userId, tenant_id: tenantId, is_active: true })
+    .update({ membership_id: membershipId, last_activity_at: new Date() });
 }
 
 // ── Password Resets ──

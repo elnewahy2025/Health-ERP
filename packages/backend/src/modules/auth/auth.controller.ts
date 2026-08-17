@@ -306,7 +306,7 @@ export async function logout(request: FastifyRequest, reply: FastifyReply) {
 }
 
 export async function switchMembership(request: FastifyRequest, reply: FastifyReply) {
-  const { userId } = getCtx(request);
+  const { userId, sessionId: requestSessionId } = getCtx(request);
   const body = request.body as { membershipId?: unknown };
   const membershipId = typeof body?.membershipId === 'string' ? body.membershipId : '';
   if (!membershipId) throw new UnauthorizedError('Membership is required');
@@ -329,13 +329,11 @@ export async function switchMembership(request: FastifyRequest, reply: FastifyRe
   }
 
   const jwt = svc.getJwtHelper(request.server);
-  const accessToken = svc.generateAccessToken(
-    jwt,
-    String(membership.tenant_id),
-    userId,
-    membershipId,
-    String((request.user as Record<string, unknown> | undefined)?.session_id || membershipId),
-  );
+  const sessionId = requestSessionId || String((request.user as Record<string, unknown> | undefined)?.session_id || '');
+  if (sessionId) {
+    await repo.updateSessionMembership(sessionId, userId, String(membership.tenant_id), membershipId);
+  }
+  const accessToken = svc.generateAccessToken(jwt, String(membership.tenant_id), userId, membershipId, sessionId || null);
   await logAudit({
     tenantId: String(membership.tenant_id),
     userId,

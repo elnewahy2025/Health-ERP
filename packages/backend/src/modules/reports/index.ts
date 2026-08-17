@@ -89,6 +89,8 @@ export async function registerReportsModule(app: FastifyInstance) {
 
   app.post('/api/v1/reports/:id/schedules', { preHandler: [authenticate, authorize('reports.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const report = await db('report_definitions').where({ id, tenant_id: tenantId }).first();
+    if (!report) return reply.status(404).send({ success: false, error: 'Report not found' });
     const [s] = await db('report_schedules').insert({
       tenant_id: tenantId, report_id: id, cron: body.cron || '0 8 * * 1',
       recipients: JSON.stringify(body.recipients || []), format: body.format || 'pdf',
@@ -122,6 +124,8 @@ export async function registerReportsModule(app: FastifyInstance) {
 
   app.post('/api/v1/reports/:id/execute', { preHandler: [authenticate, authorize('reports.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const ctx = getCtx(request); const { id } = request.params as { id: string }; const body = request.body as Record<string, unknown>;
+    const report = await db('report_definitions').where({ id, tenant_id: tenantId }).first();
+    if (!report) return reply.status(404).send({ success: false, error: 'Report not found' });
     const [exec] = await db('report_executions').insert({
       tenant_id: tenantId, report_id: id, status: 'pending',
       format: body.format || 'csv', trigger: 'manual', created_by: ctx.userId
@@ -134,7 +138,8 @@ export async function registerReportsModule(app: FastifyInstance) {
   // ── Export endpoint stub ──
   app.get('/api/v1/reports/export/:id/:format', { preHandler: [authenticate, authorize('reports.export')] }, async (request, reply) => {
     const { id, format } = request.params as { id: string; format: string };
-    const exec = await db('report_executions').where({ id }).first();
+    const tenantId = getTenantId(request);
+    const exec = await db('report_executions').where({ id, tenant_id: tenantId }).first();
     if (!exec) return reply.status(404).send({ success: false, error: 'Execution not found' });
     if (exec.status !== 'completed') return reply.status(400).send({ success: false, error: 'Report not ready' });
     // In production, stream the generated file

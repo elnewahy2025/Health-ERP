@@ -11,6 +11,7 @@ interface RequestWithMeta extends FastifyRequest {
     tenantId: string;
     userId: string;
     membershipId?: string;
+    sessionId?: string;
     authorizationScope?: string;
     roles: string[];
     permissions: string[];
