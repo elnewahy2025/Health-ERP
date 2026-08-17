@@ -22,7 +22,7 @@ import { registerCommonModule } from './modules/common/index.js';
 import { errorHandler } from './core/error-handler.js';
 import { db } from './core/database.js';
 import { redis } from './core/redis.js';
-import { loadUserPrincipal, uniquePermissionKeys } from './services/authorization.js';
+import { loadUserPrincipal, loadUserPrincipalByMembership, uniquePermissionKeys } from './services/authorization.js';
 
 import { registerLaboratoryModule } from './modules/laboratory/index.js';
 import { registerRadiologyModule } from './modules/radiology/index.js';
@@ -143,21 +143,30 @@ async function buildApp() {
       return;
     }
     const req = request as any;
-    const { tenantId, userId } = request.user as any;
-    const principal = await loadUserPrincipal(userId, tenantId);
-    if (!principal || principal.status !== 'active') {
-      reply.status(401).send({ success: false, error: "Account is not active" });
+    const token = request.user as any;
+    const userId = String(token.user_id || token.userId || '');
+    const membershipId = token.active_membership_id ? String(token.active_membership_id) : undefined;
+    const legacyTenantId = token.tenant_id || token.tenantId;
+    const principal = membershipId
+      ? await loadUserPrincipalByMembership(userId, membershipId)
+      : (legacyTenantId ? await loadUserPrincipal(userId, String(legacyTenantId)) : null);
+    if (!principal || principal.status.toLowerCase() !== 'active' ||
+        (principal.membership && String(principal.membership.status).toUpperCase() !== 'ACTIVE')) {
+      reply.status(401).send({ success: false, error: "Account or membership is not active" });
       return;
     }
+    const tenantId = principal.tenantId;
     req.tenantId = tenantId;
     req.ctx = {
       tenantId,
       userId,
+      membershipId: principal.membershipId,
       roles: principal.roles,
-      permissions: uniquePermissionKeys(principal.grants),
+      permissions: uniquePermissionKeys([...principal.grants, ...(principal.denials || [])]),
       branches: principal.branches,
       locale: principal.locale,
-      branchId: principal.branches[0],
+      branchId: principal.membership?.branchId || principal.branches[0],
+      departmentId: principal.membership?.departmentId || principal.departmentId,
       requestId: request.id,
       principal,
     };

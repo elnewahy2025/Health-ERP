@@ -18,6 +18,12 @@ export const authApi = {
     apiClient.post('/tenants', data).then((r) => r.data.data),
   me: () =>
     apiClient.get('/auth/me').then((r) => r.data.data),
+  switchMembership: async (membershipId: string) => {
+    const response = await apiClient.post('/auth/membership/switch', { membershipId });
+    const result = response.data.data;
+    if (result.accessToken) setAccessToken(result.accessToken);
+    return result;
+  },
   refresh: async () => {
     // Refresh token is in HttpOnly cookie — sent automatically
     const response = await apiClient.post('/auth/refresh', {});

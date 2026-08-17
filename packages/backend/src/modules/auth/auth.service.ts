@@ -80,12 +80,34 @@ export async function createSessionRecord(
 
 // ── JWT ──
 
-export function buildAccessTokenPayload(tenantId: string, userId: string): Record<string, unknown> {
-  return { tenantId, userId };
+export function buildAccessTokenPayload(
+  tenantId: string,
+  userId: string,
+  activeMembershipId?: string | null,
+  sessionId?: string | null,
+): Record<string, unknown> {
+  return {
+    // Legacy claims remain during the migration window so old clients and
+    // refresh paths do not fail abruptly. New middleware prefers snake_case.
+    tenantId,
+    userId,
+    user_id: userId,
+    ...(activeMembershipId ? { active_membership_id: activeMembershipId } : {}),
+    ...(sessionId ? { session_id: sessionId } : {}),
+  };
 }
 
-export function generateAccessToken(jwt: JwtHelper, tenantId: string, userId: string): string {
-  return jwt.sign(buildAccessTokenPayload(tenantId, userId), { expiresIn: env.ACCESS_TOKEN_EXPIRY });
+export function generateAccessToken(
+  jwt: JwtHelper,
+  tenantId: string,
+  userId: string,
+  activeMembershipId?: string | null,
+  sessionId?: string | null,
+): string {
+  return jwt.sign(
+    buildAccessTokenPayload(tenantId, userId, activeMembershipId, sessionId),
+    { expiresIn: env.ACCESS_TOKEN_EXPIRY },
+  );
 }
 
 // ── Verification Token ──

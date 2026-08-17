@@ -15,6 +15,14 @@ export interface User {
   passwordChangedAt?: string;
 }
 
+export interface Membership {
+  id: string;
+  tenantId: string;
+  branchId: string | null;
+  departmentId: string | null;
+  status: string;
+}
+
 export interface Tenant {
   id: string;
   name: string;
@@ -39,6 +47,8 @@ export type PermissionScope =
 interface AuthContextType {
   user: User | null;
   tenant: Tenant | null;
+  memberships: Membership[];
+  activeMembership: Membership | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string, tenantSlug: string) => Promise<Record<string, unknown>>;
@@ -46,6 +56,7 @@ interface AuthContextType {
   logout: () => void;
   setLocale: (locale: 'ar' | 'en') => void;
   refreshUser: () => Promise<void>;
+  switchMembership: (membershipId: string) => Promise<void>;
   /** Centralized permission check. Server remains authoritative — this is the UX mirror only. */
   can: (permission: string) => boolean;
   canAny: (permissions: string[]) => boolean;
@@ -56,6 +67,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [activeMembership, setActiveMembership] = useState<Membership | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -64,6 +77,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await authApi.me();
       setUser(data.user);
       setTenant(data.tenant);
+      setMemberships(data.memberships || []);
+      setActiveMembership(data.activeMembership || null);
       setIsAuthenticated(true);
       localStorage.setItem('locale', data.user.locale);
     } catch {
@@ -117,6 +132,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return {};
   }, []);
 
+  const switchMembership = useCallback(async (membershipId: string) => {
+    const result = await authApi.switchMembership(membershipId);
+    if (result.user) setUser(result.user);
+    if (result.tenant) setTenant(result.tenant);
+    if (result.membership) setActiveMembership(result.membership);
+    await refreshUser();
+  }, [refreshUser]);
+
   const register = useCallback(async (data: { name: string; slug: string; adminEmail: string; adminPassword: string; adminName: string; locale?: string }) => {
     await authApi.register(data);
   }, []);
@@ -142,6 +165,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('locale');
     setUser(null);
     setTenant(null);
+    setMemberships([]);
+    setActiveMembership(null);
     setIsAuthenticated(false);
     window.location.href = '/login';
   }, []);
@@ -155,7 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const canAny = useCallback((permissions: string[]) => canAnyUse(user?.permissions || [], permissions), [user]);
 
   return (
-    <AuthContext.Provider value={{ user, tenant, isAuthenticated, isLoading, login, register, logout, setLocale, refreshUser, can, canAny }}>
+    <AuthContext.Provider value={{ user, tenant, memberships, activeMembership, isAuthenticated, isLoading, login, register, logout, setLocale, refreshUser, switchMembership, can, canAny }}>
       {children}
     </AuthContext.Provider>
   );
@@ -177,7 +202,9 @@ export function useAuth() {
 export function canUse(permissions: string[], permission: string): boolean {
   if (!permissions || permissions.length === 0) return false;
   if (permissions.includes('*')) return true;
-  return permissions.includes(permission);
+  if (permissions.includes(permission)) return true;
+  const [module] = permission.split('.');
+  return permissions.includes(`${module}.*`);
 }
 
 export function canAnyUse(permissions: string[], required: string[]): boolean {

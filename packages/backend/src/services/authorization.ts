@@ -1,8 +1,11 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Knex } from 'knex';
 import { ForbiddenError } from '@healthcare/shared/errors';
-import type { Grant, PermissionScope } from '@healthcare/shared/authz';
+import { expandGrantKey, permissionKeyMatches } from '@healthcare/shared/authz';
+import type { Grant, PermissionEffect, PermissionScope } from '@healthcare/shared/authz';
 import { db } from '../core/database.js';
+import { CACHE_TTL, getOrSet } from '../core/redis.js';
+import { redis } from '../core/redis.js';
 
 /**
  * Centralized authorization service — the only place permission/scope decisions
@@ -13,12 +16,24 @@ import { db } from '../core/database.js';
  * union of role grants (role_permissions) and direct grants (user_permissions).
  */
 
+export interface MembershipContext {
+  id: string;
+  userId: string;
+  tenantId: string;
+  branchId: string | null;
+  departmentId: string | null;
+  status: 'ACTIVE' | 'SUSPENDED' | 'INVITED' | string;
+}
+
 export interface Principal {
   kind: 'user';
   id: string;
   tenantId: string;
+  membershipId?: string;
+  membership?: MembershipContext;
   roles: string[];
   grants: Grant[];
+  denials?: Grant[];
   branches: string[];
   departmentId: string | null;
   locale: 'ar' | 'en';
@@ -54,54 +69,115 @@ export function scopeCovers(grantScope: PermissionScope, requestedScope: Permiss
 }
 
 export function uniquePermissionKeys(grants: Grant[]): string[] {
-  return Array.from(new Set(grants.map((g) => g.permission))).sort();
+  const concrete = grants.flatMap((grant) => expandGrantKey(grant.permission));
+  return Array.from(new Set(concrete.length > 0 ? concrete : grants.map((g) => g.permission))).sort();
 }
 
 /**
  * Load a staff user principal with effective grants from the normalized tables.
  * Returns null when the user does not exist in the tenant.
  */
-export async function loadUserPrincipal(userId: string, tenantId: string): Promise<Principal | null> {
+async function loadPrincipalForContext(
+  userId: string,
+  tenantId: string,
+  membership?: MembershipContext,
+): Promise<Principal | null> {
   const user = await db('users').where({ id: userId, tenant_id: tenantId }).first();
   if (!user) return null;
 
-  const roleRows = await db('user_roles')
+  const roleQuery = db('user_roles')
     .join('roles', 'user_roles.role_id', 'roles.id')
     .where('user_roles.user_id', userId)
-    .andWhere('user_roles.tenant_id', tenantId)
-    .select('roles.slug');
+    .andWhere('user_roles.tenant_id', tenantId);
+  if (membership?.id) roleQuery.andWhere('user_roles.membership_id', membership.id);
+  const roleRows = await roleQuery.select('roles.slug');
 
-  const roleGrantRows = await db('role_permissions')
+  const roleGrantQuery = db('role_permissions')
     .join('user_roles', 'role_permissions.role_id', 'user_roles.role_id')
     .where('user_roles.user_id', userId)
-    .andWhere('user_roles.tenant_id', tenantId)
-    .select('role_permissions.permission', 'role_permissions.scope');
+    .andWhere('user_roles.tenant_id', tenantId);
+  if (membership?.id) roleGrantQuery.andWhere('user_roles.membership_id', membership.id);
+  const roleGrantRows = await roleGrantQuery.select('role_permissions.permission', 'role_permissions.scope', 'role_permissions.effect');
 
-  const directGrantRows = await db('user_permissions')
-    .where({ user_id: userId, tenant_id: tenantId })
-    .select('permission', 'scope');
+  const directGrantQuery = db('user_permissions').where({ user_id: userId, tenant_id: tenantId });
+  if (membership?.id) directGrantQuery.andWhere('membership_id', membership.id);
+  const directGrantRows = await directGrantQuery.select('permission', 'scope', 'effect');
 
-  const branchRows = await db('user_branches')
-    .where({ user_id: userId, tenant_id: tenantId })
-    .select('branch_id');
+  const branchQuery = db('user_branches').where({ user_id: userId, tenant_id: tenantId });
+  if (membership?.id) branchQuery.andWhere('membership_id', membership.id);
+  const branchRows = await branchQuery.select('branch_id');
 
-  const grants: Grant[] = [
-    ...roleGrantRows.map((r) => ({ permission: String(r.permission), scope: String(r.scope) as PermissionScope })),
-    ...directGrantRows.map((r) => ({ permission: String(r.permission), scope: String(r.scope) as PermissionScope })),
+  const mapGrant = (row: { permission: unknown; scope: unknown; effect?: unknown }, source: 'role' | 'user'): Grant => ({
+    permission: String(row.permission),
+    scope: String(row.scope) as PermissionScope,
+    effect: (String(row.effect || 'ALLOW').toUpperCase() as PermissionEffect),
+    source,
+  });
+  const grants = [
+    ...roleGrantRows.map((row) => mapGrant(row, 'role')),
+    ...directGrantRows.map((row) => mapGrant(row, 'user')),
   ];
+  const denials = grants.filter((grant) => grant.effect === 'DENY');
 
   return {
     kind: 'user',
     id: userId,
     tenantId,
+    membershipId: membership?.id,
+    membership,
     roles: roleRows.map((r) => String(r.slug)),
-    grants,
+    grants: grants.filter((grant) => grant.effect !== 'DENY'),
+    denials,
     branches: branchRows.map((b) => String(b.branch_id)),
-    departmentId: user.department_id ? String(user.department_id) : null,
+    departmentId: membership?.departmentId || (user.department_id ? String(user.department_id) : null),
     locale: user.locale === 'ar' ? 'ar' : 'en',
     permVersion: Number(user.perm_version || 0),
     status: String(user.status || 'active'),
   };
+}
+
+export async function loadUserPrincipal(userId: string, tenantId: string): Promise<Principal | null> {
+  return loadPrincipalForContext(userId, tenantId);
+}
+
+export async function loadUserPrincipalByMembership(userId: string, membershipId: string): Promise<Principal | null> {
+  const membership = await db('memberships').where({ id: membershipId, user_id: userId }).first();
+  if (!membership) return null;
+  const context: MembershipContext = {
+    id: String(membership.id),
+    userId,
+    tenantId: String(membership.tenant_id),
+    branchId: membership.branch_id ? String(membership.branch_id) : null,
+    departmentId: membership.department_id ? String(membership.department_id) : null,
+    status: String(membership.status),
+  };
+  if (context.status.toUpperCase() !== 'ACTIVE') return null;
+  const user = await db('users').where({ id: userId, tenant_id: context.tenantId }).select('perm_version', 'status').first();
+  if (!user || String(user.status).toLowerCase() !== 'active') return null;
+  const version = Number(user.perm_version || 0);
+  const contextVersion = new Date(membership.updated_at || membership.created_at || 0).getTime();
+  const key = `authz:${userId}:${membershipId}:${version}:${contextVersion}`;
+  try {
+    return await getOrSet(key, () => loadPrincipalForContext(userId, context.tenantId, context), CACHE_TTL.MEDIUM);
+  } catch {
+    return loadPrincipalForContext(userId, context.tenantId, context);
+  }
+}
+
+export async function invalidateAuthorizationCache(userId: string, membershipId?: string): Promise<void> {
+  // Version bumps are the primary invalidation mechanism. This best-effort
+  // deletion removes currently known keys when Redis supports SCAN.
+  try {
+    let cursor = '0';
+    const pattern = membershipId ? `authz:${userId}:${membershipId}:*` : `authz:${userId}:*`;
+    do {
+      const [next, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+      cursor = next;
+      if (keys.length) await redis.del(...keys);
+    } while (cursor !== '0');
+  } catch {
+    // Redis is optional; versioned database resolution remains authoritative.
+  }
 }
 
 /**
@@ -113,10 +189,15 @@ export function hasPermission(
   permission: string,
   requestedScope?: PermissionScope,
 ): boolean {
-  const candidates = principal.grants.filter((g) => g.permission === '*' || g.permission === permission);
-  if (candidates.length === 0) return false;
-  if (!requestedScope) return true;
-  return candidates.some((g) => scopeCovers(g.scope, requestedScope as PermissionScope));
+  const requested = requestedScope as PermissionScope | undefined;
+  const denied = principal.denials?.some((grant) =>
+    permissionKeyMatches(grant.permission, permission) && (!requested || scopeCovers(grant.scope, requested)),
+  );
+  if (denied) return false;
+  const candidates = principal.grants.filter((grant) =>
+    permissionKeyMatches(grant.permission, permission) && (!requested || scopeCovers(grant.scope, requested)),
+  );
+  return candidates.length > 0;
 }
 
 export function anyPermission(

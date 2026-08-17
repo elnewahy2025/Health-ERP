@@ -10,7 +10,8 @@ import { generateSecret, verifyToken, generateQrCode } from '../../services/totp
 import { createAndSendOtp, verifyOtp, incrementOtpAttempt } from '../../services/otp.js';
 import { sendEmail } from '../../services/email.js';
 import { getEnv } from '@healthcare/shared/config';
-import { loadUserPrincipal, uniquePermissionKeys, type Principal } from '../../services/authorization.js';
+import { loadUserPrincipal, loadUserPrincipalByMembership, uniquePermissionKeys, type Principal } from '../../services/authorization.js';
+import { db } from '../../core/database.js';
 import * as svc from './auth.service.js';
 import * as repo from './auth.repository.js';
 import {
@@ -278,14 +279,73 @@ export async function logout(request: FastifyRequest, reply: FastifyReply) {
   return sendSuccess(reply, { message: 'Logged out successfully' });
 }
 
+export async function switchMembership(request: FastifyRequest, reply: FastifyReply) {
+  const { userId } = getCtx(request);
+  const body = request.body as { membershipId?: unknown };
+  const membershipId = typeof body?.membershipId === 'string' ? body.membershipId : '';
+  if (!membershipId) throw new UnauthorizedError('Membership is required');
+
+  const membership = await db('memberships')
+    .where({ id: membershipId, user_id: userId })
+    .first();
+  if (!membership || String(membership.status).toUpperCase() !== 'ACTIVE') {
+    throw new UnauthorizedError('Membership is not available');
+  }
+
+  const user = await repo.findUserById(userId);
+  if (!user || String(user.status).toLowerCase() !== 'active') {
+    throw new UnauthorizedError('Account is not active');
+  }
+
+  const principal = await loadUserPrincipalByMembership(userId, membershipId);
+  if (!principal || principal.status.toLowerCase() !== 'active') {
+    throw new UnauthorizedError('Membership authorization could not be resolved');
+  }
+
+  const jwt = svc.getJwtHelper(request.server);
+  const accessToken = svc.generateAccessToken(
+    jwt,
+    String(membership.tenant_id),
+    userId,
+    membershipId,
+    String((request.user as Record<string, unknown> | undefined)?.session_id || membershipId),
+  );
+  await logAudit({
+    tenantId: String(membership.tenant_id),
+    userId,
+    action: 'user.membership_switched',
+    metadata: { membershipId, branchId: membership.branch_id, departmentId: membership.department_id },
+  });
+
+  return sendSuccess(reply, {
+    accessToken,
+    expiresIn: 3600,
+    user: buildUserResponse(user, principal),
+    membership: {
+      id: membership.id,
+      tenantId: membership.tenant_id,
+      branchId: membership.branch_id,
+      departmentId: membership.department_id,
+      status: membership.status,
+    },
+  });
+}
+
 export async function me(request: FastifyRequest, reply: FastifyReply) {
   const { userId, tenantId } = getCtx(request);
   const user = await repo.findUserByIdAndTenant(userId, tenantId);
   if (!user) throw new UnauthorizedError('User not found');
   const tenant = await repo.findTenantById(tenantId);
   const principal = await loadUserPrincipal(userId, tenantId);
+  const memberships = await db('memberships')
+    .where({ user_id: userId })
+    .whereIn('status', ['ACTIVE', 'INVITED'])
+    .select('id', 'tenant_id as tenantId', 'branch_id as branchId', 'department_id as departmentId', 'status', 'is_default')
+    .orderBy([{ column: 'is_default', order: 'desc' }, { column: 'created_at', order: 'asc' }]);
   return sendSuccess(reply, {
     user: buildUserResponse(user, principal),
+    memberships,
+    activeMembership: principal?.membership || null,
     tenant: tenant ? {
       id: tenant.id, name: tenant.name, slug: tenant.slug,
       locale: tenant.locale, direction: tenant.settings?.direction || (tenant.locale === 'ar' ? 'rtl' : 'ltr'),

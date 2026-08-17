@@ -57,6 +57,20 @@ describe('hasPermission', () => {
     expect(hasPermission(p, 'emergency_access.manage', 'system')).toBe(true);
   });
 
+  it('matches module wildcards without expanding storage', () => {
+    const p = principal([{ permission: 'patients.*', scope: 'branch' }]);
+    expect(hasPermission(p, 'patients.view', 'branch')).toBe(true);
+    expect(hasPermission(p, 'patients.delete', 'branch')).toBe(true);
+    expect(hasPermission(p, 'billing.view', 'branch')).toBe(false);
+  });
+
+  it('explicit denial overrides a matching allow', () => {
+    const p = principal([{ permission: 'patients.*', scope: 'tenant' }]);
+    p.denials = [{ permission: 'patients.delete', scope: 'tenant', effect: 'DENY', source: 'user' }];
+    expect(hasPermission(p, 'patients.view', 'branch')).toBe(true);
+    expect(hasPermission(p, 'patients.delete', 'branch')).toBe(false);
+  });
+
   it('scope must cover the requested scope', () => {
     const p = principal([
       { permission: 'patients.view', scope: 'branch' },

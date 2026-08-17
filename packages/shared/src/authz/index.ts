@@ -35,9 +35,14 @@ export const PERMISSION_SCOPES = [
 
 export type PermissionScope = (typeof PERMISSION_SCOPES)[number];
 
+export const PERMISSION_EFFECTS = ['ALLOW', 'DENY'] as const;
+export type PermissionEffect = (typeof PERMISSION_EFFECTS)[number];
+
 export interface Grant {
-  permission: string; // module.action | '*'
+  permission: string; // module.action | module.* | '*'
   scope: PermissionScope;
+  effect?: PermissionEffect;
+  source?: 'role' | 'user';
 }
 
 export interface RoleTemplate {
@@ -150,11 +155,15 @@ export function expandGrantKey(key: string): string[] {
 export function expandRoleGrants(template: RoleTemplate): Grant[] {
   const grants: Grant[] = [];
   for (const [key, scopes] of Object.entries(template.grants)) {
-    for (const permission of expandGrantKey(key)) {
-      for (const scope of scopes) grants.push({ permission, scope });
-    }
+    for (const scope of scopes) grants.push({ permission: key, scope, effect: 'ALLOW', source: 'role' });
   }
   return grants;
+}
+
+/** Return true when a stored key covers a concrete permission request. */
+export function permissionKeyMatches(storedKey: string, requestedKey: string): boolean {
+  return storedKey === '*' || storedKey === requestedKey ||
+    (storedKey.endsWith('.*') && requestedKey.startsWith(`${storedKey.slice(0, -2)}.`));
 }
 
 /**
@@ -343,3 +352,60 @@ export const SEED_ROLES: Record<string, RoleTemplate> = {
     },
   },
 };
+
+
+/**
+ * Enterprise hospital role catalog. Existing SEED_ROLES remain the backward-
+ * compatible seed slugs; these templates provide stable system-template names
+ * for the expanded role-management API without inventing new permission keys.
+ */
+export const HOSPITAL_ROLE_CATALOG = [
+  ['super_administrator', 'Super Administrator', 'system', 'system', 'super_admin'],
+  ['tenant_administrator', 'Tenant Administrator', 'system', 'tenant', 'admin'],
+  ['hospital_executive', 'Hospital Executive', 'tenant', 'tenant', 'manager'],
+  ['hospital_operations_manager', 'Hospital Operations Manager', 'tenant', 'tenant', 'manager'],
+  ['branch_manager', 'Branch Manager', 'tenant', 'branch', 'manager'],
+  ['department_head', 'Department Head', 'tenant', 'department', 'manager'],
+  ['medical_director', 'Medical Director', 'tenant', 'tenant', 'manager'],
+  ['physician', 'Physician', 'tenant', 'assigned_patients', 'doctor'],
+  ['consultant_physician', 'Consultant Physician', 'tenant', 'assigned_patients', 'doctor'],
+  ['resident_physician', 'Resident Physician', 'tenant', 'assigned_patients', 'doctor'],
+  ['nurse_manager', 'Nurse Manager', 'tenant', 'department', 'nurse'],
+  ['registered_nurse', 'Registered Nurse', 'tenant', 'department', 'nurse'],
+  ['nurse_assistant', 'Nurse Assistant', 'tenant', 'assigned_patients', 'nurse'],
+  ['pharmacist', 'Pharmacist', 'tenant', 'branch', 'pharmacist'],
+  ['pharmacy_technician', 'Pharmacy Technician', 'tenant', 'branch', 'pharmacist'],
+  ['laboratory_manager', 'Laboratory Manager', 'tenant', 'department', 'lab_tech'],
+  ['laboratory_technician', 'Laboratory Technician', 'tenant', 'department', 'lab_tech'],
+  ['radiology_manager', 'Radiology Manager', 'tenant', 'department', 'radiologist'],
+  ['radiologist', 'Radiologist', 'tenant', 'department', 'radiologist'],
+  ['radiology_technician', 'Radiology Technician', 'tenant', 'department', 'radiologist'],
+  ['medical_records_officer', 'Medical Records Officer', 'tenant', 'department', 'nurse'],
+  ['medical_coder', 'Medical Coder', 'tenant', 'department', 'billing_staff'],
+  ['receptionist', 'Receptionist', 'tenant', 'branch', 'receptionist'],
+  ['appointment_coordinator', 'Appointment Coordinator', 'tenant', 'branch', 'receptionist'],
+  ['triage_officer', 'Triage Officer', 'tenant', 'branch', 'nurse'],
+  ['billing_manager', 'Billing Manager', 'tenant', 'branch', 'billing_staff'],
+  ['billing_officer', 'Billing Officer', 'tenant', 'branch', 'billing_staff'],
+  ['accountant', 'Accountant', 'tenant', 'tenant', 'accountant'],
+  ['insurance_manager', 'Insurance Manager', 'tenant', 'tenant', 'accountant'],
+  ['insurance_claims_officer', 'Insurance Claims Officer', 'tenant', 'branch', 'billing_staff'],
+  ['hr_manager', 'HR Manager', 'tenant', 'tenant', 'manager'],
+  ['hr_officer', 'HR Officer', 'tenant', 'department', 'manager'],
+  ['inventory_manager', 'Inventory Manager', 'tenant', 'branch', 'manager'],
+  ['procurement_officer', 'Procurement Officer', 'tenant', 'branch', 'manager'],
+  ['compliance_officer', 'Compliance Officer', 'tenant', 'tenant', 'manager'],
+  ['reporting_bi_analyst', 'Reporting and BI Analyst', 'tenant', 'tenant', 'accountant'],
+  ['it_system_administrator', 'IT/System Administrator', 'tenant', 'tenant', 'admin'],
+  ['patient_portal_administrator', 'Patient Portal Administrator', 'tenant', 'tenant', 'admin'],
+  ['patient_portal_user', 'Patient Portal User', 'tenant', 'self', 'patient'],
+] as const;
+
+export function hospitalRoleTemplate(slug: string): RoleTemplate | null {
+  const entry = HOSPITAL_ROLE_CATALOG.find(([catalogSlug]) => catalogSlug === slug);
+  if (!entry) return null;
+  const [, , level, scopeDefault, baseSlug] = entry;
+  const base = SEED_ROLES[baseSlug];
+  if (!base) return null;
+  return { ...base, level: level as RoleTemplate['level'], scopeDefault: scopeDefault as PermissionScope };
+}
