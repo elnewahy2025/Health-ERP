@@ -5,6 +5,7 @@ import { Modal, Input, Select, Button, Badge, EmptyState, PageLoader } from '../
 import { Plus, Package, Warehouse as WarehouseIcon } from 'lucide-react';
 import { sanitizeNumber, sanitizeString } from '../lib/sanitize';
 import toast from 'react-hot-toast';
+import { Can } from '../components/auth/Authorization';
 
 type TabType = 'items' | 'warehouses' | 'pos';
 
@@ -325,9 +326,11 @@ export default function InventoryPage() {
             {t('inventory.itemsCount', { count: items.length })}, {pos.length} {t('inventory.purchaseOrders').toLowerCase()}
           </p>
         </div>
-        <Button icon={<Plus className="w-4 h-4" />} onClick={openNewModal}>
-          {tab === 'items' ? newItemLabel : tab === 'warehouses' ? newWhLabel : newPoLabel}
-        </Button>
+        <Can permission={tab === 'items' ? 'inventory.create' : tab === 'warehouses' ? 'inventory.manage' : 'inventory.create'}>
+          <Button icon={<Plus className="w-4 h-4" />} onClick={openNewModal}>
+            {tab === 'items' ? newItemLabel : tab === 'warehouses' ? newWhLabel : newPoLabel}
+          </Button>
+        </Can>
       </div>
 
       {/* Tab Buttons */}
@@ -481,7 +484,9 @@ export default function InventoryPage() {
       <Modal open={showItemModal} onClose={closeItemModal} title={t('inventory.newItem')} size="lg"
         footer={<>
           <Button variant="secondary" onClick={closeItemModal}>{t('common.cancel')}</Button>
-          <Button loading={saving} onClick={() => { const f = document.getElementById('item-form'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          <Can permission="inventory.create">
+            <Button loading={saving} onClick={() => { const f = document.getElementById('item-form'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          </Can>
         </>}
       >
         <form id="item-form" onSubmit={handleCreateItem} className="space-y-4">
@@ -538,7 +543,9 @@ export default function InventoryPage() {
       <Modal open={showWarehouseModal} onClose={closeWarehouseModal} title={t('inventory.newWarehouse')} size="md"
         footer={<>
           <Button variant="secondary" onClick={closeWarehouseModal}>{t('common.cancel')}</Button>
-          <Button loading={saving} onClick={() => { const f = document.getElementById('warehouse-form'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          <Can permission="inventory.manage">
+            <Button loading={saving} onClick={() => { const f = document.getElementById('warehouse-form'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          </Can>
         </>}
       >
         <form id="warehouse-form" onSubmit={handleCreateWarehouse} className="space-y-4">
@@ -557,7 +564,9 @@ export default function InventoryPage() {
       <Modal open={showPoModal} onClose={closePoModal} title={t('inventory.newPo')} size="md"
         footer={<>
           <Button variant="secondary" onClick={closePoModal}>{t('common.cancel')}</Button>
-          <Button loading={saving} onClick={() => { const f = document.getElementById('po-form'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          <Can permission="inventory.create">
+            <Button loading={saving} onClick={() => { const f = document.getElementById('po-form'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          </Can>
         </>}
       >
         <form id="po-form" onSubmit={handleCreatePo} className="space-y-4">

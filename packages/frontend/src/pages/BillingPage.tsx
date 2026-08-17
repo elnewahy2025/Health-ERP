@@ -6,6 +6,7 @@ import { Modal, Input, Select, PatientSearchField, Button, Badge, EmptyState, Pa
 import { Plus, Trash2, DollarSign, FileText, TrendingUp, AlertTriangle, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { sanitizeNumber } from '../lib/sanitize';
 import toast from 'react-hot-toast';
+import { Can } from '../components/auth/Authorization';
 
 interface InvoiceItemForm {
   description: string;
@@ -345,12 +346,14 @@ export default function BillingPage() {
           <h1 className="page-title">{t('billing.title')}</h1>
           <p className="text-muted-txt mt-1">{t('billing.invoiceCount', { count: pagination.total })}</p>
         </div>
-        <Button
-          icon={<Plus className="w-4 h-4" />}
-          onClick={() => setShowNewModal(true)}
-        >
-          {t('billing.new')}
-        </Button>
+        <Can permission="billing.create">
+          <Button
+            icon={<Plus className="w-4 h-4" />}
+            onClick={() => setShowNewModal(true)}
+          >
+            {t('billing.new')}
+          </Button>
+        </Can>
       </div>
 
       {/* Revenue Summary Cards */}
@@ -428,9 +431,11 @@ export default function BillingPage() {
           title={t('common.noData')}
           message={t('common.noData')}
           action={
-            <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowNewModal(true)}>
-              {t('billing.new')}
-            </Button>
+            <Can permission="billing.create">
+              <Button icon={<Plus className="w-4 h-4" />} onClick={() => setShowNewModal(true)}>
+                {t('billing.new')}
+              </Button>
+            </Can>
           }
         />
       ) : (
@@ -506,16 +511,18 @@ export default function BillingPage() {
                       </Badge>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {invoice.due > 0 && invoice.status !== 'cancelled' && invoice.status !== 'paid' && (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          icon={<DollarSign className="w-3 h-3" />}
-                          onClick={() => openPayModal(invoice)}
-                        >
-                          {t('billing.pay')}
-                        </Button>
-                      )}
+                      <Can permission="billing.approve">
+                        {invoice.due > 0 && invoice.status !== 'cancelled' && invoice.status !== 'paid' && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            icon={<DollarSign className="w-3 h-3" />}
+                            onClick={() => openPayModal(invoice)}
+                          >
+                            {t('billing.pay')}
+                          </Button>
+                        )}
+                      </Can>
                     </td>
                   </tr>
                 ))}
@@ -563,12 +570,14 @@ export default function BillingPage() {
             <Button variant="secondary" onClick={closeNewModal}>
               {t('common.cancel')}
             </Button>
-            <Button loading={saving} onClick={() => {
-              const form = document.getElementById('invoice-form') as HTMLFormElement 
-              if (form) form.requestSubmit();
-            }}>
-              {t('common.create')}
-            </Button>
+            <Can permission="billing.create">
+              <Button loading={saving} onClick={() => {
+                const form = document.getElementById('invoice-form') as HTMLFormElement;
+                if (form) form.requestSubmit();
+              }}>
+                {t('common.create')}
+              </Button>
+            </Can>
           </>
         }
       >
@@ -713,9 +722,11 @@ export default function BillingPage() {
             <Button variant="secondary" onClick={closePayModal}>
               {t('common.cancel')}
             </Button>
-            <Button loading={saving} onClick={handleRecordPayment}>
-              {t('billing.pay')} {selectedInvoice ? formatEgp(selectedInvoice.due) : ''}
-            </Button>
+            <Can permission="billing.approve">
+              <Button loading={saving} onClick={handleRecordPayment}>
+                {t('billing.pay')} {selectedInvoice ? formatEgp(selectedInvoice.due) : ''}
+              </Button>
+            </Can>
           </>
         }
       >

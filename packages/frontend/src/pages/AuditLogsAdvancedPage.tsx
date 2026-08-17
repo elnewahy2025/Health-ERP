@@ -14,6 +14,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { Can } from '../components/auth/Authorization';
 
 interface AuditEntry {
   id: string;
@@ -161,24 +162,26 @@ export default function AuditLogsAdvancedPage() {
             <p className="text-sm text-gray-500">{t('auditAdv.subtitle')}</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleExport('csv')}
-            icon={<Download className="w-4 h-4" />}
-          >
-            {t('auditAdv.exportCsv')}
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => handleExport('json')}
-            icon={<Download className="w-4 h-4" />}
-          >
-            {t('auditAdv.exportJson')}
-          </Button>
-        </div>
+        <Can permission="audit.export">
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleExport('csv')}
+              icon={<Download className="w-4 h-4" />}
+            >
+              {t('auditAdv.exportCsv')}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleExport('json')}
+              icon={<Download className="w-4 h-4" />}
+            >
+              {t('auditAdv.exportJson')}
+            </Button>
+          </div>
+        </Can>
       </div>
 
       <Card>

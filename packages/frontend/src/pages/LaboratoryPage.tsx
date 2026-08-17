@@ -4,6 +4,7 @@ import { apiClient as api } from '../lib/api';
 import { Modal, Input, Select, PatientSearchField } from '../components/ui';
 import { Plus, Search, Loader2, Trash2, FlaskConical, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Can } from '../components/auth/Authorization';
 
 interface LabTest {
   testCode: string;
@@ -125,7 +126,9 @@ export default function LaboratoryPage() {
     <div>
       <div className="page-header">
         <div><h1 className="page-title">{t('lab.title')}</h1><p className="text-gray-500 mt-1">{orders.length} orders</p></div>
-        <button onClick={() => setShowNewModal(true)} className="btn-primary"><Plus className="w-4 h-4" />{t('lab.newOrder')}</button>
+        <Can permission="laboratory.create">
+          <button onClick={() => setShowNewModal(true)} className="btn-primary"><Plus className="w-4 h-4" />{t('lab.newOrder')}</button>
+        </Can>
       </div>
 
       <div className="card mb-6"><div className="card-body">
@@ -158,9 +161,11 @@ export default function LaboratoryPage() {
         footer={
           <>
             <button onClick={() => { setShowNewModal(false); resetForm(); }} className="btn-secondary">{t('common.cancel')}</button>
-            <button type="submit" form="lab-form" disabled={saving} className="btn-primary">
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}
-            </button>
+            <Can permission="laboratory.create">
+              <button type="submit" form="lab-form" disabled={saving} className="btn-primary">
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}
+              </button>
+            </Can>
           </>
         }>
         <form id="lab-form" onSubmit={handleCreate} noValidate className="space-y-4">

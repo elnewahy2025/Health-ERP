@@ -6,6 +6,7 @@ import { confirmDialog } from '../components/ui';
 import { Plus, Package, ListChecks, Search, Loader2, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDateTime } from '../lib/format';
+import { Can } from '../components/auth/Authorization';
 
 interface DrugItem {
   drugName: string;
@@ -171,9 +172,11 @@ interface Prescription {
     <div>
       <div className="page-header">
         <div><h1 className="page-title">{t('pharmacy.title')}</h1></div>
-        <button onClick={() => tab === 'inventory' ? setShowNewDrugModal(true) : setShowNewRxModal(true)} className="btn-primary">
-          {tab === 'inventory' ? <><Package className="w-4 h-4" />{t('pharmacy.addDrug')}</> : <><Plus className="w-4 h-4" />{t('pharmacy.newPrescription')}</>}
-        </button>
+        <Can permission="pharmacy.create">
+          <button onClick={() => tab === 'inventory' ? setShowNewDrugModal(true) : setShowNewRxModal(true)} className="btn-primary">
+            {tab === 'inventory' ? <><Package className="w-4 h-4" />{t('pharmacy.addDrug')}</> : <><Plus className="w-4 h-4" />{t('pharmacy.newPrescription')}</>}
+          </button>
+        </Can>
       </div>
 
       <div className="flex gap-2 mb-6">
@@ -221,7 +224,7 @@ interface Prescription {
                     <td>{p.items?.length || 0} items</td>
                     <td><span className={`badge ${p.status === 'dispensed' ? 'badge-success' : 'badge-info'}`}>{p.status}</span></td>
                     <td className="text-xs">{formatDateTime(p.createdAt)}</td>
-                    <td>{p.status !== 'dispensed' && <button onClick={() => handleDispense(p.id)} className="btn-ghost btn-sm text-green-600">{t('pharmacy.dispense')}</button>}</td>
+                    <td><Can permission="pharmacy.approve">{p.status !== 'dispensed' && <button onClick={() => handleDispense(p.id)} className="btn-ghost btn-sm text-green-600">{t('pharmacy.dispense')}</button>}</Can></td>
                   </tr>
                 ))}
             </tbody>
@@ -232,7 +235,9 @@ interface Prescription {
       <Modal open={showNewDrugModal} onClose={() => setShowNewDrugModal(false)} title={t('pharmacy.addDrug')} size="lg"
         footer={<>
           <button onClick={() => setShowNewDrugModal(false)} className="btn-secondary">{t('common.cancel')}</button>
-          <button type="submit" form="drug-form" disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}</button>
+          <Can permission="pharmacy.create">
+            <button type="submit" form="drug-form" disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}</button>
+          </Can>
         </>}>
         <form id="drug-form" onSubmit={handleCreateDrug} noValidate className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -261,7 +266,9 @@ interface Prescription {
       <Modal open={showNewRxModal} onClose={() => { setShowNewRxModal(false); resetRxForm(); }} title={t('pharmacy.newPrescription')} size="xl"
         footer={<>
           <button onClick={() => { setShowNewRxModal(false); resetRxForm(); }} className="btn-secondary">{t('common.cancel')}</button>
-          <button type="submit" form="rx-form" disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}</button>
+          <Can permission="pharmacy.create">
+            <button type="submit" form="rx-form" disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}</button>
+          </Can>
         </>}>
         <form id="rx-form" onSubmit={handleCreateRx} noValidate className="space-y-4">
           <PatientSearchField value={rxForm.patientId}

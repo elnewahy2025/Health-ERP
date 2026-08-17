@@ -5,6 +5,7 @@ import { Modal, Input, Select, Button, Badge, EmptyState, PageLoader } from '../
 import { Plus, UsersRound, CalendarCheck, Banknote } from 'lucide-react';
 import { sanitizeString } from '../lib/sanitize';
 import toast from 'react-hot-toast';
+import { Can } from '../components/auth/Authorization';
 
 type TabType = 'employees' | 'leave' | 'payroll';
 
@@ -227,9 +228,11 @@ export default function HrPage() {
           <p className="text-gray-500 mt-1">{t('hr.employeeCountLabel', { count: employees.length })}</p>
         </div>
         {tab !== 'payroll' && (
-          <Button icon={<Plus className="w-4 h-4" />} onClick={openNewModal}>
-            {tab === 'employees' ? t('hr.addEmployee') : t('hr.newLeaveRequest')}
-          </Button>
+          <Can permission="hr.create">
+            <Button icon={<Plus className="w-4 h-4" />} onClick={openNewModal}>
+              {tab === 'employees' ? t('hr.addEmployee') : t('hr.newLeaveRequest')}
+            </Button>
+          </Can>
         )}
       </div>
 
@@ -378,7 +381,9 @@ export default function HrPage() {
       <Modal open={showEmployeeModal} onClose={closeEmployeeModal} title={t('hr.addEmployee')} size="lg"
         footer={<>
           <Button variant="secondary" onClick={closeEmployeeModal}>{t('common.cancel')}</Button>
-          <Button loading={saving} onClick={() => { const f = document.getElementById('emp-form'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          <Can permission="hr.create">
+            <Button loading={saving} onClick={() => { const f = document.getElementById('emp-form'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          </Can>
         </>}
       >
         <form id="emp-form" onSubmit={handleCreateEmployee} className="space-y-4">
@@ -420,7 +425,9 @@ export default function HrPage() {
       <Modal open={showLeaveModal} onClose={closeLeaveModal} title={t('hr.newLeaveRequest')} size="md"
         footer={<>
           <Button variant="secondary" onClick={closeLeaveModal}>{t('common.cancel')}</Button>
-          <Button loading={saving} onClick={() => { const f = document.getElementById('leave-form'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          <Can permission="hr.create">
+            <Button loading={saving} onClick={() => { const f = document.getElementById('leave-form'); if (f) (f as HTMLFormElement).requestSubmit(); }}>{t('common.save')}</Button>
+          </Can>
         </>}
       >
         <form id="leave-form" onSubmit={handleCreateLeave} className="space-y-4">

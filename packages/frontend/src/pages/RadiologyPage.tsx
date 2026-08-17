@@ -4,6 +4,7 @@ import { apiClient as api } from '../lib/api';
 import { Modal, Input, Select, PatientSearchField } from '../components/ui';
 import { Plus, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Can } from '../components/auth/Authorization';
 
 interface RadiologyOrderForm {
   patientId: string;
@@ -84,7 +85,9 @@ export default function RadiologyPage() {
     <div>
       <div className="page-header">
         <div><h1 className="page-title">{t('radiology.title')}</h1><p className="text-gray-500 mt-1">{orders.length} orders</p></div>
-        <button onClick={() => setShowNewModal(true)} className="btn-primary"><Plus className="w-4 h-4" />{t('radiology.newOrder')}</button>
+        <Can permission="radiology.create">
+          <button onClick={() => setShowNewModal(true)} className="btn-primary"><Plus className="w-4 h-4" />{t('radiology.newOrder')}</button>
+        </Can>
       </div>
 
       <div className="card mb-6"><div className="card-body">
@@ -119,9 +122,11 @@ export default function RadiologyPage() {
         footer={
           <>
             <button onClick={() => { setShowNewModal(false); resetForm(); }} className="btn-secondary">{t('common.cancel')}</button>
-            <button type="submit" form="rad-form" disabled={saving} className="btn-primary">
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}
-            </button>
+            <Can permission="radiology.create">
+              <button type="submit" form="rad-form" disabled={saving} className="btn-primary">
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}
+              </button>
+            </Can>
           </>
         }>
         <form id="rad-form" onSubmit={handleCreate} noValidate className="space-y-4">

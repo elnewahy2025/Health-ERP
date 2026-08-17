@@ -8,6 +8,7 @@ import { confirmDialog } from '../components/ui';
 import { Plus, Loader2, CalendarCheck, CheckCircle2, Ban } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDate } from '../lib/format';
+import { Can } from '../components/auth/Authorization';
 
 interface AppointmentFormData {
   patientId: string;
@@ -172,9 +173,11 @@ export default function AppointmentsPage() {
           <h1 className="page-title">{t('appointment.title')}</h1>
           <p className="text-gray-500 mt-1">{pagination.total} appointments</p>
         </div>
-        <button onClick={() => setShowNewModal(true)} className="btn-primary">
-          <Plus className="w-4 h-4" />{t('appointment.new')}
-        </button>
+        <Can permission="appointments.create">
+          <button onClick={() => setShowNewModal(true)} className="btn-primary">
+            <Plus className="w-4 h-4" />{t('appointment.new')}
+          </button>
+        </Can>
       </div>
 
       <div className="card mb-6">
@@ -218,9 +221,13 @@ export default function AppointmentsPage() {
                 <td><span className={statusBadge(a.status)}>{a.status}</span></td>
                 <td>
                   <div className="flex flex-wrap gap-1">
-                    {(a.status === 'scheduled' || a.status === 'confirmed') && <button onClick={() => handleCheckIn(a.id)} className="btn-ghost btn-sm"><CalendarCheck className="w-3.5 h-3.5" />{t('appointment.status.checkedIn')}</button>}
-                    {a.status === 'checked_in' && <button onClick={() => handleComplete(a.id)} className="btn-ghost btn-sm text-green-600"><CheckCircle2 className="w-3.5 h-3.5" />{t('appointment.status.completed')}</button>}
-                    {(a.status === 'scheduled' || a.status === 'confirmed') && <button onClick={() => handleCancel(a.id)} className="btn-ghost btn-sm text-red-600"><Ban className="w-3.5 h-3.5" />{t('appointment.status.cancelled')}</button>}
+                    <Can permission="appointments.approve">
+                      {(a.status === 'scheduled' || a.status === 'confirmed') && <button onClick={() => handleCheckIn(a.id)} className="btn-ghost btn-sm"><CalendarCheck className="w-3.5 h-3.5" />{t('appointment.status.checkedIn')}</button>}
+                      {a.status === 'checked_in' && <button onClick={() => handleComplete(a.id)} className="btn-ghost btn-sm text-green-600"><CheckCircle2 className="w-3.5 h-3.5" />{t('appointment.status.completed')}</button>}
+                    </Can>
+                    <Can permission="appointments.cancel">
+                      {(a.status === 'scheduled' || a.status === 'confirmed') && <button onClick={() => handleCancel(a.id)} className="btn-ghost btn-sm text-red-600"><Ban className="w-3.5 h-3.5" />{t('appointment.status.cancelled')}</button>}
+                    </Can>
                   </div>
                 </td>
               </tr>
@@ -245,9 +252,11 @@ export default function AppointmentsPage() {
         footer={
           <>
             <button onClick={() => { setShowNewModal(false); resetForm(); }} className="btn-secondary">{t('common.cancel')}</button>
-            <button type="submit" form="appointment-form" disabled={saving} className="btn-primary">
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.create')}
-            </button>
+            <Can permission="appointments.create">
+              <button type="submit" form="appointment-form" disabled={saving} className="btn-primary">
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.create')}
+              </button>
+            </Can>
           </>
         }>
         <form id="appointment-form" onSubmit={handleCreate} noValidate className="space-y-4">
