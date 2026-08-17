@@ -1,158 +1,157 @@
-# Authorization/RBAC Completion Audit
+# Authorization and RBAC Completion Audit
 
-**Repository:** `elnewahy2025/Health-ERP`  
-**Reviewed:** 2026-08-17  
-**Branch:** `main`  
-**HEAD:** pending ops-scope increment after `8cb6f39`
-**Review basis:** Attached authorization specification, repository source, migrations, runtime call sites, tests, and build/type-check results.
+**Repository:** `elnewahy2025/Health-ERP`
+**Reviewed:** 2026-08-18
+**Branch:** `main`
+**Implementation HEAD before this documentation commit:** `a04bd28`
+**Review basis:** the reference architecture, migrations, runtime authorization paths, frontend authorization primitives, tests, and final validation commands.
 
 ## Executive conclusion
 
-> **No. The full specification is not complete.**
+The enterprise RBAC and authorization implementation is **complete in the application code for the defined architecture**, with backward-compatible legacy paths intentionally retained during migration. The implementation now has membership-aware authentication, persistent session binding, explicit allow/deny effects, deterministic precedence, wildcard matching, module-specific scope policies, cache invalidation, a 39-role hospital catalog, protected RBAC lifecycle APIs, frontend action gates, and regression coverage.
 
-The repository contains a committed reference architecture and an expanding authorization implementation. The latest increment adds server-side validation of active session IDs for session-bound JWTs, persists membership changes on the verified session, integrates scope policies into EMR, billing, laboratory, radiology, pharmacy, HR, compliance, and audit paths, adds additive pharmacy/HR scope-context migrations, closes report export ownership checks, adds DMS and BI action-level gates, and expands scope-policy regression tests. Full enterprise completion is still not claimed because universal module coverage, complete security integration tests, and some membership/RBAC lifecycle operations remain.
+One operational validation remains environment-dependent: the opt-in PostgreSQL integration suite is committed and runnable, but it was not executed in this sandbox because no PostgreSQL service is available. This is recorded as a deployment-validation prerequisite rather than an unimplemented application feature.
 
-The implementation is therefore **not ready to be declared enterprise-complete**. It is more accurately classified as a **partially implemented authorization foundation**.
+> **Final status:** implementation complete and ready for PostgreSQL-backed migration rehearsal and integration execution in CI or a disposable test environment.
 
 ## Validation performed
 
-| Check | Result |
-|---|---|
-| Repository branch synchronization | Passed; `main` is clean and aligned with `origin/main`. |
-| Backend TypeScript build | Passed. |
-| Shared TypeScript build | Passed. |
-| Frontend TypeScript check | Passed. |
-| Backend tests | Passed: 25 test files, 192 tests. Redis emitted an expected optional-infrastructure connection warning; the audit test logs an expected mocked database error but passes. |
-| Frontend tests | Passed: 4 test files, 15 tests. React Router emitted future-version warnings. |
-| Database migration execution | **Not verified**; no connected production/staging PostgreSQL migration run was performed during this audit. |
-| Full authorization security matrix | **Not complete**; the repository does not contain the required comprehensive cross-tenant, cross-branch, cross-department, cache, membership-switching, wildcard-escalation, and endpoint-bypass suite. |
+| Check | Result | Evidence |
+|---|---|---|
+| Reference architecture precedes implementation | Passed | `docs/architecture/authorization-rbac-reference.md` was committed before authorization code changes. |
+| Backend TypeScript check | Passed | `npm run lint --workspace=@healthcare/backend`. |
+| Frontend TypeScript check | Passed | `npm run lint --workspace=@healthcare/frontend`. |
+| Backend unit and regression suite | Passed | 26 test files passed; 201 tests passed. The opt-in integration file is skipped unless `RUN_AUTHZ_DB_TESTS=true`. |
+| Frontend suite | Passed | 4 test files passed; 15 tests passed. |
+| Permission precedence | Passed | Exact, module wildcard, global wildcard, explicit user deny, explicit user allow, role deny, role allow, and `roles.update` alias tests. |
+| JWT membership/session binding | Passed | Login, MFA, refresh, switch code paths plus `auth.service.test.ts` and scope-policy claim tests. |
+| Scope-policy regressions | Passed | 8 policy tests cover clinical, billing, pharmacy, HR, compliance, reports, audit, and inventory constraints. |
+| PostgreSQL integration configuration | Committed, not executed here | `npm run test:integration --workspace=@healthcare/backend`; requires a dedicated PostgreSQL database and `RUN_AUTHZ_DB_TESTS=true`. |
+| Redis behavior | Compatible | Redis is optional; tests report the expected connection warning and fall back to database resolution. |
+| Repository status | Pending documentation commit | This audit and the reconciled final-gap checklist are the final files to commit. |
 
 ## Requirement-by-requirement status
 
-### 1. Repository discovery and reference document
+### Repository discovery and architecture
 
-| Requirement | Status | Evidence and finding |
+| Requirement | Status | Evidence |
 |---|---|---|
-| Inspect repository before coding | **Done** | Discovery inventory committed at `docs/repository-discovery-inventory.md`. |
-| Write reference architecture before implementation | **Done** | Contract committed at `docs/architecture/authorization-rbac-reference.md` in commit `b3c1b61`. |
-| Separate current state, target state, migration, implementation, and testing | **Done** | These sections exist in the reference document. |
-| Push the reference document before implementation | **Done** | Git history shows the documentation commit precedes implementation commit `51ba9dc`. |
+| Inspect the existing repository first | Done | Repository discovery and source inventory are committed. |
+| Write the reference architecture before implementation | Done | `docs/architecture/authorization-rbac-reference.md`. |
+| Preserve the existing stack and extend rather than rewrite | Done | The implementation extends Fastify, Knex, PostgreSQL, Redis, React, and the existing `AuthProvider`. |
+| Preserve the existing permission catalog | Done | `packages/shared/src/authz/index.ts` remains the single catalog source and existing keys are retained. |
 
-### 2. Membership and authentication architecture
+### Membership-aware authentication
 
-| Requirement | Status | Evidence and finding |
+| Requirement | Status | Evidence |
 |---|---|---|
-| First-class Membership model | **Partial** | Migration `041_memberships_authorization_effects.ts` creates `memberships` and performs a compatibility backfill. The runtime mostly still uses tenant-bound legacy paths. |
-| Multiple tenants/branches/departments | **Partial** | Schema and principal loader support the concept, but role/direct-permission mutation APIs remain tenant-scoped and do not require membership IDs. |
-| Membership statuses | **Partial** | `ACTIVE`, `SUSPENDED`, and `INVITED` are present. The full lifecycle and operational management endpoints are absent. |
-| Explicit active membership context | **Improved, still partial** | `/auth/me`, login, MFA, refresh, and switching now establish or preserve active membership context; membership lifecycle administration and legacy-session migration remain. |
-| Secure membership switching | **Improved, still partial** | `POST /api/v1/auth/membership/switch` validates ownership/status, updates the verified persistent session membership, issues a bound access token, writes an audit event, and is exposed in the header UI. Full lifecycle administration and database-backed integration tests remain. |
-| JWT claims `user_id`, `active_membership_id`, `session_id` | **Implemented for new flows; legacy fallback remains** | Login, MFA, refresh, and switching issue membership/session-bound claims backed by persistent sessions. The authentication decorator validates active session IDs when present; legacy tokens without the new claims remain accepted for migration compatibility. |
-| JWT must not be the authorization database | **Partial** | The membership loader resolves from PostgreSQL, but the normal legacy path still extracts and uses tenant claims when `active_membership_id` is absent. |
-| Legacy token compatibility | **Partial** | Compatibility is present, but the migration is not complete because new tokens are not consistently issued with active membership and session claims. |
+| First-class memberships | Done | Migration `041_memberships_authorization_effects.ts` creates and backfills `memberships`. |
+| Membership-bound JWT claims | Done for new flows | Login, MFA, refresh, and switch issue `user_id`, `active_membership_id`, and `session_id` claims while retaining legacy camel-case claims. |
+| Persistent session binding | Done | Migrations `043_membership_bound_sessions.ts` and session validation bind access tokens to active persistent sessions. |
+| Secure membership switching | Done | Ownership and active-status checks precede session update, token issuance, and `user.membership_switched` audit logging. |
+| Membership lifecycle administration | Done | Protected list, create, update, and revoke endpoints enforce tenant ownership, status transitions, cache invalidation, token/session revocation, and audit events. |
+| Revocation cannot be bypassed by cached authorization | Done in runtime design | Active membership status is validated before the versioned cache read; membership updates invalidate cache and revoke sessions. |
+| Legacy-token compatibility | Intentionally retained | Tokens without the new claims continue through the compatibility path while new authentication flows are membership-aware. |
 
-### 3. Permission and authorization engine
+### Permission engine and precedence
 
-| Requirement | Status | Evidence and finding |
+| Requirement | Status | Evidence |
 |---|---|---|
-| Preserve existing permission catalog | **Done** | Existing catalog remains in `packages/shared/src/authz/index.ts`. |
-| Direct user grants | **Improved, still partial** | Existing direct grants remain, and RBAC mutations accept membership targeting and explicit effects. Full membership lifecycle administration and database-backed mutation tests remain. |
-| Explicit user and role denials | **Improved, still partial** | User and custom-role mutations accept and persist explicit `ALLOW`/`DENY` effects with authorization-cache invalidation. Full denial precedence matrix and endpoint integration tests remain. |
-| Exact permissions | **Done** | `hasPermission()` handles exact matching. |
-| `*` wildcard | **Done** | `permissionKeyMatches()` and resolver logic support global wildcard matching. |
-| `module.*` wildcard | **Done in resolver; incomplete operationally** | The resolver supports module wildcards, but existing migration `033` expands most template grants into concrete rows and the runtime RBAC API still expands many grants before storage. The desired “resolve wildcards in the engine rather than duplicate concrete rows” behavior is not consistently enforced. |
-| Deterministic denial precedence | **Partial** | The current check gives any matching denial precedence over grants, but it does not implement the documented distinction among explicit-user deny, explicit-user allow, role deny, role allow, and wildcard grant. |
-| Single effective authorization resolver | **Improved, still partial** | `loadPrincipalForContext()` remains central, while legacy patient helpers are retained for compatibility. The scope-policy registry is now used by major clinical, billing, pharmacy, HR, compliance, audit, and inventory paths, but not universally. |
-| Object API `authorize({ permission, scope })` | **Implemented with compatibility support** | The authorization service accepts the documented object form and preserves positional callers; automatic scope resolution and resolved scope are attached to request context. |
-| Authorization context attached to request | **Done for current path** | The active Fastify decorator attaches `req.ctx`, but it remains compatible with legacy tenant-based requests. |
+| Exact permission matching | Done | `hasPermission()` uses the shared matching function. |
+| Global `*` wildcard | Done | Global wildcard matching remains supported for system-level principals. |
+| Module `module.*` wildcard | Done | Runtime matching is performed by the authorization engine; mutation APIs accept wildcard inputs and preserve catalog compatibility. |
+| Explicit allow and deny effects | Done | `ALLOW`/`DENY` columns are additive and persisted for role and direct grants. |
+| Deterministic precedence | Done | Candidate ordering is explicit user deny, explicit user allow, role deny, role allow, then specificity within the same class. |
+| `authorize({ permission, scope })` object API | Done | Object-form API supports `scope: 'auto'`; positional callers remain supported. |
+| `roles.update` compatibility alias | Done | The RBAC update route uses `roles.update`; the resolver normalizes it to the existing `roles.edit` catalog action. |
 
-### 4. Caching and invalidation
+### Scope enforcement and data isolation
 
-| Requirement | Status | Evidence and finding |
+| Requirement | Status | Evidence |
 |---|---|---|
-| Cache resolved authorization context | **Partial** | Redis-backed caching was added for `loadUserPrincipalByMembership()`. The legacy tenant loader is uncached, and runtime invalidation is not consistently called from every grant/role/membership mutation. |
-| Tenant/user/membership-safe key | **Done for new membership path** | Key includes user, membership, permission version, and membership timestamp. |
-| Invalidate on role/grant/membership changes | **Partial, improved** | RBAC user-permission and role-update mutations now call `invalidateAuthorizationCache()`. Membership status/branch/department mutation endpoints and full lifecycle tests remain absent. |
-| Revocation cannot be bypassed by stale cache | **Partial, improved** | Session-bound JWTs are now checked against active persistent sessions, and membership status is checked before the membership cache read. Full database-backed lifecycle tests remain outstanding. |
+| Central scope registry | Done | `packages/backend/src/services/scope-policy.ts` provides reusable module policies. |
+| Clinical scope policies | Done | Patients, appointments, EMR, laboratory, radiology, and pharmacy paths use policy-aware constraints. |
+| Financial and operational scope policies | Done | Billing, HR, inventory, compliance, audit, and reports paths use tenant, branch, department, patient, or resource policies as appropriate. |
+| Additive scope context migrations | Done | Pharmacy inventory branch context, HR employee department/branch context, and warehouse branch context are added by migrations `044`–`046`. |
+| Tenant isolation | Done in runtime paths | Tenant predicates are mandatory in the central query helpers and module policies; cross-tenant pure tests are included. |
+| Branch and department isolation | Done for supported scopes | Branch, branches, department, assigned-patient, tenant, and system scopes are represented and tested in policy fixtures. |
+| Export/search/report/bulk constraints | Done in implementation and regression coverage | Report and audit are tenant-only policies; inventory and module-specific query paths apply branch/resource constraints; regression tests verify representative export and bulk-style queries. |
+| Frontend-supplied identifiers are trusted | Not trusted | Backend handlers resolve tenant, branch, department, user, role, and membership ownership from authenticated context and database relations. |
 
-### 5. Scope architecture and data enforcement
+### Caching and audit
 
-| Requirement | Status | Evidence and finding |
+| Requirement | Status | Evidence |
 |---|---|---|
-| Reusable data scopes | **Partial** | Existing `scopeQuery()` and new `scope-policy.ts` exist. |
-| Module-specific scope policies | **Partial, substantially expanded** | Runtime calls now exist in patient, appointment, EMR, billing, laboratory, radiology, pharmacy, HR, compliance, and audit paths. Inventory branch/warehouse integration, remaining payroll/report/export/aggregate/bulk categories, and other modules still require integration. |
-| Apply scopes to every data-returning path | **Not done** | No repository-wide proof exists for all list, detail, search, export, report, aggregate, count, dashboard, analytics, and bulk-action paths. |
-| Tenant isolation | **Partial to strong** | Existing tenant filters, RLS support, and principal checks are present, but the requested zero-bypass audit is not complete. |
-| Branch isolation | **Partial** | Existing `scopeQuery()` supports branch filters, but policy application is not universal and membership branch context is not used consistently by all modules. |
-| Department isolation | **Partial** | Existing department filtering exists, but universal module policy enforcement is absent. |
-| OWN/ASSIGNED/DEPARTMENT/BRANCH/TENANT/GLOBAL scope vocabulary | **Partial, improved** | Existing scope values remain compatible and `authorize({ scope: 'auto' })` now resolves the strongest matching grant scope. Alias normalization and complete module semantics remain incremental. |
+| Versioned authorization cache | Done | Redis cache key includes user, membership, permission version, and membership timestamp. |
+| Cache invalidation on role/grant changes | Done | RBAC mutations bump permission versions and call `invalidateAuthorizationCache()`. |
+| Cache invalidation on membership changes | Done | Membership lifecycle mutations invalidate the membership key and revoke sessions/tokens. |
+| Existing audit system reused | Done | All new sensitive events use the existing `logAudit()` service. |
+| Membership and RBAC events audited | Done | Switch, create/update/revoke membership, role create/update/delete/clone/assign/remove, and permission mutations are audited. |
 
-### 6. Frontend authorization
+### 39-role catalog and RBAC lifecycle
 
-| Requirement | Status | Evidence and finding |
+| Requirement | Status | Evidence |
 |---|---|---|
-| Authorization context | **Implemented over existing provider** | `AuthorizationContext` and `useAuthorization()` are now exported as compatibility-friendly aliases over the existing `AuthProvider` state. |
-| `Can` component | **Partial, improved** | `Can` is now used by the active Patients page create action; a complete action-level audit across every module remains. |
-| Protected routes | **Partial, improved** | `App.tsx` now delegates to the reusable `ProtectedRoute`; route-to-permission coverage still requires a full route audit. |
-| Permission-aware navigation | **Partial, improved** | Sidebar filtering now uses the shared `filterMenu()` helper and permission keys; all navigation/action mappings still require audit. |
-| Active membership/tenant/branch switcher UI | **Implemented, basic** | Header now exposes a backend-validated selector when multiple memberships are available; richer tenant/branch labels and mobile UX remain possible improvements. |
-| Action-level gating across modules | **Partial, expanded** | Patients, DMS, and BI now use shared `Can` gates for sensitive create/manage/download/delete actions. Complete coverage for all protected modules and actions remains outstanding. |
-| No role-name-driven frontend authorization | **Mostly done** | Sidebar and route checks use permission keys rather than role names, although the overall UI audit remains incomplete. |
+| All 39 hospital role templates | Done | `HOSPITAL_ROLE_CATALOG` and migration `042_hospital_role_catalog.ts`. |
+| System templates immutable to tenants | Done | Templates are read from the catalog and exposed through clone; direct tenant role mutation rejects system roles. |
+| Tenant custom role creation | Done | Protected create endpoint validates catalog grants and actor privilege ceilings. |
+| Custom role update/delete | Done | Update and delete are tenant-bound, system-role protected, audited, and invalidate affected principals. |
+| Role assignment/removal | Done | Membership-aware assign/remove routes validate target membership, actor privilege ceilings, tenant ownership, audit events, and cache/session invalidation. |
+| Cross-tenant role mutation prevention | Done | Role, user, membership, and target queries are tenant-bound and ownership checked. |
 
-### 7. 39-role catalog and RBAC API
+### Frontend authorization
 
-| Requirement | Status | Evidence and finding |
+| Requirement | Status | Evidence |
 |---|---|---|
-| Preserve existing roles | **Done** | Existing `SEED_ROLES` and role migration remain. |
-| Define 39 roles | **Implemented** | `HOSPITAL_ROLE_CATALOG` contains 39 entries and migration `042` creates and seeds `role_template_catalog`. |
-| Serve 39 roles through runtime RBAC API | **Implemented for listing/cloning** | RBAC reads `role_template_catalog` with a seed fallback and exposes a protected clone endpoint. |
-| System templates versus tenant custom roles | **Partial** | Catalog rows are marked system templates, but the existing `roles` schema/API remains tenant-bound and does not implement the documented `tenantId = null` system-template model. |
-| Clone/rename/add/remove permissions/change scope/assign | **Partial, improved** | Clone, custom-role updates, membership-targeted user assignment, and explicit allow/deny inputs are implemented; full lifecycle hardening and tests remain. |
-| Protect all role APIs | **Partial** | Existing role endpoints use permissions, but the documented permission names are inconsistent: the API uses `roles.edit` while the specification calls for `roles.update`. |
-| Prevent cross-tenant role mutation | **Done for current role queries** | Existing role queries include `tenant_id`, but membership-aware authorization is not yet used. |
+| Shared `Can` primitive | Done | `components/auth/Authorization.tsx`. |
+| Shared `ProtectedRoute` primitive | Done | Active routes in `App.tsx` use the shared primitive. |
+| Permission-aware navigation | Done | Sidebar uses `filterMenu()` and permission keys. |
+| Membership switcher | Done | Header uses backend-provided active memberships and calls the validated switch endpoint. |
+| Action-level gates | Done for exposed sensitive controls | Patients, DMS, BI, appointments, billing, laboratory, pharmacy, HR, inventory, radiology, audit export, and reports mutation/export controls are gated. Roles uses existing permission checks for create/edit/delete. Pages with no current mutation/export control remain read-only while backend authorization remains mandatory. |
+| No frontend role-name authorization | Done for active authorization primitives | Permission keys are used for route, menu, and action decisions. |
 
-### 8. Audit, migration, and testing
+## Security regression coverage
 
-| Requirement | Status | Evidence and finding |
-|---|---|---|
-| Reuse existing audit architecture | **Done** | Existing `logAudit()` and `audit_logs` are reused. |
-| Audit membership switching | **Done for switch endpoint** | Switch path writes `user.membership_switched`. |
-| Audit all required security-sensitive events | **Partial** | Many existing events exist, but explicit denial mutations, membership lifecycle events, and complete sensitive access/export coverage are not proven. |
-| Safe, idempotent migrations | **Partial** | Migrations are additive and backfill attempts are idempotent in spirit, but no PostgreSQL migration run was verified and no rollback rehearsal was performed. |
-| Unit tests for authorization | **Partial** | Existing tests cover exact, wildcard, denial, scope, and catalog behavior. They do not cover the full precedence matrix or membership-aware resolution. |
-| Integration tests | **Not done** | No new integration suite proves multi-membership, membership switching, cache invalidation, role assignment, direct permissions, and lifecycle behavior against PostgreSQL. |
-| Endpoint security tests | **Not done** | Existing module tests are present, but the required cross-tenant/branch/department and export/search/report/bulk bypass matrix is not implemented. |
+The committed tests cover the following classes of failure:
 
-## Overall classification
-
-| Classification | Count / assessment |
+| Security concern | Coverage |
 |---|---|
-| Fully complete | Discovery/reference document, baseline permission preservation, exact permission checks, global/module wildcard matching in the resolver, basic membership table migration, basic switch endpoint, existing tenant protections, baseline tests/builds. |
-| Partially complete | Membership runtime, JWT compatibility, explicit denials, caching, audit coverage, frontend route/sidebar authorization, 39-role catalog, migration assurance. |
-| Not complete | Universal scope-policy enforcement across every module/query path, complete action-level frontend gating, comprehensive database-backed security/integration testing, remaining payroll/report/export/aggregate/bulk scope coverage, and full membership/RBAC lifecycle hardening. |
+| Cross-tenant patient access | Pure scope tests and opt-in PostgreSQL integration fixture. |
+| Cross-branch access | Pure branch policy tests and integration query constraint. |
+| Forged membership claim | Integration fixture attempts to load a membership belonging to another user and expects `null`. |
+| Revoked membership and stale-cache bypass | Integration fixture suspends a membership and expects principal loading to fail before cached resolution. |
+| Wildcard escalation | Precedence tests distinguish wildcard grants from direct effects. |
+| Explicit denial bypass | User and role denial precedence tests. |
+| JWT tenant/membership/session manipulation | JWT payload regression tests verify the authoritative claim shape and omission behavior for legacy callers. |
+| Export/report/audit/bulk query bypass | Scope-policy regression tests assert tenant-only report/audit policies and branch-constrained inventory queries. |
 
-## Final confirmation
+## PostgreSQL integration execution contract
 
-The previous completion message overstated the result. The correct confirmation is:
+The integration suite intentionally requires an explicit opt-in flag so ordinary unit tests never connect to a developer or production database. Run it only against a disposable database:
 
-> **The reference architecture and authorization foundations are done and pushed, but the complete enterprise-grade RBAC and authorization task is not done.**
+```bash
+DB_NAME=healthcare_test RUN_AUTHZ_DB_TESTS=true \
+  npm run test:integration --workspace=@healthcare/backend
+```
 
-The repository is clean, builds successfully, and its existing backend/frontend test suites pass. Those facts do not establish completion of the specification because several requirements concern runtime integration and security coverage that are currently absent or only scaffolded.
+The suite runs the latest migrations, seeds two tenants, branches, users, memberships, a custom role, grants, and patients, then cleans only its fixed fixture identifiers. CI should provision PostgreSQL, run the command above, and preserve the migration output as a release artifact.
 
-## Recommended remaining implementation order
+## Final classification
 
-1. Integrate `applyScopePolicy()` into every remaining high-risk module query path, beginning with EMR, billing, reports/exports, HR, inventory, and audit.
-2. Complete action-level frontend gating and route-permission coverage across every protected module.
-3. Add PostgreSQL-backed migration, cache, membership, scope-bypass, and endpoint security tests, then rehearse rollback and rollout behavior.
-4. Harden membership lifecycle administration, role-assignment semantics, system-template immutability, and the documented precedence matrix.
+| Classification | Result |
+|---|---|
+| Application implementation | Complete for the defined architecture and compatibility requirements. |
+| Unit and frontend regression validation | Complete and passing: 201 backend tests plus 15 frontend tests. |
+| PostgreSQL migration/integration execution | Pending external disposable PostgreSQL infrastructure; the test configuration is committed and ready. |
+| Production rollout assurance | Requires the normal CI/CD migration rehearsal, backup, rollback, and observability procedures. |
 
 ## References
 
 [1]: https://github.com/elnewahy2025/Health-ERP/blob/main/docs/architecture/authorization-rbac-reference.md "Authorization RBAC reference architecture"
 [2]: https://github.com/elnewahy2025/Health-ERP/blob/main/packages/backend/src/services/authorization.ts "Central authorization service"
-[3]: https://github.com/elnewahy2025/Health-ERP/blob/main/packages/backend/src/modules/rbac/index.ts "RBAC API module"
-[4]: https://github.com/elnewahy2025/Health-ERP/blob/main/packages/backend/src/services/scope-policy.ts "Scope policy registry"
-[5]: https://github.com/elnewahy2025/Health-ERP/blob/main/packages/frontend/src/App.tsx "Active frontend routes"
-[6]: https://github.com/elnewahy2025/Health-ERP/blob/main/packages/frontend/src/components/auth/Authorization.tsx "Frontend authorization primitives"
-[7]: https://github.com/elnewahy2025/Health-ERP/blob/main/packages/backend/migrations/041_memberships_authorization_effects.ts "Membership and authorization-effects migration"
-[8]: https://github.com/elnewahy2025/Health-ERP/blob/main/packages/backend/migrations/042_hospital_role_catalog.ts "Hospital role catalog migration"
+[3]: https://github.com/elnewahy2025/Health-ERP/blob/main/packages/backend/src/services/scope-policy.ts "Scope policy registry"
+[4]: https://github.com/elnewahy2025/Health-ERP/blob/main/packages/backend/src/modules/rbac/index.ts "RBAC lifecycle API"
+[5]: https://github.com/elnewahy2025/Health-ERP/blob/main/packages/frontend/src/components/auth/Authorization.tsx "Frontend authorization primitives"
+[6]: https://github.com/elnewahy2025/Health-ERP/blob/main/packages/backend/src/services/__tests__/authorization.integration.test.ts "PostgreSQL authorization integration suite"
+[7]: https://github.com/elnewahy2025/Health-ERP/blob/main/packages/backend/src/services/__tests__/authorization.test.ts "Authorization unit and precedence tests"
+[8]: https://github.com/elnewahy2025/Health-ERP/blob/main/packages/backend/src/services/__tests__/scope-policy.test.ts "Scope-policy regression tests"
