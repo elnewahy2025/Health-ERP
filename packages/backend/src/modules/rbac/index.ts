@@ -417,11 +417,18 @@ export async function registerRbacModule(app: FastifyInstance) {
 
   // ── Assign role to a membership ──
   app.post('/api/v1/rbac/roles/:roleId/assign', { preHandler: [authenticate, authorize('roles.assign')] }, async (request, reply) => {
-    const { tenantId, userId: actorId } = getCtx(request);
+    const { tenantId, principal, userId: actorId } = getCtx(request);
     const { roleId } = z.object({ roleId: z.string().uuid() }).parse(request.params);
     const body = z.object({ userId: z.string().uuid(), membershipId: z.string().uuid().optional() }).parse(request.body);
     const role = await db('roles').where({ id: roleId, tenant_id: tenantId }).first();
     if (!role) return sendError(reply, 'Role not found', 404);
+    const roleGrants = await db('role_permissions').where({ role_id: roleId }).select('permission', 'scope');
+    const isSuper = hasPermission(principal, '*');
+    for (const grant of roleGrants) {
+      if (!isSuper && !hasPermission(principal, String(grant.permission), grant.scope as PermissionScope)) {
+        throw new ForbiddenError(`Cannot assign role '${role.slug}': exceeds your permissions`);
+      }
+    }
     const membership = await resolveTargetMembership(body.userId, tenantId, body.membershipId);
     if (!membership) return sendError(reply, 'Active target membership not found', 404);
     const existing = await db('user_roles').where({ user_id: body.userId, role_id: roleId, tenant_id: tenantId, membership_id: membership.id }).first();
@@ -458,11 +465,20 @@ export async function registerRbacModule(app: FastifyInstance) {
     if (!role) return sendError(reply, 'Role not found', 404);
     if (role.is_system) throw new ForbiddenError('System roles cannot be deleted');
 
+    const affectedUsers = await db('user_roles').where({ role_id: roleId, tenant_id: tenantId }).distinct('user_id');
     await db.transaction(async (trx) => {
       await trx('role_permissions').where({ role_id: roleId }).delete();
       await trx('user_roles').where({ role_id: roleId, tenant_id: tenantId }).delete();
       await trx('roles').where({ id: roleId, tenant_id: tenantId }).delete();
+      for (const row of affectedUsers) {
+        await trx('users').where({ id: row.user_id, tenant_id: tenantId }).update({ perm_version: trx.raw('perm_version + 1') });
+      }
     });
+    for (const row of affectedUsers) {
+      await invalidateAuthorizationCache(String(row.user_id));
+      await revokeAllUserTokens(String(row.user_id), tenantId);
+      await db('user_sessions').where({ user_id: row.user_id, tenant_id: tenantId, is_active: true }).update({ is_active: false });
+    }
 
     await logAudit({
       tenantId,
