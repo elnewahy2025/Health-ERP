@@ -10,7 +10,7 @@ import { generateSecret, verifyToken, generateQrCode } from '../../services/totp
 import { createAndSendOtp, verifyOtp, incrementOtpAttempt } from '../../services/otp.js';
 import { sendEmail } from '../../services/email.js';
 import { getEnv } from '@healthcare/shared/config';
-import { getDefaultMembershipForUser, loadUserPrincipal, loadUserPrincipalByMembership, uniquePermissionKeys, type Principal } from '../../services/authorization.js';
+import { getDefaultMembershipForUser, loadUserPrincipal, loadUserPrincipalByMembership, uniquePermissionKeys, invalidateAuthorizationCache, type Principal } from '../../services/authorization.js';
 import { db } from '../../core/database.js';
 import * as svc from './auth.service.js';
 import * as repo from './auth.repository.js';
@@ -353,6 +353,98 @@ export async function switchMembership(request: FastifyRequest, reply: FastifyRe
       status: membership.status,
     },
   });
+}
+
+function normalizeMembershipStatus(value: unknown): 'ACTIVE' | 'SUSPENDED' | 'INVITED' {
+  const status = String(value || 'INVITED').toUpperCase();
+  if (status !== 'ACTIVE' && status !== 'SUSPENDED' && status !== 'INVITED') {
+    throw new ConflictError('Unsupported membership status');
+  }
+  return status;
+}
+
+async function validateMembershipContext(tenantId: string, branchId?: string | null, departmentId?: string | null) {
+  if (branchId) {
+    const branch = await db('branches').where({ id: branchId, tenant_id: tenantId }).first();
+    if (!branch) throw new ConflictError('Branch does not belong to the active tenant');
+  }
+  if (departmentId) {
+    const department = await db('departments').where({ id: departmentId, tenant_id: tenantId }).first();
+    if (!department) throw new ConflictError('Department does not belong to the active tenant');
+  }
+}
+
+export async function listUserMemberships(request: FastifyRequest, reply: FastifyReply) {
+  const { tenantId } = getCtx(request);
+  const { userId } = request.params as { userId: string };
+  const user = await repo.findUserByIdAndTenant(userId, tenantId);
+  if (!user) throw new UnauthorizedError('User is not in the active tenant');
+  const memberships = await db('memberships').where({ user_id: userId, tenant_id: tenantId }).orderBy('created_at', 'asc');
+  return sendSuccess(reply, memberships);
+}
+
+export async function createMembership(request: FastifyRequest, reply: FastifyReply) {
+  const { tenantId, userId: actorId } = getCtx(request);
+  const { userId } = request.params as { userId: string };
+  const body = request.body as Record<string, unknown>;
+  const user = await repo.findUserByIdAndTenant(userId, tenantId);
+  if (!user) throw new UnauthorizedError('User is not in the active tenant');
+  const branchId = typeof body.branchId === 'string' ? body.branchId : null;
+  const departmentId = typeof body.departmentId === 'string' ? body.departmentId : null;
+  await validateMembershipContext(tenantId, branchId, departmentId);
+  const status = normalizeMembershipStatus(body.status);
+  const duplicate = await db('memberships').where({ user_id: userId, tenant_id: tenantId }).modify((query) => {
+    branchId ? query.andWhere('branch_id', branchId) : query.whereNull('branch_id');
+    departmentId ? query.andWhere('department_id', departmentId) : query.whereNull('department_id');
+  }).first();
+  if (duplicate) throw new ConflictError('Membership already exists');
+  const membership = await db.transaction(async (trx) => {
+    if (body.isDefault === true) await trx('memberships').where({ user_id: userId, tenant_id: tenantId }).update({ is_default: false });
+    const [created] = await trx('memberships').insert({
+      user_id: userId, tenant_id: tenantId, branch_id: branchId, department_id: departmentId,
+      status, is_default: body.isDefault === true, created_by: actorId,
+    }).returning('*');
+    return created;
+  });
+  await invalidateAuthorizationCache(userId, String(membership.id));
+  await logAudit({ tenantId, userId: actorId, action: 'membership.created', entityType: 'membership', entityId: String(membership.id), metadata: { targetUserId: userId, status, branchId, departmentId } });
+  return sendSuccess(reply, membership, 'Membership created', 201);
+}
+
+export async function updateMembership(request: FastifyRequest, reply: FastifyReply) {
+  const { tenantId, userId: actorId } = getCtx(request);
+  const { membershipId } = request.params as { membershipId: string };
+  const body = request.body as Record<string, unknown>;
+  const existing = await db('memberships').where({ id: membershipId, tenant_id: tenantId }).first();
+  if (!existing) throw new UnauthorizedError('Membership not found');
+  const branchId = body.branchId === undefined ? existing.branch_id : (typeof body.branchId === 'string' ? body.branchId : null);
+  const departmentId = body.departmentId === undefined ? existing.department_id : (typeof body.departmentId === 'string' ? body.departmentId : null);
+  await validateMembershipContext(tenantId, branchId, departmentId);
+  const status = body.status === undefined ? existing.status : normalizeMembershipStatus(body.status);
+  const update: Record<string, unknown> = {
+    branch_id: branchId, department_id: departmentId, status,
+    suspended_at: status === 'SUSPENDED' ? new Date() : null,
+    updated_at: new Date(),
+  };
+  await db.transaction(async (trx) => {
+    if (body.isDefault === true) await trx('memberships').where({ user_id: existing.user_id, tenant_id: tenantId }).update({ is_default: false });
+    if (body.isDefault !== undefined) update.is_default = body.isDefault === true;
+    await trx('memberships').where({ id: membershipId, tenant_id: tenantId }).update(update);
+  });
+  await invalidateAuthorizationCache(String(existing.user_id), membershipId);
+  await logAudit({ tenantId, userId: actorId, action: status !== existing.status ? 'membership.status_changed' : 'membership.updated', entityType: 'membership', entityId: membershipId, metadata: { targetUserId: existing.user_id, previousStatus: existing.status, status, branchId, departmentId } });
+  return sendSuccess(reply, { ...existing, ...update, id: membershipId }, 'Membership updated');
+}
+
+export async function revokeMembership(request: FastifyRequest, reply: FastifyReply) {
+  const { tenantId, userId: actorId } = getCtx(request);
+  const { membershipId } = request.params as { membershipId: string };
+  const existing = await db('memberships').where({ id: membershipId, tenant_id: tenantId }).first();
+  if (!existing) throw new UnauthorizedError('Membership not found');
+  await db('memberships').where({ id: membershipId, tenant_id: tenantId }).update({ status: 'SUSPENDED', suspended_at: new Date(), updated_at: new Date() });
+  await invalidateAuthorizationCache(String(existing.user_id), membershipId);
+  await logAudit({ tenantId, userId: actorId, action: 'membership.suspended', entityType: 'membership', entityId: membershipId, metadata: { targetUserId: existing.user_id } });
+  return sendSuccess(reply, null, 'Membership suspended');
 }
 
 export async function me(request: FastifyRequest, reply: FastifyReply) {

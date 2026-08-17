@@ -202,20 +202,36 @@ export async function invalidateAuthorizationCache(userId: string, membershipId?
  * Core permission check. A wildcard '*' grant (super_admin) passes everything.
  * When `requestedScope` is provided, the grant's scope must cover it.
  */
+function permissionSpecificity(storedKey: string, requestedKey: string): number {
+  if (storedKey === requestedKey) return 3;
+  if (storedKey.endsWith('.*') && requestedKey.startsWith(`${storedKey.slice(0, -2)}.`)) return 2;
+  if (storedKey === '*') return 1;
+  return 0;
+}
+
+function authorizationRank(grant: Grant): number {
+  const isUser = grant.source === 'user';
+  if (isUser && grant.effect === 'DENY') return 400;
+  if (isUser) return 300;
+  if (grant.effect === 'DENY') return 200;
+  return 100;
+}
+
 export function hasPermission(
   principal: Principal,
   permission: string,
   requestedScope?: PermissionScope,
 ): boolean {
   const requested = requestedScope as PermissionScope | undefined;
-  const denied = principal.denials?.some((grant) =>
-    permissionKeyMatches(grant.permission, permission) && (!requested || scopeCovers(grant.scope, requested)),
-  );
-  if (denied) return false;
-  const candidates = principal.grants.filter((grant) =>
-    permissionKeyMatches(grant.permission, permission) && (!requested || scopeCovers(grant.scope, requested)),
-  );
-  return candidates.length > 0;
+  const candidates = [...(principal.grants || []), ...(principal.denials || [])]
+    .filter((grant) => permissionKeyMatches(grant.permission, permission))
+    .filter((grant) => !requested || scopeCovers(grant.scope, requested))
+    .sort((left, right) => {
+      const rankDifference = authorizationRank(right) - authorizationRank(left);
+      if (rankDifference !== 0) return rankDifference;
+      return permissionSpecificity(right.permission, permission) - permissionSpecificity(left.permission, permission);
+    });
+  return candidates[0]?.effect !== 'DENY' && candidates.length > 0;
 }
 
 export function anyPermission(

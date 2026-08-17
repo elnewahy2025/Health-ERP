@@ -5,13 +5,16 @@ import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { findTenantRow } from '../../utils/tenant-scope.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
+import { applyScopePolicy } from '../../services/scope-policy.js';
 import type { ReportScheduleRow, ReportExecutionRow } from "../types.js";
 
 export async function registerReportsModule(app: FastifyInstance) {
   // ── Report Definitions ──
   app.get('/api/v1/reports', { preHandler: [authenticate, authorize('reports.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { category } = request.query as { category?: string };
+    const principal = getCtx(request).principal;
     let q = db('report_definitions').where('report_definitions.tenant_id', tenantId);
+    q = applyScopePolicy('reports', q, principal, 'tenant') as typeof q;
     if (category) q = q.andWhere('category', category);
     const reports = await q.orderBy('name');
     const parseList = (v: unknown): unknown[] => {
@@ -78,7 +81,8 @@ export async function registerReportsModule(app: FastifyInstance) {
   // ── Report Schedules ──
   app.get('/api/v1/reports/:id/schedules', { preHandler: [authenticate, authorize('reports.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string };
-    const schedules = await db('report_schedules').where({ tenant_id: tenantId, report_id: id }).orderBy('created_at', 'desc');
+    const principal = getCtx(request).principal;
+    const schedules = await applyScopePolicy('reports', db('report_schedules').where({ tenant_id: tenantId, report_id: id }), principal, 'tenant').orderBy('created_at', 'desc');
     return sendSuccess(reply, schedules.map((s: Record<string, unknown>) => ({
       id: s.id, reportId: s.report_id, cron: s.cron,
       recipients: s.recipients, format: s.format, params: s.params,
@@ -114,7 +118,8 @@ export async function registerReportsModule(app: FastifyInstance) {
   // ── Report Executions ──
   app.get('/api/v1/reports/:id/executions', { preHandler: [authenticate, authorize('reports.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request); const { id } = request.params as { id: string };
-    const execs = await db('report_executions').where({ tenant_id: tenantId, report_id: id }).orderBy('created_at', 'desc').limit(20);
+    const principal = getCtx(request).principal;
+    const execs = await applyScopePolicy('reports', db('report_executions').where({ tenant_id: tenantId, report_id: id }), principal, 'tenant').orderBy('created_at', 'desc').limit(20);
     return sendSuccess(reply, execs.map((e: Record<string, unknown>) => ({
       id: e.id, reportId: e.report_id, status: e.status, format: e.format,
       error: e.error, rowCount: e.row_count, trigger: e.trigger,
@@ -139,7 +144,8 @@ export async function registerReportsModule(app: FastifyInstance) {
   app.get('/api/v1/reports/export/:id/:format', { preHandler: [authenticate, authorize('reports.export')] }, async (request, reply) => {
     const { id, format } = request.params as { id: string; format: string };
     const tenantId = getTenantId(request);
-    const exec = await db('report_executions').where({ id, tenant_id: tenantId }).first();
+    const principal = getCtx(request).principal;
+    const exec = await applyScopePolicy('reports', db('report_executions').where({ id, tenant_id: tenantId }), principal, 'tenant').first();
     if (!exec) return reply.status(404).send({ success: false, error: 'Execution not found' });
     if (exec.status !== 'completed') return reply.status(400).send({ success: false, error: 'Report not ready' });
     // In production, stream the generated file

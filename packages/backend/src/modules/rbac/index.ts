@@ -415,6 +415,40 @@ export async function registerRbacModule(app: FastifyInstance) {
     return sendSuccess(reply, { roleId }, 'Role updated');
   });
 
+  // ── Assign role to a membership ──
+  app.post('/api/v1/rbac/roles/:roleId/assign', { preHandler: [authenticate, authorize('roles.assign')] }, async (request, reply) => {
+    const { tenantId, userId: actorId } = getCtx(request);
+    const { roleId } = z.object({ roleId: z.string().uuid() }).parse(request.params);
+    const body = z.object({ userId: z.string().uuid(), membershipId: z.string().uuid().optional() }).parse(request.body);
+    const role = await db('roles').where({ id: roleId, tenant_id: tenantId }).first();
+    if (!role) return sendError(reply, 'Role not found', 404);
+    const membership = await resolveTargetMembership(body.userId, tenantId, body.membershipId);
+    if (!membership) return sendError(reply, 'Active target membership not found', 404);
+    const existing = await db('user_roles').where({ user_id: body.userId, role_id: roleId, tenant_id: tenantId, membership_id: membership.id }).first();
+    if (!existing) await db('user_roles').insert({ user_id: body.userId, role_id: roleId, tenant_id: tenantId, membership_id: membership.id, assigned_by: actorId });
+    await db('users').where({ id: body.userId, tenant_id: tenantId }).update({ perm_version: db.raw('perm_version + 1') });
+    await invalidateAuthorizationCache(body.userId, String(membership.id));
+    await revokeAllUserTokens(body.userId, tenantId);
+    await logAudit({ tenantId, userId: actorId, action: 'role.assigned', entityType: 'role', entityId: roleId, metadata: { targetUserId: body.userId, membershipId: membership.id } });
+    return sendSuccess(reply, { roleId, userId: body.userId, membershipId: membership.id }, 'Role assigned');
+  });
+
+  // ── Remove role from a membership ──
+  app.delete('/api/v1/rbac/roles/:roleId/assign', { preHandler: [authenticate, authorize('roles.assign')] }, async (request, reply) => {
+    const { tenantId, userId: actorId } = getCtx(request);
+    const { roleId } = z.object({ roleId: z.string().uuid() }).parse(request.params);
+    const body = z.object({ userId: z.string().uuid(), membershipId: z.string().uuid().optional() }).parse(request.body);
+    const membership = await resolveTargetMembership(body.userId, tenantId, body.membershipId);
+    if (!membership) return sendError(reply, 'Active target membership not found', 404);
+    const removed = await db('user_roles').where({ user_id: body.userId, role_id: roleId, tenant_id: tenantId, membership_id: membership.id }).delete();
+    if (!removed) return sendError(reply, 'Role assignment not found', 404);
+    await db('users').where({ id: body.userId, tenant_id: tenantId }).update({ perm_version: db.raw('perm_version + 1') });
+    await invalidateAuthorizationCache(body.userId, String(membership.id));
+    await revokeAllUserTokens(body.userId, tenantId);
+    await logAudit({ tenantId, userId: actorId, action: 'role.removed', entityType: 'role', entityId: roleId, metadata: { targetUserId: body.userId, membershipId: membership.id } });
+    return sendSuccess(reply, { roleId, userId: body.userId, membershipId: membership.id }, 'Role removed');
+  });
+
   // ── Delete custom role ──
   app.delete('/api/v1/rbac/roles/:roleId', { preHandler: [authenticate, authorize('roles.delete')] }, async (request, reply) => {
     const { tenantId, userId: actorId } = getCtx(request);

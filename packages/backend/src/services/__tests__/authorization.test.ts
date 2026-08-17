@@ -165,3 +165,30 @@ describe('shared permission catalog', () => {
     expect(allPermissionKeys().length).toBeGreaterThan(200);
   });
 });
+
+
+describe('deterministic denial precedence', () => {
+  it('explicit user deny overrides explicit user allow and role grants', () => {
+    const p = principal([
+      { permission: 'patients.view', scope: 'tenant', source: 'user', effect: 'ALLOW' },
+      { permission: 'patients.*', scope: 'tenant', source: 'role', effect: 'ALLOW' },
+    ]);
+    p.denials = [{ permission: 'patients.view', scope: 'tenant', source: 'user', effect: 'DENY' }];
+    expect(hasPermission(p, 'patients.view', 'branch')).toBe(false);
+  });
+
+  it('explicit user allow overrides a role denial', () => {
+    const p = principal([
+      { permission: 'patients.view', scope: 'tenant', source: 'user', effect: 'ALLOW' },
+    ]);
+    p.denials = [{ permission: 'patients.*', scope: 'tenant', source: 'role', effect: 'DENY' }];
+    expect(hasPermission(p, 'patients.view', 'branch')).toBe(true);
+  });
+
+  it('role denial overrides role wildcard allow', () => {
+    const p = principal([{ permission: 'patients.*', scope: 'tenant', source: 'role', effect: 'ALLOW' }]);
+    p.denials = [{ permission: 'patients.delete', scope: 'tenant', source: 'role', effect: 'DENY' }];
+    expect(hasPermission(p, 'patients.view', 'branch')).toBe(true);
+    expect(hasPermission(p, 'patients.delete', 'branch')).toBe(false);
+  });
+});

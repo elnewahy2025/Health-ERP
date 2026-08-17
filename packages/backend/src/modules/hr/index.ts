@@ -114,7 +114,14 @@ export async function registerHrModule(app: FastifyInstance) {
 
   app.get('/api/v1/hr/payroll', { preHandler: [authenticate, authorize('hr.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
-    const runs = await db('payroll_runs').where({ tenant_id: tenantId }).orderBy('created_at', 'desc').limit(20);
-    return sendSuccess(reply, runs);
+    const principal = getCtx(request).principal;
+    const scope = resolveHrScope(principal);
+    let runs = db('payroll_runs')
+      .leftJoin('payroll_entries', 'payroll_runs.id', 'payroll_entries.payroll_run_id')
+      .leftJoin('employees', 'payroll_entries.employee_id', 'employees.id')
+      .where('payroll_runs.tenant_id', tenantId);
+    runs = applyScopePolicy('hr_payroll', runs, principal, scope) as typeof runs;
+    const result = await runs.select('payroll_runs.*').distinct('payroll_runs.id').orderBy('payroll_runs.created_at', 'desc').limit(20);
+    return sendSuccess(reply, result);
   });
 }

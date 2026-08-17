@@ -91,7 +91,7 @@ export async function updateSupplier(request: FastifyRequest, reply: FastifyRepl
 export async function listWarehouses(request: FastifyRequest, reply: FastifyReply) {
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
-  const warehouses = await repo.findWarehouses(tenantId);
+  const warehouses = await repo.findWarehouses(tenantId, inventoryContext(request));
   try { await logAudit({ tenantId, userId, action: 'inventory.warehouse.list', entityType: 'warehouse' }); } catch {}
   return sendSuccess(reply, warehouses.map(mapWarehouse));
 }
@@ -265,7 +265,12 @@ export async function transferStock(request: FastifyRequest, reply: FastifyReply
     throw new ValidationError('Source and destination warehouses must be different');
   }
 
-  const item = await repo.findInventoryItemById(body.itemId, tenantId, inventoryContext(request));
+  const warehouseContext = inventoryContext(request);
+  const sourceWarehouse = await repo.findWarehouseById(body.fromWarehouseId, tenantId, warehouseContext);
+  const destinationWarehouse = await repo.findWarehouseById(body.toWarehouseId, tenantId, warehouseContext);
+  if (!sourceWarehouse || !destinationWarehouse) throw new NotFoundError('Accessible warehouse', !sourceWarehouse ? body.fromWarehouseId : body.toWarehouseId);
+
+  const item = await repo.findInventoryItemById(body.itemId, tenantId, warehouseContext);
   if (!item) throw new NotFoundError('Inventory item', body.itemId);
 
   // Deduct from source
@@ -516,6 +521,9 @@ export async function receivePurchaseOrder(request: FastifyRequest, reply: Fasti
   const body = receivePurchaseOrderSchema.parse(request.body);
   const tenantId = getTenantId(request);
   const { userId } = getCtx(request);
+
+  const purchaseOrder = await repo.findPurchaseOrderById(poId, tenantId, inventoryContext(request));
+  if (!purchaseOrder) throw new NotFoundError('Purchase order', poId);
 
   for (const received of body.items) {
     await repo.updatePurchaseOrderItem(received.id, tenantId, { quantity_received: received.quantityReceived });

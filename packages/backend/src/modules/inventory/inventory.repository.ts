@@ -42,16 +42,16 @@ export async function updateSupplier(
 
 // ── Warehouses ──
 
-export async function findWarehouses(tenantId: string): Promise<WarehouseRow[]> {
-  return db('warehouses')
-    .where({ tenant_id: tenantId, status: 'active' })
-    .orderBy('name');
+export async function findWarehouses(tenantId: string, context?: InventoryScope): Promise<WarehouseRow[]> {
+  let query = db('warehouses').where({ 'warehouses.tenant_id': tenantId, 'warehouses.status': 'active' });
+  if (context?.principal && context.scope) query = applyScopePolicy('inventory_warehouses', query, context.principal, context.scope) as typeof query;
+  return query.select('warehouses.*').orderBy('warehouses.name');
 }
 
-export async function findWarehouseById(warehouseId: string, tenantId: string): Promise<WarehouseRow | undefined> {
-  return db('warehouses')
-    .where({ id: warehouseId, tenant_id: tenantId })
-    .first();
+export async function findWarehouseById(warehouseId: string, tenantId: string, context?: InventoryScope): Promise<WarehouseRow | undefined> {
+  let query = db('warehouses').where({ 'warehouses.id': warehouseId, 'warehouses.tenant_id': tenantId });
+  if (context?.principal && context.scope) query = applyScopePolicy('inventory_warehouses', query, context.principal, context.scope) as typeof query;
+  return query.select('warehouses.*').first();
 }
 
 export async function createWarehouse(

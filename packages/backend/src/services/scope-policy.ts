@@ -87,6 +87,14 @@ const hrAttendancePolicy: ScopePolicy = (qb, principal, scope) =>
     departmentColumn: 'employees.department_id',
   });
 
+const hrPayrollPolicy: ScopePolicy = (qb, principal, scope) =>
+  scopeQuery(qb, principal, {
+    scope,
+    tenantColumn: 'payroll_runs.tenant_id',
+    branchColumn: 'employees.branch_id',
+    departmentColumn: 'employees.department_id',
+  });
+
 const hrLeavePolicy: ScopePolicy = (qb, principal, scope) =>
   scopeQuery(qb, principal, {
     scope,
@@ -159,6 +167,13 @@ const radiologyPolicy: ScopePolicy = (qb, principal, scope) => {
   return constrained;
 };
 
+const inventoryWarehousePolicy: ScopePolicy = (qb, principal, scope) =>
+  scopeQuery(qb, principal, {
+    scope,
+    tenantColumn: 'warehouses.tenant_id',
+    branchColumn: 'warehouses.branch_id',
+  });
+
 const inventoryPurchaseOrderPolicy: ScopePolicy = (qb, principal, scope) =>
   scopeQuery(qb, principal, {
     scope,
@@ -199,7 +214,9 @@ export const SCOPE_POLICIES: Record<string, ScopePolicy> = {
   hr: hrEmployeePolicy,
   hr_attendance: hrAttendancePolicy,
   hr_leave: hrLeavePolicy,
+  hr_payroll: hrPayrollPolicy,
   inventory: inventoryPolicy,
+  inventory_warehouses: inventoryWarehousePolicy,
   inventory_purchase_orders: inventoryPurchaseOrderPolicy,
   billing: billingPolicy,
   compliance: tenantOnly,
