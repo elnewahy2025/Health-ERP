@@ -215,6 +215,10 @@ describe('shared permission catalog', () => {
     expect(new Set(signatures).size).toBe(39);
   });
 
+  it('keeps accountant data-export visibility in the role map', () => {
+    expect(hospitalRoleTemplate('accountant')?.grants['data_export.view']).toEqual(['tenant']);
+  });
+
   it('keeps named operational roles on their intended modules and scopes', () => {
     expect(hospitalRoleTemplate('pharmacist')?.grants['pharmacy.*']).toEqual(['branch']);
     expect(hospitalRoleTemplate('pharmacy_technician')?.grants['pharmacy.approve']).toBeUndefined();

@@ -1,7 +1,7 @@
 # Centralized Clinic Configuration Design
 
 **Phase:** 3 — implementation checkpoint
-**Status:** Partially implemented; the shared registry, additive tables, compatibility facade, module readiness, subscription entitlement fallback, and server-side activation guard are committed. Encrypted secret storage migration 052 is prepared for validation; secret rotation/read APIs remain a separate integration slice.
+**Status:** Partially implemented; the shared registry, additive tables, compatibility facade, module readiness, subscription entitlement fallback, server-side activation guard, system entitlement routes, shell identity/visibility routes, encrypted secret migration 052, and SettingsPage onboarding checklist are committed. Secret rotation/read APIs remain a separate integration slice.
 **Product model:** One tenant represents one clinic organisation
 
 ## Design goals
@@ -88,7 +88,7 @@ The shared package should define an allowlisted registry for each key:
 | `sensitive` | Whether it requires heightened audit and masking. |
 | `description` | Admin-facing explanation and validation guidance. |
 
-Initial key groups should cover clinic identity, contact/address, locale/timezone, branding, operating hours, numbering, currency/tax/payment, services/pricing, notifications, documents/printing, and module setup. Specialty keys must be added only with the corresponding module contract and tests.
+Initial key groups should cover clinic identity, contact/address, locale/timezone, branding, operating hours, numbering, currency/tax/payment, services/pricing, notifications, documents/printing, and module setup. Specialty keys must be added only with the corresponding module contract and tests. The canonical optional module registry includes pharmacy, laboratory, radiology, nursing, inventory, insurance, patient portal, online booking, integrations, AI, BI, advanced reporting, and automation.
 
 ## Configuration API contract
 
@@ -99,10 +99,14 @@ The current compatibility endpoints remain in place while the new service is int
 | `GET /api/v1/clinic-settings` | `settings.view` | Compatibility response for existing clinic fields; excludes secrets and can include readiness metadata. |
 | `PUT /api/v1/clinic-settings` | `settings.manage` | Compatibility update using allowlisted legacy fields, validation, audit, optimistic concurrency, and mapping into the new service. |
 | `GET /api/v1/clinic-configuration` | `settings.view` | Effective non-secret configuration for the authorized tenant/scope. |
+| `GET /api/v1/clinic-configuration/identity` | Authenticated tenant session | Minimal non-secret shell identity, logo URL, locale, and timezone for shared branding/date formatting. |
+| `GET /api/v1/clinic-configuration/readiness` | `settings.view` | Per-module setup status and missing non-secret requirements. |
 | `PUT /api/v1/clinic-configuration` | `settings.manage` | Update an allowlisted key at an authorized scope; requires expected version when updating an existing entry. |
 | `GET /api/v1/clinic-modules` | `settings.view` | Returns entitlement, activation, readiness, and missing non-secret requirements. |
+| `GET /api/v1/clinic-modules/visibility` | Authenticated tenant session | Minimal active/core state for sidebar UX; it never grants permissions. |
 | `PUT /api/v1/clinic-modules/:moduleKey` | `settings.manage` | Tenant admin enables/disables only an entitled module; backend checks readiness policy and records audit. |
-| System entitlement endpoints | System/vendor authorization | Manage availability boundary; never exposed to ordinary tenant administrators. |
+| `GET /api/v1/system/clinic-module-entitlements` | `saas_billing.manage` at `system` scope | Read effective module boundary for a selected tenant. |
+| `PUT /api/v1/system/clinic-module-entitlements/:tenantId/:moduleKey` | `saas_billing.manage` at `system` scope | Manage explicit vendor/system availability; never exposed to ordinary tenant administrators. |
 
 Every mutation must use `logAudit()` with tenant, actor, scope, key/module, old/new non-secret values or hashes, result, and reason where required. Secrets must be represented by metadata such as `configured: true`, not values.
 
