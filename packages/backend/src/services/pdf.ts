@@ -1,5 +1,10 @@
 import { db } from '../core/database.js';
-import { listEffectiveClinicConfiguration } from './clinic-configuration.js';
+import { listEffectiveClinicConfiguration, type ClinicConfigurationScopeContext } from './clinic-configuration.js';
+import { clinicConfigurationDefinition } from '@healthcare/shared';
+
+const DEFAULT_CLINIC_CURRENCY = String(
+  clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '',
+);
 
 export interface ClinicDocumentContext {
   displayName: string;
@@ -9,6 +14,10 @@ export interface ClinicDocumentContext {
   currency: string;
   timezone: string;
   locale: string;
+  address: string;
+  phone: string;
+  email: string;
+  workingHours: string;
 }
 
 function isValidTimeZone(value: string): boolean {
@@ -21,7 +30,7 @@ function isValidTimeZone(value: string): boolean {
 }
 
 export function formatDocumentMoney(value: number | string | null | undefined, currency: string, locale = 'en'): string {
-  const safeCurrency = /^[A-Z]{3}$/.test(currency) ? currency : 'EGP';
+  const safeCurrency = /^[A-Z]{3}$/.test(currency) ? currency : DEFAULT_CLINIC_CURRENCY;
   const safeLocale = locale.toLowerCase().startsWith('ar') ? 'ar-EG' : 'en-EG';
   return new Intl.NumberFormat(safeLocale, {
     style: 'currency',
@@ -43,10 +52,18 @@ export function formatDocumentDate(value: string | Date, timezone: string, local
   }).format(new Date(value));
 }
 
-async function loadClinicDocumentContext(tenantId: string): Promise<ClinicDocumentContext> {
+export async function loadClinicDocumentContext(
+  tenantId: string,
+  scope: ClinicConfigurationScopeContext = {},
+): Promise<ClinicDocumentContext> {
+  const scopeRef = scope.departmentId
+    ? { scopeType: 'department' as const, scopeId: scope.departmentId }
+    : scope.branchId
+      ? { scopeType: 'branch' as const, scopeId: scope.branchId }
+      : undefined;
   const [tenant, entries] = await Promise.all([
     db('tenants').where({ id: tenantId }).select('name').first(),
-    listEffectiveClinicConfiguration(tenantId),
+    scopeRef ? listEffectiveClinicConfiguration(tenantId, scopeRef, scope) : listEffectiveClinicConfiguration(tenantId),
   ]);
   const values = new Map(entries.map((entry) => [entry.key, entry.value]));
   const text = (key: string): string => {
@@ -56,14 +73,24 @@ async function loadClinicDocumentContext(tenantId: string): Promise<ClinicDocume
   const locale = text('clinic.locale.default') || 'en';
   const timezone = text('clinic.timezone.default') || 'UTC';
   const currency = text('clinic.finance.currency').toUpperCase();
+  const address = [
+    text('clinic.address.street'),
+    text('clinic.address.city'),
+    text('clinic.address.country'),
+  ].filter(Boolean).join(', ');
+  const workingHoursValue = values.get('clinic.operations.working_hours');
   return {
-    displayName: text('clinic.profile.display_name') || tenant?.name || 'Vision Healthcare',
-    legalName: text('clinic.profile.legal_name') || text('clinic.profile.display_name') || tenant?.name || 'Vision Healthcare',
+    displayName: text('clinic.profile.display_name') || tenant?.name || '',
+    legalName: text('clinic.profile.legal_name') || text('clinic.profile.display_name') || tenant?.name || '',
     licenseNumber: text('clinic.legal.license_number'),
     taxNumber: text('clinic.legal.tax_number'),
-    currency: /^[A-Z]{3}$/.test(currency) ? currency : 'EGP',
+    currency: /^[A-Z]{3}$/.test(currency) ? currency : DEFAULT_CLINIC_CURRENCY,
     timezone,
     locale,
+    address,
+    phone: text('clinic.contact.land_phone'),
+    email: text('clinic.contact.email'),
+    workingHours: typeof workingHoursValue === 'string' ? workingHoursValue : JSON.stringify(workingHoursValue || []),
   };
 }
 
@@ -91,10 +118,11 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer | nu
     const invoice = await db('invoices')
       .join('patients', 'invoices.patient_id', 'patients.id')
       .where('invoices.id', invoiceId)
-      .select('invoices.*', 'patients.first_name', 'patients.last_name', 'patients.phone', 'patients.email', 'patients.national_id')
+      .leftJoin('appointments as invoice_appointments', 'invoices.appointment_id', 'invoice_appointments.id')
+      .select('invoices.*', 'invoice_appointments.branch_id as branch_id', 'patients.first_name', 'patients.last_name', 'patients.phone', 'patients.email', 'patients.national_id')
       .first();
     if (!invoice) return null;
-    const clinic = await loadClinicDocumentContext(invoice.tenant_id);
+    const clinic = await loadClinicDocumentContext(invoice.tenant_id, { branchId: invoice.branch_id || undefined });
     const items = typeof invoice.items === 'string' ? JSON.parse(invoice.items) : (invoice.items || []);
 
     const content: any[] = [
@@ -102,7 +130,10 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer | nu
       { text: [
         { text: `${clinic.legalName}\n`, bold: true },
         ...(clinic.licenseNumber ? [{ text: `License: ${clinic.licenseNumber}\n` }] : []),
-        ...(clinic.taxNumber ? [{ text: `Tax number: ${clinic.taxNumber}` }] : []),
+        ...(clinic.taxNumber ? [{ text: `Tax number: ${clinic.taxNumber}\n` }] : []),
+        ...(clinic.address ? [{ text: `${clinic.address}\n` }] : []),
+        ...(clinic.phone ? [{ text: `Phone: ${clinic.phone}` }] : []),
+        ...(clinic.email ? [{ text: `  Email: ${clinic.email}` }] : []),
       ], fontSize: 8, color: 'gray' },
       { text: '', margin: [0, 8] },
       { columns: [
@@ -124,7 +155,7 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer | nu
         [{ text: 'Due:', color: 'red', bold: true }, { text: formatDocumentMoney(invoice.due, clinic.currency, clinic.locale), color: 'red', bold: true }],
       ]}, layout: 'noBorders' }] },
       { text: '', margin: [0, 20] },
-      { text: [{ text: 'Thank you for your visit!\n', bold: true, alignment: 'center' }, { text: `${clinic.displayName}`, alignment: 'center', fontSize: 9, color: 'gray' }] },
+      { text: [{ text: 'Thank you for your visit!\n', bold: true, alignment: 'center' }, { text: `${clinic.displayName}${clinic.workingHours ? `\n${clinic.workingHours}` : ''}`, alignment: 'center', fontSize: 9, color: 'gray' }] },
     ];
 
     const docDefinition = { content, defaultStyle: { fontSize: 10, font: 'Roboto' }, styles: { title: { fontSize: 18, bold: true, color: '#2563eb' }, invoiceNumber: { fontSize: 14, bold: true }, tableHeader: { bold: true, fontSize: 9, color: 'white', fillColor: '#2563eb', margin: [4, 4] } }, pageMargins: [40, 40, 40, 40] };
@@ -143,16 +174,19 @@ export async function generatePrescriptionPdf(prescriptionId: string): Promise<B
   try {
     const pm = await getPdfMake();
     const rx = await db('pharmacy_prescriptions')
-      .join('patients', 'prescriptions.patient_id', 'patients.id')
-      .where('prescriptions.id', prescriptionId)
-      .select('prescriptions.*', 'patients.first_name', 'patients.last_name', 'patients.age', 'patients.gender', 'patients.phone')
+      .join('patients', 'pharmacy_prescriptions.patient_id', 'patients.id')
+      .where('pharmacy_prescriptions.id', prescriptionId)
+      .leftJoin('emr_records as rx_emr', 'pharmacy_prescriptions.emr_record_id', 'rx_emr.id')
+      .leftJoin('appointments as rx_appointments', 'rx_emr.appointment_id', 'rx_appointments.id')
+      .select('pharmacy_prescriptions.*', 'rx_appointments.branch_id as branch_id', 'patients.first_name', 'patients.last_name', 'patients.age', 'patients.gender', 'patients.phone')
       .first();
     if (!rx) return null;
-    const clinic = await loadClinicDocumentContext(rx.tenant_id);
+    const clinic = await loadClinicDocumentContext(rx.tenant_id, { branchId: rx.branch_id || undefined });
     const medications = typeof rx.medications === 'string' ? JSON.parse(rx.medications) : (rx.medications || []);
 
     const content: any[] = [
       { columns: [{ text: clinic.displayName, style: 'title', width: '*' }, { text: 'PRESCRIPTION', width: 'auto', alignment: 'right', style: 'title' }] },
+      { text: [clinic.legalName, clinic.address, clinic.phone, clinic.email].filter(Boolean).join('  | '), fontSize: 8, color: 'gray' },
       { text: '', margin: [0, 10] },
       { text: [{ text: 'Patient: ', bold: true }, `${rx.first_name} ${rx.last_name}`, '  ', { text: 'Age/Gender: ', bold: true }, `${rx.age || 'N/A'} / ${rx.gender || 'N/A'}`, '  ', { text: 'Date: ', bold: true }, formatDocumentDate(rx.created_at, clinic.timezone, clinic.locale)] },
       { text: '', margin: [0, 10] },
@@ -160,6 +194,7 @@ export async function generatePrescriptionPdf(prescriptionId: string): Promise<B
       ...(medications.length ? [] : [{ text: 'No medications prescribed.', italics: true, color: 'gray' }]),
       { text: '', margin: [0, 15] },
       { text: rx.notes || 'No additional notes.' },
+      ...(clinic.workingHours ? [{ text: clinic.workingHours, fontSize: 8, color: 'gray' }] : []),
       { text: '', margin: [0, 50] },
       { canvas: [{ type: 'line', x1: 300, y1: 0, x2: 450, y2: 0, lineWidth: 1, lineColor: 'gray' }] },
       { text: 'Doctor\'s Signature', fontSize: 9, color: 'gray', alignment: 'right' },
@@ -179,10 +214,11 @@ export async function generateLabReportPdf(labOrderId: string): Promise<Buffer |
     const order = await db('lab_orders')
       .join('patients', 'lab_orders.patient_id', 'patients.id')
       .where('lab_orders.id', labOrderId)
-      .select('lab_orders.*', 'patients.first_name', 'patients.last_name', 'patients.age', 'patients.gender')
+      .leftJoin('appointments as lab_appointments', 'lab_orders.appointment_id', 'lab_appointments.id')
+      .select('lab_orders.*', 'lab_appointments.branch_id as branch_id', 'patients.first_name', 'patients.last_name', 'patients.age', 'patients.gender')
       .first();
     if (!order) return null;
-    const clinic = await loadClinicDocumentContext(order.tenant_id);
+    const clinic = await loadClinicDocumentContext(order.tenant_id, { branchId: order.branch_id || undefined });
     const results = typeof order.results === 'string' ? JSON.parse(order.results) : (order.results || []);
 
     const tableRows: any[] = results.length ? [[
@@ -191,11 +227,13 @@ export async function generateLabReportPdf(labOrderId: string): Promise<Buffer |
 
     const content: any[] = [
       { columns: [{ text: clinic.displayName, style: 'title', width: '*' }, { text: 'LABORATORY REPORT', width: 'auto', alignment: 'right' }] },
+      { text: [clinic.legalName, clinic.address, clinic.phone, clinic.email].filter(Boolean).join('  | '), fontSize: 8, color: 'gray' },
       { text: '', margin: [0, 10] },
       { text: [{ text: 'Patient: ', bold: true }, `${order.first_name} ${order.last_name}`, '  ', { text: 'Test: ', bold: true }, order.test_name || 'N/A', '  ', { text: 'Date: ', bold: true }, formatDocumentDate(order.created_at, clinic.timezone, clinic.locale)] },
       { text: '', margin: [0, 10] },
       ...(tableRows.length ? [{ table: { headerRows: 1, widths: ['*', 100, 100, 50], body: tableRows }, layout: 'lightHorizontalLines' }] : []),
       { text: order.notes || '', italics: true, margin: [0, 10] },
+      ...(clinic.workingHours ? [{ text: clinic.workingHours, fontSize: 8, color: 'gray' }] : []),
     ];
 
     const docDefinition = { content, defaultStyle: { fontSize: 10, font: 'Roboto' }, styles: { title: { fontSize: 16, bold: true, color: '#2563eb' }, tableHeader: { bold: true, fontSize: 9, color: 'white', fillColor: '#2563eb', margin: [4, 4] } }, pageMargins: [40, 40, 40, 40] };

@@ -15,6 +15,11 @@ export interface ClinicConfigurationScopeRef {
   scopeId: string;
 }
 
+export interface ClinicConfigurationScopeContext {
+  branchId?: string;
+  departmentId?: string;
+}
+
 export interface EffectiveClinicConfigurationEntry {
   key: string;
   value: unknown;
@@ -83,12 +88,17 @@ async function assertScopeBelongsToTenant(tenantId: string, scope: ClinicConfigu
   }
 }
 
-function scopeChain(tenantId: string, scope: ClinicConfigurationScopeRef): ClinicConfigurationScopeRef[] {
-  if (scope.scopeType === 'tenant') return [scope];
-  return [
-    { scopeType: 'tenant', scopeId: tenantId },
-    scope,
-  ];
+export function clinicConfigurationScopeChain(
+  tenantId: string,
+  scope: ClinicConfigurationScopeRef,
+  context: ClinicConfigurationScopeContext = {},
+): ClinicConfigurationScopeRef[] {
+  const chain: ClinicConfigurationScopeRef[] = [{ scopeType: 'tenant', scopeId: tenantId }];
+  const branchId = context.branchId || (scope.scopeType === 'branch' ? scope.scopeId : undefined);
+  const departmentId = context.departmentId || (scope.scopeType === 'department' ? scope.scopeId : undefined);
+  if (branchId) chain.push({ scopeType: 'branch', scopeId: branchId });
+  if (departmentId) chain.push({ scopeType: 'department', scopeId: departmentId });
+  return chain;
 }
 
 function normalizeStoredValue(value: unknown): unknown {
@@ -105,9 +115,16 @@ function normalizeStoredValue(value: unknown): unknown {
 export async function listEffectiveClinicConfiguration(
   tenantId: string,
   scope: ClinicConfigurationScopeRef = { scopeType: 'tenant', scopeId: tenantId },
+  context: ClinicConfigurationScopeContext = {},
 ): Promise<EffectiveClinicConfigurationEntry[]> {
   await assertScopeBelongsToTenant(tenantId, scope);
-  const chain = scopeChain(tenantId, scope);
+  if (context.branchId && !(scope.scopeType === 'branch' && scope.scopeId === context.branchId)) {
+    await assertScopeBelongsToTenant(tenantId, { scopeType: 'branch', scopeId: context.branchId });
+  }
+  if (context.departmentId && !(scope.scopeType === 'department' && scope.scopeId === context.departmentId)) {
+    await assertScopeBelongsToTenant(tenantId, { scopeType: 'department', scopeId: context.departmentId });
+  }
+  const chain = clinicConfigurationScopeChain(tenantId, scope, context);
   const rows = await db('clinic_config_entries')
     .where({ tenant_id: tenantId })
     .whereIn('scope_type', chain.map((entry) => entry.scopeType))

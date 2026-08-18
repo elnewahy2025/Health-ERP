@@ -7,7 +7,7 @@ import {
   isClinicModuleKey,
 } from '@healthcare/shared';
 import { ForbiddenError, ValidationError } from '@healthcare/shared/errors';
-import { validateConfigurationShape, type EffectiveClinicConfigurationEntry } from '../clinic-configuration.js';
+import { clinicConfigurationScopeChain, validateConfigurationShape, type EffectiveClinicConfigurationEntry } from '../clinic-configuration.js';
 import { setTenantModuleEntitlement, validateModuleConfiguration } from '../clinic-modules.js';
 
 describe('clinic configuration registry', () => {
@@ -39,6 +39,20 @@ describe('clinic configuration registry', () => {
     expect(CLINIC_MODULE_CATALOG).toContain('pharmacy');
     expect(isClinicModuleKey('appointments')).toBe(true);
     expect(isClinicModuleKey('not-a-clinic-module')).toBe(false);
+  });
+
+  it('resolves tenant, branch, and department scopes in precedence order', () => {
+    expect(clinicConfigurationScopeChain('tenant-1', { scopeType: 'tenant', scopeId: 'tenant-1' }, {
+      branchId: 'branch-1', departmentId: 'department-1',
+    })).toEqual([
+      { scopeType: 'tenant', scopeId: 'tenant-1' },
+      { scopeType: 'branch', scopeId: 'branch-1' },
+      { scopeType: 'department', scopeId: 'department-1' },
+    ]);
+    expect(clinicConfigurationScopeChain('tenant-1', { scopeType: 'branch', scopeId: 'branch-1' })).toEqual([
+      { scopeType: 'tenant', scopeId: 'tenant-1' },
+      { scopeType: 'branch', scopeId: 'branch-1' },
+    ]);
   });
 
   it('rejects non-object configuration payloads', () => {
