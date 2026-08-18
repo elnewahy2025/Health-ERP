@@ -131,6 +131,14 @@ export default function PrintTemplatesPage() {
           />
         </CardBody>
       </Card>
+      <Card className="mb-6">
+        <CardBody>
+          <p className="text-sm font-medium text-gray-700">{t('printTemplates.builtInVariables')}</p>
+          <p className="text-xs text-gray-500 mt-1 font-mono break-words">
+            {'{{clinic_name}} · {{clinic_legal_name}} · {{clinic_license_number}} · {{clinic_tax_number}} · {{clinic_currency}} · {{document_number}} · {{document_date}} · {{invoice_total}} · {{receipt_amount}} · {{receipt_method}}'}
+          </p>
+        </CardBody>
+      </Card>
 
       <div className="flex gap-2 mb-4 flex-wrap">
         <button

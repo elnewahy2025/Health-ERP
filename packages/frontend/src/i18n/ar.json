@@ -1508,6 +1508,7 @@
   "printTemplates.templateCount": "{{count}} قالب",
   "printTemplates.newTemplate": "قالب جديد",
   "printTemplates.searchPlaceholder": "بحث في القوالب...",
+  "printTemplates.builtInVariables": "المتغيرات المضمنة للعيادة والفواتير والإيصالات:",
   "printTemplates.all": "الكل",
   "printTemplates.noTemplates": "لا توجد قوالب طباعة",
   "printTemplates.type": "النوع",

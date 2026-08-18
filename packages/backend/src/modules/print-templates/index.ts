@@ -6,6 +6,52 @@ import { findTenantRow } from '../../utils/tenant-scope.js';
 import { sanitizeTemplateHtml } from '../../utils/html-sanitizer.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
+import { listEffectiveClinicConfiguration } from '../../services/clinic-configuration.js';
+import { formatDocumentDate, formatDocumentMoney } from '../../services/pdf.js';
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
+}
+
+async function clinicPrintVariables(tenantId: string, data: Record<string, unknown>): Promise<Record<string, string>> {
+  const [tenant, entries] = await Promise.all([
+    db('tenants').where({ id: tenantId }).select('name').first(),
+    listEffectiveClinicConfiguration(tenantId),
+  ]);
+  const values = new Map(entries.map((entry) => [entry.key, entry.value]));
+  const text = (key: string, fallback = '') => {
+    const value = values.get(key);
+    return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+  };
+  const locale = text('clinic.locale.default', 'en');
+  const timezone = text('clinic.timezone.default', 'UTC');
+  const configuredCurrency = text('clinic.finance.currency', 'EGP').toUpperCase();
+  const currency = /^[A-Z]{3}$/.test(configuredCurrency) ? configuredCurrency : 'EGP';
+  const amount = (value: unknown) => formatDocumentMoney(value as number | string | null | undefined, currency, locale);
+  return {
+    clinic_name: text('clinic.profile.display_name', tenant?.name || 'Vision Healthcare'),
+    clinic_legal_name: text('clinic.profile.legal_name', text('clinic.profile.display_name', tenant?.name || 'Vision Healthcare')),
+    clinic_license_number: text('clinic.legal.license_number'),
+    clinic_tax_number: text('clinic.legal.tax_number'),
+    clinic_currency: currency,
+    clinic_timezone: timezone,
+    clinic_locale: locale,
+    document_number: String(data.reference || data.invoice_number || data.prescription_number || data.order_number || data.id || ''),
+    document_date: data.created_at ? formatDocumentDate(String(data.created_at), timezone, locale) : '',
+    invoice_number: String(data.invoice_number || ''),
+    invoice_subtotal: amount(data.subtotal),
+    invoice_discount: amount(data.discount),
+    invoice_tax: amount(data.tax),
+    invoice_total: amount(data.total ?? data.invoice_total),
+    invoice_paid: amount(data.paid),
+    invoice_due: amount(data.due),
+    receipt_number: String(data.reference || data.id || ''),
+    receipt_amount: amount(data.amount),
+    receipt_method: String(data.method || ''),
+    receipt_status: String(data.status || ''),
+    receipt_notes: String(data.notes || ''),
+  };
+}
 
 export async function registerPrintTemplatesModule(app: FastifyInstance) {
   app.get('/api/v1/print/templates', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
@@ -74,14 +120,37 @@ export async function registerPrintTemplatesModule(app: FastifyInstance) {
     if (documentType === 'invoice') data = await db('invoices').where({ id: referenceId, tenant_id: tenantId }).first() || {};
     else if (documentType === 'prescription') data = await db('pharmacy_prescriptions').where({ id: referenceId, tenant_id: tenantId }).first() || {};
     else if (documentType === 'lab_report') data = await db('lab_orders').where({ id: referenceId, tenant_id: tenantId }).first() || {};
-    else if (documentType === 'patient_summary') data = await db('patients').where({ id: referenceId, tenant_id: tenantId }).first() || {};
+    else if (documentType === 'receipt') {
+      data = await db('payment_transactions as payments')
+        .leftJoin('invoices', 'payments.invoice_id', 'invoices.id')
+        .where('payments.id', referenceId)
+        .andWhere('payments.tenant_id', tenantId)
+        .select(
+          'payments.*',
+          'invoices.invoice_number',
+          'invoices.subtotal as invoice_subtotal',
+          'invoices.total as invoice_total',
+          'invoices.paid as invoice_paid',
+          'invoices.due as invoice_due',
+        )
+        .first() || {};
+    } else if (documentType === 'patient_summary') data = await db('patients').where({ id: referenceId, tenant_id: tenantId }).first() || {};
 
-    // Replace variables in template
+    // Replace declared variables and built-in clinic/billing variables.
     let html = template.content_html || '';
-    const vars = template.variables || [];
-    for (const v of vars) {
-      const val = data[v] || `{{${v}}}`;
-      html = html.replace(new RegExp(`\\{\\{${v}\\}\\}`, 'g'), String(val));
+    const declaredVariables = Array.isArray(template.variables)
+      ? template.variables
+      : (typeof template.variables === 'string' ? JSON.parse(template.variables) : []);
+    const builtInVariables = await clinicPrintVariables(tenantId, data);
+    const values: Record<string, unknown> = { ...data, ...builtInVariables };
+    const variableNames = new Set<string>([
+      ...declaredVariables.filter((value: unknown): value is string => typeof value === 'string'),
+      ...Object.keys(builtInVariables),
+    ]);
+    for (const variable of variableNames) {
+      const value = values[variable];
+      if (value === undefined || value === null) continue;
+      html = html.replace(new RegExp(escapeRegExp(`{{${variable}}}`), 'g'), String(value));
     }
 
     return reply.type('text/html').send(sanitizeTemplateHtml(html));

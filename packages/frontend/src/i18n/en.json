@@ -1510,6 +1510,7 @@
   "printTemplates.templateCount": "{{count}} templates",
   "printTemplates.newTemplate": "New Template",
   "printTemplates.searchPlaceholder": "Search templates...",
+  "printTemplates.builtInVariables": "Built-in clinic, billing, and receipt variables:",
   "printTemplates.all": "All",
   "printTemplates.noTemplates": "No print templates",
   "printTemplates.type": "Type",
