@@ -288,7 +288,7 @@ Write-Ok "Database credentials OK"
 
 # --- 8. Wait for health --------------------------------------------------
 Write-Step "Waiting for backend to become healthy (up to ~2 minutes)..."
-$healthUrl = "http://localhost:${BACKEND_PORT}/api/v1/health"
+$healthUrl = "http://localhost:${BACKEND_PORT}/health"
 $healthy = $false
 for ($i = 0; $i -lt 24; $i++) {
     Start-Sleep -Seconds 5
