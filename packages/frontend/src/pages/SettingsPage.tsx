@@ -8,6 +8,7 @@ import { Can } from '../components/auth/Authorization';
 import toast from 'react-hot-toast';
 import { CLINIC_CONFIGURATION_REGISTRY, clinicConfigurationDefinition } from '@healthcare/shared';
 import type { ClinicConfigurationEntry, ClinicConfigurationScope } from '../lib/api/clinic-configuration';
+import { isSupportedClinicLocale, isValidClinicTimezone } from '../lib/clinic-settings-validation';
 
 interface ClinicSettings {
   clinicName: string;
@@ -241,6 +242,16 @@ export default function SettingsPage() {
   };
 
   const handleSave = async () => {
+    if (!isValidClinicTimezone(clinic.timezone)) {
+      toast.error(t('settings.invalidTimezone'));
+      document.getElementById('clinic-settings-timezone')?.focus();
+      return;
+    }
+    if (clinic.locale.trim() && !isSupportedClinicLocale(clinic.locale)) {
+      toast.error(t('settings.invalidLocale'));
+      document.getElementById('clinic-settings-locale')?.focus();
+      return;
+    }
     setSaving(true);
     try {
       await api.put('/clinic-settings', clinic);
@@ -292,6 +303,9 @@ export default function SettingsPage() {
   ];
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-6 h-6 animate-spin text-primary-600" /></div>;
+
+  const timezoneInvalid = !isValidClinicTimezone(clinic.timezone);
+  const localeInvalid = Boolean(clinic.locale.trim()) && !isSupportedClinicLocale(clinic.locale);
 
   return (
     <div className="space-y-6">
@@ -354,8 +368,18 @@ export default function SettingsPage() {
                   <Input id="clinic-settings-license-number" label={t('settings.licenseNumber')} value={clinic.licenseNumber} onChange={e => setClinic(p => ({ ...p, licenseNumber: e.target.value }))} />
                   <Input id="clinic-settings-tax-number" label={t('settings.taxNumber')} value={clinic.taxNumber} onChange={e => setClinic(p => ({ ...p, taxNumber: e.target.value }))} />
                   <Input id="clinic-settings-currency" label={t('settings.currency')} value={clinic.currency} maxLength={3} onChange={e => setClinic(p => ({ ...p, currency: e.target.value.toUpperCase() }))} placeholder={DEFAULT_CLINIC_CURRENCY} />
-                  <Input id="clinic-settings-timezone" label={t('settings.timezone')} value={clinic.timezone} onChange={e => setClinic(p => ({ ...p, timezone: e.target.value }))} placeholder="Area/City" />
-                  <Input id="clinic-settings-locale" label={t('settings.locale')} value={clinic.locale} onChange={e => setClinic(p => ({ ...p, locale: e.target.value }))} placeholder="en" />
+                  <Input id="clinic-settings-timezone" label={t('settings.timezone')} value={clinic.timezone} error={timezoneInvalid ? t('settings.invalidTimezone') : undefined} onChange={e => setClinic(p => ({ ...p, timezone: e.target.value }))} placeholder="Area/City" />
+                  <Select
+                    id="clinic-settings-locale"
+                    label={t('settings.locale')}
+                    value={clinic.locale}
+                    error={localeInvalid ? t('settings.invalidLocale') : undefined}
+                    options={[
+                      { value: 'en', label: t('settings.localeEnglish') },
+                      { value: 'ar', label: t('settings.localeArabic') },
+                    ]}
+                    onChange={e => setClinic(p => ({ ...p, locale: e.target.value }))}
+                  />
                 </div>
               </div>
 
