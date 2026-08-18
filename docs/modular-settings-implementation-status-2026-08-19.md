@@ -3,7 +3,7 @@
 **Project:** Health-ERP Clinic Management System  
 **Status date:** 19 August 2026  
 **Repository branch:** `main`  
-**Latest implementation commit:** `5e4272e`
+**Latest implementation commit:** `c8f4016`
 
 ## Executive status
 
@@ -29,6 +29,7 @@ Administrators can now complete regional configuration progressively and manage 
 | `15ab9b6` | Structural provider adapters | Added safe ETA, Fawry, Stripe, and Twilio adapter validation with provider-specific required fields, no network calls, and safe result codes. |
 | `b4199f2` | Opt-in live-validation controls | Added migration 054, provider-configurable validation mode, live opt-in, timeout, endpoint URL, safe endpoint allowlisting, bilingual controls, and deterministic probe tests. |
 | `5e4272e` | Backward-compatible policy persistence | Preserved existing validation policy values when older clients save provider configuration and mapped persisted live/structural failures accurately. |
+| `c8f4016` | Versioned provider contracts | Exposed contract version and capability states for ETA, Fawry, Stripe, and Twilio; distinguishes implemented checks from unverified authentication and unsupported business operations. |
 
 ## Database and security model
 
@@ -107,6 +108,12 @@ Migration 054 adds `validation_mode`, `live_validation_enabled`, and `validation
 
 Live validation is intentionally opt-in. Production endpoints must use HTTPS. Localhost, link-local, private IPv4 ranges, loopback, and private IPv6 ranges are blocked to prevent an administrator mistake from turning the application into an internal-network request proxy. Live probes send only a simple GET request with generic `Accept` headers and never send provider secrets, authentication headers, payment data, or clinic records. Redirects are rejected, responses are not parsed as trusted provider payloads, and timeout or HTTP failures are mapped to safe status codes.
 
+## Versioned provider contracts
+
+The provider API now returns a versioned contract for every supported provider. Capability states explicitly distinguish **implemented** structural validation and endpoint reachability from **not verified** vendor authentication and **not implemented** business operations. This prevents a green configuration check from being interpreted as proof that a vendor account, signing certificate, payment rail, tax submission workflow, or messaging account is operational.
+
+The Settings page displays these capability states and the contract version for administrators. Unknown provider keys return a safe unsupported result rather than falling through to an inferred or unregistered adapter.
+
 ## Provider adapter validation semantics
 
 The provider test endpoint now delegates to a provider adapter registry. Structural checks always run first. If the saved policy is `live` and `live_validation_enabled` is true, the adapter then performs only the configured endpoint reachability probe. Structural results record a safe code, readiness status, missing field names, and `testMode: structural`; live results record a safe endpoint status and `testMode: live`. Neither result includes decrypted secret values.
@@ -115,7 +122,7 @@ This is deliberately not presented as a fabricated vendor handshake. The current
 
 ## Validation results
 
-The final validation completed successfully. Backend lint passed. Backend tests passed with **32 passed test files, 1 skipped integration file, 240 tests passed, and 3 skipped tests**. Frontend tests passed with **11 test files and 43 tests passed**. Backend and frontend production builds passed, and `git diff --check` passed. Validation was run against implementation commit `5e4272e`; the documentation update is committed separately.
+The final validation completed successfully. Backend lint passed. Backend tests passed with **32 passed test files, 1 skipped integration file, 241 tests passed, and 3 skipped tests**. Frontend tests passed with **11 test files and 43 tests passed**. Backend and frontend production builds passed, and `git diff --check` passed. Validation was run against implementation commit `c8f4016`; the documentation update is committed separately.
 
 The backend test run still prints existing non-failing warnings about Redis connection attempts in the isolated test environment and the audit test’s intentionally swallowed database-write failure. These warnings did not fail the suite and were not introduced by the modular settings work.
 
