@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UserCog, Palette, Bell, Globe, Printer, Shield, Building2, Save, Loader2, Puzzle, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Card, CardBody, Input, Button } from '../components/ui';
 import { apiClient as api, clinicConfigurationApi, type ClinicModuleReadiness, type ClinicModuleStatus } from '../lib/api';
@@ -10,6 +10,7 @@ import { clinicConfigurationDefinition } from '@healthcare/shared';
 
 interface ClinicSettings {
   clinicName: string;
+  legalName: string;
   branch: string;
   landPhone: string;
   whatsappPhone: string;
@@ -24,6 +25,8 @@ interface ClinicSettings {
   licenseNumber: string;
   taxNumber: string;
   currency: string;
+  timezone: string;
+  locale: string;
   twilioConfigured?: boolean;
 }
 
@@ -34,9 +37,9 @@ const DEFAULT_CLINIC_CURRENCY = String(
 );
 
 const INITIAL_CLINIC: ClinicSettings = {
-  clinicName: '', branch: '', landPhone: '', whatsappPhone: '', logoUrl: '',
+  clinicName: '', legalName: '', branch: '', landPhone: '', whatsappPhone: '', logoUrl: '',
   address: '', city: '', country: '', googleMapsLocation: '', email: '',
-  website: '', workingHours: 'Sun-Thu: 9AM-5PM', licenseNumber: '', taxNumber: '', currency: DEFAULT_CLINIC_CURRENCY,
+  website: '', workingHours: 'Sun-Thu: 9AM-5PM', licenseNumber: '', taxNumber: '', currency: DEFAULT_CLINIC_CURRENCY, timezone: 'UTC', locale: 'en',
 };
 
 function moduleLabel(moduleKey: string): string {
@@ -48,6 +51,7 @@ function moduleLabel(moduleKey: string): string {
 
 const CONFIGURATION_FIELD_IDS: Record<string, string> = {
   'clinic.profile.display_name': 'clinic-settings-clinic-name',
+  'clinic.profile.legal_name': 'clinic-settings-legal-name',
   'clinic.profile.branch_label': 'clinic-settings-branch',
   'clinic.profile.logo_url': 'clinic-settings-logo-url',
   'clinic.contact.email': 'clinic-settings-email',
@@ -62,6 +66,8 @@ const CONFIGURATION_FIELD_IDS: Record<string, string> = {
   'clinic.legal.license_number': 'clinic-settings-license-number',
   'clinic.legal.tax_number': 'clinic-settings-tax-number',
   'clinic.finance.currency': 'clinic-settings-currency',
+  'clinic.timezone.default': 'clinic-settings-timezone',
+  'clinic.locale.default': 'clinic-settings-locale',
 };
 
 function validationKeys(module: ClinicModuleStatus, readiness?: ClinicModuleReadiness): string[] {
@@ -74,6 +80,7 @@ function validationKeys(module: ClinicModuleStatus, readiness?: ClinicModuleRead
 export default function SettingsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<SettingsTab>('clinic');
   const [clinic, setClinic] = useState<ClinicSettings>(INITIAL_CLINIC);
   const [modules, setModules] = useState<ClinicModuleStatus[]>([]);
@@ -134,6 +141,12 @@ export default function SettingsPage() {
     }, 0);
   };
 
+  useEffect(() => {
+    const focusKey = searchParams.get('focus');
+    if (!focusKey || loading) return;
+    focusConfigurationField(focusKey);
+  }, [loading, searchParams]);
+
   const handleModuleToggle = async (module: ClinicModuleStatus) => {
     if (module.core || !module.entitled) return;
     const enabled = module.activationStatus !== 'enabled';
@@ -184,6 +197,7 @@ export default function SettingsPage() {
                 <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">{t('settings.basicInformation')}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Input id="clinic-settings-clinic-name" label={t('settings.clinicName')} value={clinic.clinicName} onChange={e => setClinic(p => ({ ...p, clinicName: e.target.value }))} />
+                  <Input id="clinic-settings-legal-name" label={t('settings.legalName')} value={clinic.legalName} onChange={e => setClinic(p => ({ ...p, legalName: e.target.value }))} />
                   <Input id="clinic-settings-branch" label={t('settings.branch')} value={clinic.branch} onChange={e => setClinic(p => ({ ...p, branch: e.target.value }))} />
                   <Input id="clinic-settings-email" label={t('settings.email')} type="email" value={clinic.email} onChange={e => setClinic(p => ({ ...p, email: e.target.value }))} />
                   <Input id="clinic-settings-website" label={t('settings.website')} value={clinic.website} onChange={e => setClinic(p => ({ ...p, website: e.target.value }))} />
@@ -220,6 +234,8 @@ export default function SettingsPage() {
                   <Input id="clinic-settings-license-number" label={t('settings.licenseNumber')} value={clinic.licenseNumber} onChange={e => setClinic(p => ({ ...p, licenseNumber: e.target.value }))} />
                   <Input id="clinic-settings-tax-number" label={t('settings.taxNumber')} value={clinic.taxNumber} onChange={e => setClinic(p => ({ ...p, taxNumber: e.target.value }))} />
                   <Input id="clinic-settings-currency" label={t('settings.currency')} value={clinic.currency} maxLength={3} onChange={e => setClinic(p => ({ ...p, currency: e.target.value.toUpperCase() }))} placeholder={DEFAULT_CLINIC_CURRENCY} />
+                  <Input id="clinic-settings-timezone" label={t('settings.timezone')} value={clinic.timezone} onChange={e => setClinic(p => ({ ...p, timezone: e.target.value }))} placeholder="Africa/Cairo" />
+                  <Input id="clinic-settings-locale" label={t('settings.locale')} value={clinic.locale} onChange={e => setClinic(p => ({ ...p, locale: e.target.value }))} placeholder="en" />
                 </div>
               </div>
 

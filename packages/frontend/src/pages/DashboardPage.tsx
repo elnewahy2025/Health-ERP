@@ -6,6 +6,7 @@ import { Spinner } from '../components/ui';
 import { Can } from '../components/auth/Authorization';
 import { useAuth } from '../stores/authStore';
 import { formatClinicDate, useClinicConfiguration, useClinicMoney } from '../stores/clinicConfigurationStore';
+import { ClinicSetupChecklist } from '../components/clinic/ClinicSetupChecklist';
 import {
   CalendarCheck, Receipt, Users, DollarSign,
   Stethoscope, TrendingUp, Activity as ActivityIcon,
@@ -98,6 +99,10 @@ interface TodayAppointment { id: string; patientName: string; doctorName: string
           </button>
         </Can>
       </div>
+
+      <Can permission="settings.view">
+        <ClinicSetupChecklist />
+      </Can>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">

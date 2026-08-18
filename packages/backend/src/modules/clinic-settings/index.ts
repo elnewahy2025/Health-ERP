@@ -22,6 +22,7 @@ const DEFAULT_CLINIC_CURRENCY = String(
 
 const LEGACY_FIELD_MAP = {
   clinicName: 'clinic.profile.display_name',
+  legalName: 'clinic.profile.legal_name',
   branch: 'clinic.profile.branch_label',
   landPhone: 'clinic.contact.land_phone',
   whatsappPhone: 'clinic.contact.whatsapp_phone',
@@ -36,6 +37,8 @@ const LEGACY_FIELD_MAP = {
   licenseNumber: 'clinic.legal.license_number',
   taxNumber: 'clinic.legal.tax_number',
   currency: 'clinic.finance.currency',
+  timezone: 'clinic.timezone.default',
+  locale: 'clinic.locale.default',
 } as const;
 
 type LegacyClinicField = keyof typeof LEGACY_FIELD_MAP;
@@ -43,6 +46,7 @@ type LegacyClinicSettings = Partial<Record<LegacyClinicField, unknown>>;
 
 const LEGACY_SETTINGS_SCHEMA = z.object({
   clinicName: z.string().max(200).optional(),
+  legalName: z.string().max(200).optional(),
   branch: z.string().max(200).optional(),
   landPhone: z.string().max(50).optional(),
   whatsappPhone: z.string().max(50).optional(),
@@ -57,6 +61,8 @@ const LEGACY_SETTINGS_SCHEMA = z.object({
   licenseNumber: z.string().max(200).optional(),
   taxNumber: z.string().max(200).optional(),
   currency: z.string().regex(/^[A-Z]{3}$/).optional(),
+  timezone: z.string().max(100).optional(),
+  locale: z.string().max(20).optional(),
 }).strict();
 
 function asRecord(value: unknown): Record<string, unknown> {
