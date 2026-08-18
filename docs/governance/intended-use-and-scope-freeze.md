@@ -1,6 +1,6 @@
 # Intended Use and Scope Freeze
 
-**Document status:** Draft for formal approval
+**Document status:** Product model agreed; formal governance approval pending
 **Release state:** Development only
 **Effective date:** 2026-08-18
 **Product:** Health-ERP
@@ -19,21 +19,35 @@ The following information is required before pilot approval and is intentionally
 
 | Required fact | Current value | Approval owner |
 |---|---|---|
-| Pilot hospital/legal entity | **TBD — user/hospital input required** | Hospital sponsor |
-| Country and regulatory jurisdiction | **TBD — user/hospital input required** | Compliance/privacy owner |
-| Pilot department | **TBD — user/hospital input required** | Hospital sponsor and clinical lead |
-| Authoritative existing system during pilot | **TBD — user/hospital input required** | Hospital IT and sponsor |
-| Patient-data classification and permitted dataset | **TBD — user/hospital input required** | Privacy/compliance owner |
-| Required external interfaces | **TBD — hospital interface inventory required** | Interoperability owner |
+| Pilot hospital/legal entity | **TBD — pilot-specific input still required** | Hospital sponsor |
+| Country and regulatory jurisdiction | **TBD — pilot-specific input still required** | Compliance/privacy owner |
+| Pilot department | **TBD — pilot-specific input still required** | Hospital sponsor and clinical lead |
+| Authoritative existing system during pilot | **TBD — pilot-specific input still required** | Hospital IT and sponsor |
+| Patient-data classification and permitted dataset | **TBD — pilot-specific input still required** | Privacy/compliance owner |
+| Required external interfaces | **TBD — hospital interface inventory still required** | Interoperability owner |
 | Clinical safety lead | **Unassigned** | Product owner / hospital sponsor |
 | Security owner | **Unassigned** | Product owner |
 | Privacy/compliance owner | **Unassigned** | Product owner / hospital sponsor |
 | Finance owner | **Unassigned** | Product owner / hospital sponsor |
 | Operations/SRE owner | **Unassigned** | Product owner |
 
+## Approved product model
+
+The user approved the following product decisions on 2026-08-18:
+
+| Decision | Approved model |
+|---|---|
+| Tenant meaning | One tenant represents one clinic organisation. A tenant may contain multiple branches and departments. |
+| Product type | Configurable multi-tenant Clinic Management System; it is not hardcoded around one specialty. |
+| Module authority | System/vendor administration defines which modules are available to a tenant. Tenant administrators activate and configure only modules available to that tenant. |
+| Module activation and permissions | Activating a module never grants staff permissions automatically. Existing RBAC, custom roles, and operational scopes remain authoritative. |
+| First release profile | Generic clinic core: clinic settings, users, roles, branches, departments, audit, notifications, patients, providers, appointments, scheduling, encounters/basic EMR, documents, basic reports, and billing basics after the applicable acceptance gates. |
+| Optional modules | Pharmacy, laboratory, radiology, nursing, inventory, insurance, patient portal, online booking, advanced accounting, integrations, AI, BI, and automation are enabled only when the tenant needs them and the relevant implementation and acceptance gates pass. |
+| Configuration hierarchy | Tenant defaults with optional branch and department overrides, using deterministic precedence and audited changes. |
+
 ## In-scope product direction
 
-The product direction is to provide one coherent platform for hospital operations, with role-specific functions and server-enforced tenant, branch, department, patient, and resource boundaries. The first shippable release must be narrower than the entire repository and must identify the exact workflows that have passed clinical, financial, security, and operational acceptance.
+The product direction is to provide one coherent, configurable clinic platform with generic core workflows and optional specialty modules. Role-specific functions and server-enforced tenant, branch, department, patient, and resource boundaries remain mandatory. The first shippable release must be narrower than the entire repository and must identify the exact workflows that have passed clinical, financial, security, and operational acceptance.
 
 ## Explicit non-goals until separately approved
 
@@ -49,4 +63,4 @@ Changes to permissions, scopes, audit behavior, patient identity, medication, di
 
 ## Approval
 
-This document remains **DRAFT / NOT APPROVED** until the missing hospital, jurisdiction, pilot, ownership, and authoritative-system facts are supplied and signed by the required owners. No production or pilot claim may be made before approval.
+The configurable product model is **AGREED**, but this document remains **NOT APPROVED for pilot or production** until the pilot hospital, jurisdiction, pilot department, owners, authoritative system, permitted data, and required interfaces are supplied and signed by the required owners. No production or pilot claim may be made before those facts are approved.

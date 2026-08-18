@@ -10,6 +10,7 @@
 | Criterion | Evidence | Status |
 |---|---|---|
 | Intended use and explicit non-goals documented | `intended-use-and-scope-freeze.md` | PASS — document created; formal approval pending |
+| Configurable clinic product model agreed | `intended-use-and-scope-freeze.md`; DEC-0004 | PASS — user approved one tenant per clinic organisation, system availability boundaries, tenant-admin activation, and generic core with optional modules |
 | Release states and stop-ship policy documented | `SHIP-READINESS-PLAN.md` and `release-decision-log.md` | PASS — policy documented |
 | Initial engineering risk register created | `risk-register.md` | PASS — repository-based baseline created; hospital-specific assessment pending |
 | Named product, clinical, security, privacy, finance, interoperability, SRE, support, and release owners | `roles-and-owners.md` | **FAIL — all required owners are unassigned** |
@@ -24,7 +25,7 @@
 
 ## Why the gate is blocked
 
-The missing inputs are not safe to infer. A real product plan requires the actual pilot hospital, jurisdiction, departments, workflows, data authority, required interfaces, and named accountable reviewers. Inventing those values would create false evidence and violate the no-hallucination release rule.
+The configurable product model is agreed, but the missing pilot and governance inputs are not safe to infer. A real product plan requires the actual pilot hospital, jurisdiction, department, workflows, data authority, required interfaces, and named accountable reviewers. Inventing those values would create false evidence and violate the no-hallucination release rule.
 
 ## Exact blocking inputs
 
