@@ -16,6 +16,16 @@ import {
   setTenantModuleEntitlement,
 } from '../../services/clinic-modules.js';
 import { clinicConfigurationDefinition } from '@healthcare/shared';
+import {
+  getRegionalProfile,
+  updateRegionalProfile,
+  listProviderConfigurations,
+  updateProviderConfiguration,
+  updateProviderSecrets,
+  updateProviderSecret,
+  revokeProviderSecret,
+  validateProviderConfiguration,
+} from '../../services/clinic-provider-configuration.js';
 
 const DEFAULT_CLINIC_CURRENCY = String(
   clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '',
@@ -77,6 +87,154 @@ function legacyValue(entries: Awaited<ReturnType<typeof listEffectiveClinicConfi
 }
 
 export async function registerClinicSettingsModule(app: FastifyInstance) {
+  app.get('/api/v1/clinic-regional-profile', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    return sendSuccess(reply, await getRegionalProfile(ctx.tenantId));
+  });
+
+  app.put('/api/v1/clinic-regional-profile', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const body = z.object({
+      countryCode: z.string().length(2).nullable().optional(),
+      profileKey: z.string().min(1).max(80).optional(),
+      status: z.enum(['incomplete', 'configured', 'invalid']).optional(),
+      nationalIdentifierPolicy: z.string().min(1).max(80).optional(),
+      phonePolicy: z.string().min(1).max(80).optional(),
+      taxProfileKey: z.string().max(80).nullable().optional(),
+      metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+      expectedVersion: z.number().int().nonnegative().optional(),
+    }).parse(request.body);
+    return sendSuccess(reply, await updateRegionalProfile({
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      ...body,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] as string | undefined,
+    }), 'Regional profile updated');
+  });
+
+  app.get('/api/v1/clinic-provider-configurations', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    return sendSuccess(reply, await listProviderConfigurations(ctx.tenantId));
+  });
+
+  app.put('/api/v1/clinic-provider-configurations/:providerKey', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const params = z.object({ providerKey: z.string().min(1).max(80) }).parse(request.params);
+    const body = z.object({
+      displayName: z.string().max(160).nullable().optional(),
+      environment: z.enum(['sandbox', 'production']).optional(),
+      config: z.record(z.string(), z.unknown()).default({}),
+      expectedVersion: z.number().int().positive().optional(),
+    }).parse(request.body);
+    return sendSuccess(reply, await updateProviderConfiguration({
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      providerKey: params.providerKey,
+      ...body,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] as string | undefined,
+    }), 'Provider configuration updated');
+  });
+
+  app.put('/api/v1/clinic-provider-configurations/:providerKey/secrets', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const params = z.object({ providerKey: z.string().min(1).max(80) }).parse(request.params);
+    const body = z.object({
+      secrets: z.record(z.string(), z.string()).default({}),
+      clearKeys: z.array(z.string().min(1).max(120)).default([]),
+      expectedVersion: z.number().int().positive().optional(),
+    }).parse(request.body);
+    return sendSuccess(reply, await updateProviderSecrets({
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      providerKey: params.providerKey,
+      ...body,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] as string | undefined,
+    }), 'Provider secrets updated');
+  });
+
+  app.post('/api/v1/clinic-provider-configurations/:providerKey/validate', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const params = z.object({ providerKey: z.string().min(1).max(80) }).parse(request.params);
+    return sendSuccess(reply, await validateProviderConfiguration({
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      providerKey: params.providerKey,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] as string | undefined,
+    }), 'Provider configuration validated');
+  });
+
+  // Stable provider API contract. Responses never include encrypted or plaintext secret values.
+  app.get('/api/v1/clinic-providers', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    return sendSuccess(reply, await listProviderConfigurations(ctx.tenantId));
+  });
+
+  app.put('/api/v1/clinic-providers/:providerKey', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const params = z.object({ providerKey: z.string().min(1).max(80) }).parse(request.params);
+    const body = z.object({
+      displayName: z.string().max(160).nullable().optional(),
+      environment: z.enum(['sandbox', 'production']).optional(),
+      config: z.record(z.string(), z.unknown()).default({}),
+      expectedVersion: z.number().int().positive().optional(),
+    }).parse(request.body);
+    return sendSuccess(reply, await updateProviderConfiguration({
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      providerKey: params.providerKey,
+      ...body,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] as string | undefined,
+    }), 'Provider configuration updated');
+  });
+
+  app.post('/api/v1/clinic-providers/:providerKey/test', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const params = z.object({ providerKey: z.string().min(1).max(80) }).parse(request.params);
+    return sendSuccess(reply, await validateProviderConfiguration({
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      providerKey: params.providerKey,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] as string | undefined,
+    }), 'Provider configuration tested');
+  });
+
+  app.put('/api/v1/clinic-providers/:providerKey/secrets/:secretKey', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const params = z.object({ providerKey: z.string().min(1).max(80), secretKey: z.string().min(1).max(120) }).parse(request.params);
+    const body = z.object({ value: z.string().min(1), expectedVersion: z.number().int().positive().optional() }).parse(request.body);
+    return sendSuccess(reply, await updateProviderSecret({
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      providerKey: params.providerKey,
+      secretKey: params.secretKey,
+      value: body.value,
+      expectedVersion: body.expectedVersion,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] as string | undefined,
+    }), 'Provider secret updated');
+  });
+
+  app.delete('/api/v1/clinic-providers/:providerKey/secrets/:secretKey', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const params = z.object({ providerKey: z.string().min(1).max(80), secretKey: z.string().min(1).max(120) }).parse(request.params);
+    const body = z.object({ expectedVersion: z.number().int().positive().optional() }).default({}).parse(request.body || {});
+    return sendSuccess(reply, await revokeProviderSecret({
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      providerKey: params.providerKey,
+      secretKey: params.secretKey,
+      expectedVersion: body.expectedVersion,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] as string | undefined,
+    }), 'Provider secret revoked');
+  });
+
   app.get('/api/v1/clinic-configuration', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
     const ctx = getCtx(request);
     const query = z.object({
