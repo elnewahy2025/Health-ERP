@@ -3,7 +3,7 @@
 **Project:** Health-ERP Clinic Management System  
 **Status date:** 19 August 2026  
 **Repository branch:** `main`  
-**Latest commit:** `15ab9b6`
+**Latest implementation commit:** `5e4272e`
 
 ## Executive status
 
@@ -27,10 +27,12 @@ Administrators can now complete regional configuration progressively and manage 
 | `cbd79bd` | Operational provider consumption | Added backend-only runtime resolution and wired tenant provider settings into Stripe checkout, Fawry creation, SMS, and voice operations with safe fallback for unconfigured legacy tenants. |
 | `7ac98f8` | Callback provider resolution | Stripe confirmation, Fawry callback secret selection, and Twilio voice callback validation now recover tenant context before selecting provider secrets. |
 | `15ab9b6` | Structural provider adapters | Added safe ETA, Fawry, Stripe, and Twilio adapter validation with provider-specific required fields, no network calls, and safe result codes. |
+| `b4199f2` | Opt-in live-validation controls | Added migration 054, provider-configurable validation mode, live opt-in, timeout, endpoint URL, safe endpoint allowlisting, bilingual controls, and deterministic probe tests. |
+| `5e4272e` | Backward-compatible policy persistence | Preserved existing validation policy values when older clients save provider configuration and mapped persisted live/structural failures accurately. |
 
 ## Database and security model
 
-Migration `053_modular_clinic_settings.ts` creates or extends the following structures with `hasTable` and `hasColumn` guards:
+Migrations `053_modular_clinic_settings.ts` and `054_provider_live_validation_policy.ts` create or extend the following structures with `hasTable` and `hasColumn` guards:
 
 | Table or extension | Purpose |
 |---|---|
@@ -99,15 +101,21 @@ The following paths now use tenant-scoped runtime credentials when available:
 
 WhatsApp remains on its existing separate Meta provider configuration path because it is not represented by the Twilio provider catalog in this foundation. Vendor-specific ETA invoice submission and true provider network handshakes should be implemented as separate adapters once their exact API contracts, endpoints, certificate requirements, and test environments are supplied.
 
+## Live-validation controls
+
+Migration 054 adds `validation_mode`, `live_validation_enabled`, and `validation_timeout_ms` to each tenant provider connection. Existing connections default to structural validation, live validation disabled, and a five-second timeout. Administrators can select **Configuration only** or **Live validation**, explicitly enable live validation, and set a bounded timeout between one and thirty seconds. Provider endpoint URLs are stored as nonsecret configuration fields; they are never allowed to contain embedded credentials.
+
+Live validation is intentionally opt-in. Production endpoints must use HTTPS. Localhost, link-local, private IPv4 ranges, loopback, and private IPv6 ranges are blocked to prevent an administrator mistake from turning the application into an internal-network request proxy. Live probes send only a simple GET request with generic `Accept` headers and never send provider secrets, authentication headers, payment data, or clinic records. Redirects are rejected, responses are not parsed as trusted provider payloads, and timeout or HTTP failures are mapped to safe status codes.
+
 ## Provider adapter validation semantics
 
-The provider test endpoint now delegates to a provider adapter registry. The current adapters perform **structural validation only**: they verify that the tenant connection exists, the provider is enabled, required nonsecret fields are present, required encrypted secrets can be loaded, and provider-specific protocol fields are valid. The result records a safe code, readiness status, missing field names, and `testMode: structural`; it never includes decrypted secret values.
+The provider test endpoint now delegates to a provider adapter registry. Structural checks always run first. If the saved policy is `live` and `live_validation_enabled` is true, the adapter then performs only the configured endpoint reachability probe. Structural results record a safe code, readiness status, missing field names, and `testMode: structural`; live results record a safe endpoint status and `testMode: live`. Neither result includes decrypted secret values.
 
-This is deliberately not presented as a fabricated vendor handshake. No outbound provider request is made until the repository has an explicit adapter contract for that vendor’s endpoint, signing algorithm, certificate requirements, timeout, retry, and response-sanitization rules. Decryption failures are returned as a generic safe invalid result. Twilio accepts one configured sender option for voice or messaging while preserving optional legacy secret fields, and Fawry requires an administrator-entered three-letter `currencyCode` without inserting `EGP` as a clinic default.
+This is deliberately not presented as a fabricated vendor handshake. The current live probe sends no provider credentials and does not claim that ETA, Fawry, Stripe, or Twilio authentication or business APIs are valid. Vendor-specific handshakes remain a separate adapter step requiring the exact vendor endpoint, signing algorithm, certificate requirements, timeout, retry, and response-sanitization contract. Decryption failures are returned as a generic safe invalid result. Twilio accepts one configured sender option for voice or messaging while preserving optional legacy secret fields, and Fawry requires an administrator-entered three-letter `currencyCode` without inserting `EGP` as a clinic default.
 
 ## Validation results
 
-The final validation completed successfully. Backend lint passed. Backend tests passed with **32 test files, 236 tests passed, and 3 intentionally skipped integration tests**. Frontend tests passed with **11 test files and 43 tests passed**. Backend and frontend production builds passed, and `git diff --check` passed. The working tree is clean and `HEAD` matches `origin/main` at commit `15ab9b6`.
+The final validation completed successfully. Backend lint passed. Backend tests passed with **32 passed test files, 1 skipped integration file, 240 tests passed, and 3 skipped tests**. Frontend tests passed with **11 test files and 43 tests passed**. Backend and frontend production builds passed, and `git diff --check` passed. Validation was run against implementation commit `5e4272e`; the documentation update is committed separately.
 
 The backend test run still prints existing non-failing warnings about Redis connection attempts in the isolated test environment and the audit test’s intentionally swallowed database-write failure. These warnings did not fail the suite and were not introduced by the modular settings work.
 
