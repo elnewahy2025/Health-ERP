@@ -40,6 +40,13 @@ export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     configKeys: ['currency'],
     secretKeys: ['secretKey', 'publishableKey', 'webhookSecret'],
   },
+  {
+    providerKey: 'twilio',
+    moduleKey: 'integrations',
+    displayName: 'Twilio',
+    configKeys: [],
+    secretKeys: ['account_sid', 'auth_token', 'messaging_service_sid', 'whatsapp_number', 'voice_number'],
+  },
 ] as const;
 
 interface RegionalProfileRow {
