@@ -72,6 +72,13 @@ export const clinicConfigurationApi = {
     value: unknown;
     expectedVersion?: number;
   }) => apiClient.put('/clinic-configuration', payload).then((response) => response.data.data as ClinicConfigurationEntry),
+  remove: (payload: {
+    scopeType: Exclude<ClinicConfigurationScope, 'tenant'>;
+    scopeId: string;
+    key: string;
+    expectedVersion?: number;
+  }) => apiClient.delete('/clinic-configuration', { data: payload })
+    .then((response) => response.data.data as { reset: boolean; effective: ClinicConfigurationEntry | null }),
   modules: () => apiClient.get('/clinic-modules').then((response) => response.data.data as ClinicModuleStatus[]),
   readiness: () => apiClient.get('/clinic-configuration/readiness')
     .then((response) => response.data.data as { tenantId: string; modules: ClinicModuleReadiness[] }),

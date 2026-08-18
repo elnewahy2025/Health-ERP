@@ -8,6 +8,7 @@ import { authorize } from '../../services/authorization.js';
 import {
   listEffectiveClinicConfiguration,
   upsertClinicConfiguration,
+  deleteClinicConfiguration,
 } from '../../services/clinic-configuration.js';
 import {
   listTenantModules,
@@ -155,6 +156,28 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
       userAgent: request.headers['user-agent'] as string | undefined,
     });
     return sendSuccess(reply, entry, 'Clinic configuration updated');
+  });
+
+  app.delete('/api/v1/clinic-configuration', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const body = z.object({
+      scopeType: z.enum(['branch', 'department']),
+      scopeId: z.string().uuid(),
+      key: z.string().min(1).max(160),
+      expectedVersion: z.number().int().positive().optional(),
+    }).parse(request.body);
+    const effective = await deleteClinicConfiguration({
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      scopeType: body.scopeType,
+      scopeId: body.scopeId,
+      key: body.key,
+      expectedVersion: body.expectedVersion,
+      branchId: ctx.branchId,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] as string | undefined,
+    });
+    return sendSuccess(reply, { reset: true, effective });
   });
 
   app.get('/api/v1/clinic-modules', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {

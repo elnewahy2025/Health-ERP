@@ -240,6 +240,58 @@ export async function upsertClinicConfiguration(input: UpsertClinicConfiguration
   return saved;
 }
 
+export interface DeleteClinicConfigurationInput extends ClinicConfigurationScopeRef {
+  tenantId: string;
+  actorId: string;
+  key: string;
+  expectedVersion?: number;
+  branchId?: string;
+  ipAddress?: string;
+  userAgent?: string | null;
+}
+
+export async function deleteClinicConfiguration(input: DeleteClinicConfigurationInput): Promise<EffectiveClinicConfigurationEntry | null> {
+  const definition = clinicConfigurationDefinition(input.key);
+  if (!definition) throw new ValidationError(`Unknown clinic configuration key: ${input.key}`);
+  assertAllowedScope(definition, input.scopeType);
+  await assertScopeBelongsToTenant(input.tenantId, input);
+
+  const deleted = await db.transaction(async (trx) => {
+    const existing = await trx('clinic_config_entries').where({
+      tenant_id: input.tenantId,
+      scope_type: input.scopeType,
+      scope_id: input.scopeId,
+      key: input.key,
+    }).first();
+    if (!existing) return false;
+    if (input.expectedVersion !== undefined && Number(existing.version) !== input.expectedVersion) {
+      throw new ConflictError(`Configuration ${input.key} has changed; reload before resetting`);
+    }
+    await trx('clinic_config_entries').where({ id: existing.id }).delete();
+    return true;
+  });
+
+  if (deleted) {
+    await logAudit({
+      tenantId: input.tenantId,
+      userId: input.actorId,
+      action: 'clinic_configuration.reset',
+      entityType: 'clinic_config_entry',
+      branchId: input.branchId,
+      ipAddress: input.ipAddress,
+      userAgent: input.userAgent,
+      result: 'success',
+      metadata: { key: input.key, scopeType: input.scopeType, scopeId: input.scopeId },
+    });
+  }
+
+  const entries = await listEffectiveClinicConfiguration(input.tenantId, {
+    scopeType: input.scopeType,
+    scopeId: input.scopeId,
+  });
+  return entries.find((entry) => entry.key === input.key) || null;
+}
+
 export function validateConfigurationShape(value: unknown): asserts value is Record<string, unknown> {
   if (!isPlainRecord(value)) throw new ValidationError('Configuration payload must be an object');
 }

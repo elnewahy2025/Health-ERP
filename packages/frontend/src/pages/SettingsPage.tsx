@@ -182,6 +182,30 @@ export default function SettingsPage() {
     return () => { cancelled = true; };
   }, [scopeId, scopeType, t]);
 
+  const handleResetScoped = async (entry: ClinicConfigurationEntry) => {
+    if (!scopeId || entry.scopeType !== scopeType || entry.scopeId !== scopeId) return;
+    setScopedSaving(true);
+    try {
+      await clinicConfigurationApi.remove({
+        scopeType,
+        scopeId,
+        key: entry.key,
+        expectedVersion: entry.version || undefined,
+      });
+      const response = await clinicConfigurationApi.get(scopeType, scopeId);
+      const entries = response.entries.filter((current) => current.definition.allowedScopes.includes(scopeType));
+      const values = Object.fromEntries(entries.map((current) => [current.key, serializeScopedValue(current)]));
+      setScopedEntries(entries);
+      setScopedDraft(values);
+      setScopedOriginal(values);
+      toast.success(t('settings.scopedReset'));
+    } catch {
+      toast.error(t('settings.scopedResetError'));
+    } finally {
+      setScopedSaving(false);
+    }
+  };
+
   const handleSaveScoped = async () => {
     if (!scopeId) return;
     setScopedSaving(true);
@@ -390,6 +414,9 @@ export default function SettingsPage() {
                   {scopedEntries.map((entry) => {
                     const value = String(scopedDraft[entry.key] ?? '');
                     const label = t(`onboarding.fields.${entry.key}`);
+                    const hasOverride = entry.scopeType === scopeType && entry.scopeId === scopeId;
+                    const statusLabel = hasOverride ? t('settings.overrideSaved') : t('settings.inheritedValue');
+                    const statusClass = hasOverride ? 'text-blue-700' : 'text-[var(--text-muted)]';
                     return entry.definition.valueType === 'json' ? (
                       <div key={entry.key} className="space-y-1">
                         <label htmlFor={`scoped-${entry.key}`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
@@ -399,16 +426,23 @@ export default function SettingsPage() {
                           value={value}
                           onChange={(event) => setScopedDraft((current) => ({ ...current, [entry.key]: event.target.value }))}
                         />
-                        <p className="text-xs text-[var(--text-muted)]">{entry.definition.description}</p>
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs text-[var(--text-muted)]">{entry.definition.description}</p>
+                          <span className={`shrink-0 text-xs ${statusClass}`}>{statusLabel}</span>
+                        </div>
+                        {hasOverride && <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => void handleResetScoped(entry)}>{t('settings.resetToInherited')}</button>}
                       </div>
                     ) : (
-                      <Input
-                        key={entry.key}
-                        id={`scoped-${entry.key}`}
-                        label={label}
-                        value={value}
-                        onChange={(event) => setScopedDraft((current) => ({ ...current, [entry.key]: event.target.value }))}
-                      />
+                      <div key={entry.key} className="space-y-1">
+                        <Input
+                          id={`scoped-${entry.key}`}
+                          label={label}
+                          value={value}
+                          onChange={(event) => setScopedDraft((current) => ({ ...current, [entry.key]: event.target.value }))}
+                          helpText={statusLabel}
+                        />
+                        {hasOverride && <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => void handleResetScoped(entry)}>{t('settings.resetToInherited')}</button>}
+                      </div>
                     );
                   })}
                   <div className="flex justify-end pt-2">
