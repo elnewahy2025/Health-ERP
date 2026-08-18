@@ -4,15 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { AlertCircle, CheckCircle2, Circle, Loader2, Settings2 } from 'lucide-react';
 import { Card, CardBody } from '../ui';
 import { clinicConfigurationApi, type ClinicModuleReadiness } from '../../lib/api';
+import { CLINIC_CONFIGURATION_REGISTRY } from '@healthcare/shared';
 
-const SETUP_FIELDS = [
-  'clinic.profile.display_name',
-  'clinic.profile.legal_name',
-  'clinic.contact.email',
-  'clinic.address.street',
-  'clinic.timezone.default',
-  'clinic.finance.currency',
-] as const;
+const SETUP_FIELDS = CLINIC_CONFIGURATION_REGISTRY
+  .filter((definition) => definition.requiredFor.length > 0)
+  .map((definition) => definition.key);
 
 type ChecklistState = {
   modules: ClinicModuleReadiness[];

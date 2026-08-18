@@ -60,10 +60,10 @@ describe('ClinicSetupChecklist', () => {
   it('renders readiness progress from the centralized readiness response', async () => {
     renderWithProviders(<ClinicSetupChecklist />);
 
-    await waitFor(() => expect(screen.getByText('4 of 6 configured')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('13 of 15 configured')).toBeInTheDocument());
     expect(screen.getByText('Clinic name')).toBeInTheDocument();
     expect(screen.getAllByText('Configure in Settings')).toHaveLength(2);
-    expect(screen.getAllByText('Configured')).toHaveLength(4);
+    expect(screen.getAllByText('Configured')).toHaveLength(13);
   });
 
   it('links an incomplete field directly to its Settings focus target', async () => {
