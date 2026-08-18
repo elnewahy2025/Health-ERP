@@ -1,4 +1,52 @@
 import { db } from '../core/database.js';
+import { listEffectiveClinicConfiguration } from './clinic-configuration.js';
+
+export interface ClinicDocumentContext {
+  displayName: string;
+  legalName: string;
+  timezone: string;
+  locale: string;
+}
+
+function isValidTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function formatDocumentDate(value: string | Date, timezone: string, locale = 'en'): string {
+  const safeTimezone = isValidTimeZone(timezone) ? timezone : 'UTC';
+  const safeLocale = locale.toLowerCase().startsWith('ar') ? 'ar-EG' : 'en-EG';
+  return new Intl.DateTimeFormat(safeLocale, {
+    year: 'numeric',
+    month: locale.toLowerCase().startsWith('ar') ? 'long' : 'short',
+    day: 'numeric',
+    timeZone: safeTimezone,
+  }).format(new Date(value));
+}
+
+async function loadClinicDocumentContext(tenantId: string): Promise<ClinicDocumentContext> {
+  const [tenant, entries] = await Promise.all([
+    db('tenants').where({ id: tenantId }).select('name').first(),
+    listEffectiveClinicConfiguration(tenantId),
+  ]);
+  const values = new Map(entries.map((entry) => [entry.key, entry.value]));
+  const text = (key: string): string => {
+    const value = values.get(key);
+    return typeof value === 'string' ? value.trim() : '';
+  };
+  const locale = text('clinic.locale.default') || 'en';
+  const timezone = text('clinic.timezone.default') || 'UTC';
+  return {
+    displayName: text('clinic.profile.display_name') || tenant?.name || 'Vision Healthcare',
+    legalName: text('clinic.profile.legal_name') || text('clinic.profile.display_name') || tenant?.name || 'Vision Healthcare',
+    timezone,
+    locale,
+  };
+}
 
 let pdfMake: any = null;
 
@@ -27,15 +75,15 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer | nu
       .select('invoices.*', 'patients.first_name', 'patients.last_name', 'patients.phone', 'patients.email', 'patients.national_id')
       .first();
     if (!invoice) return null;
-    const tenant = await db('tenants').where({ id: invoice.tenant_id }).first();
+    const clinic = await loadClinicDocumentContext(invoice.tenant_id);
     const items = typeof invoice.items === 'string' ? JSON.parse(invoice.items) : (invoice.items || []);
 
     const content: any[] = [
-      { columns: [{ text: tenant?.name || 'Vision Healthcare', style: 'title', width: '*' }, { text: invoice.invoice_number, style: 'invoiceNumber', width: 'auto', alignment: 'right' }] },
+      { columns: [{ text: clinic.displayName, style: 'title', width: '*' }, { text: invoice.invoice_number, style: 'invoiceNumber', width: 'auto', alignment: 'right' }] },
       { text: '', margin: [0, 10] },
       { columns: [
         { width: '*', text: [{ text: 'Patient: ', bold: true }, `${invoice.first_name} ${invoice.last_name}\n`, { text: 'Phone: ', bold: true }, `${invoice.phone || 'N/A'}\n`, { text: 'National ID: ', bold: true }, `${invoice.national_id || 'N/A'}\n`] },
-        { width: '*', text: [{ text: 'Date: ', bold: true }, `${new Date(invoice.created_at).toLocaleDateString('en-EG')}\n`, { text: 'Due: ', bold: true }, `${invoice.due_date || 'N/A'}\n`, { text: 'Status: ', bold: true }, { text: invoice.status.toUpperCase(), color: invoice.status === 'paid' ? 'green' : 'orange' }], alignment: 'right' },
+        { width: '*', text: [{ text: 'Date: ', bold: true }, `${formatDocumentDate(invoice.created_at, clinic.timezone, clinic.locale)}\n`, { text: 'Due: ', bold: true }, `${invoice.due_date ? formatDocumentDate(invoice.due_date, clinic.timezone, clinic.locale) : 'N/A'}\n`, { text: 'Status: ', bold: true }, { text: invoice.status.toUpperCase(), color: invoice.status === 'paid' ? 'green' : 'orange' }], alignment: 'right' },
       ]},
       { text: '', margin: [0, 15] },
       { table: { headerRows: 1, widths: [25, '*', 40, 80, 80], body: [
@@ -52,7 +100,7 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer | nu
         [{ text: 'Due:', color: 'red', bold: true }, { text: `${Number(invoice.due || 0).toFixed(2)} EGP`, color: 'red', bold: true }],
       ]}, layout: 'noBorders' }] },
       { text: '', margin: [0, 20] },
-      { text: [{ text: 'Thank you for your visit!\n', bold: true, alignment: 'center' }, { text: `${tenant?.name || 'Vision Healthcare'}`, alignment: 'center', fontSize: 9, color: 'gray' }] },
+      { text: [{ text: 'Thank you for your visit!\n', bold: true, alignment: 'center' }, { text: `${clinic.displayName}`, alignment: 'center', fontSize: 9, color: 'gray' }] },
     ];
 
     const docDefinition = { content, defaultStyle: { fontSize: 10, font: 'Roboto' }, styles: { title: { fontSize: 18, bold: true, color: '#2563eb' }, invoiceNumber: { fontSize: 14, bold: true }, tableHeader: { bold: true, fontSize: 9, color: 'white', fillColor: '#2563eb', margin: [4, 4] } }, pageMargins: [40, 40, 40, 40] };
@@ -76,13 +124,13 @@ export async function generatePrescriptionPdf(prescriptionId: string): Promise<B
       .select('prescriptions.*', 'patients.first_name', 'patients.last_name', 'patients.age', 'patients.gender', 'patients.phone')
       .first();
     if (!rx) return null;
-    const tenant = await db('tenants').where({ id: rx.tenant_id }).first();
+    const clinic = await loadClinicDocumentContext(rx.tenant_id);
     const medications = typeof rx.medications === 'string' ? JSON.parse(rx.medications) : (rx.medications || []);
 
     const content: any[] = [
-      { columns: [{ text: tenant?.name || 'Vision Healthcare', style: 'title', width: '*' }, { text: 'PRESCRIPTION', width: 'auto', alignment: 'right', style: 'title' }] },
+      { columns: [{ text: clinic.displayName, style: 'title', width: '*' }, { text: 'PRESCRIPTION', width: 'auto', alignment: 'right', style: 'title' }] },
       { text: '', margin: [0, 10] },
-      { text: [{ text: 'Patient: ', bold: true }, `${rx.first_name} ${rx.last_name}`, '  ', { text: 'Age/Gender: ', bold: true }, `${rx.age || 'N/A'} / ${rx.gender || 'N/A'}`, '  ', { text: 'Date: ', bold: true }, new Date(rx.created_at).toLocaleDateString('en-EG')] },
+      { text: [{ text: 'Patient: ', bold: true }, `${rx.first_name} ${rx.last_name}`, '  ', { text: 'Age/Gender: ', bold: true }, `${rx.age || 'N/A'} / ${rx.gender || 'N/A'}`, '  ', { text: 'Date: ', bold: true }, formatDocumentDate(rx.created_at, clinic.timezone, clinic.locale)] },
       { text: '', margin: [0, 10] },
       ...medications.map((med: any, i: number) => ({ text: [{ text: `${i + 1}. ${med.medication_name || med.name || 'Unknown'}\n`, bold: true }, `   ${med.dosage || ''} ${med.frequency || ''} ${med.duration || ''}\n`, `   ${med.instructions || med.notes || ''}\n`] })),
       ...(medications.length ? [] : [{ text: 'No medications prescribed.', italics: true, color: 'gray' }]),
@@ -110,7 +158,7 @@ export async function generateLabReportPdf(labOrderId: string): Promise<Buffer |
       .select('lab_orders.*', 'patients.first_name', 'patients.last_name', 'patients.age', 'patients.gender')
       .first();
     if (!order) return null;
-    const tenant = await db('tenants').where({ id: order.tenant_id }).first();
+    const clinic = await loadClinicDocumentContext(order.tenant_id);
     const results = typeof order.results === 'string' ? JSON.parse(order.results) : (order.results || []);
 
     const tableRows: any[] = results.length ? [[
@@ -118,9 +166,9 @@ export async function generateLabReportPdf(labOrderId: string): Promise<Buffer |
     ], ...results.map((r: any) => [r.test_name || r.name || '', `${r.result || r.value || ''} ${r.unit || ''}`, r.reference_range || r.range || '', { text: r.flag || '-', color: r.flag && r.flag !== 'normal' ? 'red' : 'black', bold: r.flag && r.flag !== 'normal' }])] : [];
 
     const content: any[] = [
-      { columns: [{ text: tenant?.name || 'Vision Healthcare', style: 'title', width: '*' }, { text: 'LABORATORY REPORT', width: 'auto', alignment: 'right' }] },
+      { columns: [{ text: clinic.displayName, style: 'title', width: '*' }, { text: 'LABORATORY REPORT', width: 'auto', alignment: 'right' }] },
       { text: '', margin: [0, 10] },
-      { text: [{ text: 'Patient: ', bold: true }, `${order.first_name} ${order.last_name}`, '  ', { text: 'Test: ', bold: true }, order.test_name || 'N/A', '  ', { text: 'Date: ', bold: true }, new Date(order.created_at).toLocaleDateString('en-EG')] },
+      { text: [{ text: 'Patient: ', bold: true }, `${order.first_name} ${order.last_name}`, '  ', { text: 'Test: ', bold: true }, order.test_name || 'N/A', '  ', { text: 'Date: ', bold: true }, formatDocumentDate(order.created_at, clinic.timezone, clinic.locale)] },
       { text: '', margin: [0, 10] },
       ...(tableRows.length ? [{ table: { headerRows: 1, widths: ['*', 100, 100, 50], body: tableRows }, layout: 'lightHorizontalLines' }] : []),
       { text: order.notes || '', italics: true, margin: [0, 10] },
