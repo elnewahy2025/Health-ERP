@@ -112,6 +112,7 @@ export interface ProviderConfigurationView {
   moduleKey: string;
   displayName: string;
   jurisdictionCode: string | null;
+  configKeys: string[];
   connection: {
     id: string;
     displayName: string | null;
@@ -351,6 +352,7 @@ export async function listProviderConfigurations(tenantId: string): Promise<Prov
       moduleKey: definition.moduleKey,
       displayName: definition.displayName,
       jurisdictionCode: definition.jurisdictionCode || null,
+      configKeys: [...definition.configKeys],
       connection: connection ? {
         id: connection.id,
         displayName: connection.display_name,
@@ -509,14 +511,40 @@ export async function updateProviderSecrets(input: ConfigurationMutationContext 
 
 export async function validateProviderConfiguration(input: ConfigurationMutationContext & { providerKey: string }): Promise<ProviderConfigurationView> {
   const definition = providerDefinition(input.providerKey);
-  const result = (await listProviderConfigurations(input.tenantId)).find((item) => item.providerKey === definition.providerKey);
+  let result = (await listProviderConfigurations(input.tenantId)).find((item) => item.providerKey === definition.providerKey);
   if (!result) throw new NotFoundError('Provider configuration could not be loaded');
+
+  if (result.connection && result.connection.status !== 'disabled') {
+    await db('tenant_provider_connections').where({ id: result.connection.id }).update({
+      last_test_status: 'not_tested',
+      last_tested_at: null,
+      last_error_code: null,
+      last_error_message: null,
+      updated_at: db.fn.now(),
+    });
+    const fresh = (await listProviderConfigurations(input.tenantId)).find((item) => item.providerKey === definition.providerKey);
+    if (fresh) result = fresh;
+    const passed = result.readiness.status === 'ready';
+    const connectionId = result.connection?.id;
+    if (connectionId) {
+      await db('tenant_provider_connections').where({ id: connectionId }).update({
+        last_test_status: passed ? 'passed' : 'failed',
+        last_tested_at: db.fn.now(),
+        last_error_code: passed ? null : 'configuration_incomplete',
+        last_error_message: passed ? null : [...result.readiness.missing, ...result.readiness.errors].join(', ').slice(0, 500),
+        updated_at: db.fn.now(),
+      });
+    }
+    const tested = (await listProviderConfigurations(input.tenantId)).find((item) => item.providerKey === definition.providerKey);
+    if (tested) result = tested;
+  }
 
   await logAudit({
     tenantId: input.tenantId,
     userId: input.actorId,
     action: 'provider_configuration.validated',
     entityType: 'tenant_provider_connection',
+    entityId: result.connection?.id,
     metadata: { providerKey: definition.providerKey, readiness: result.readiness },
     ipAddress: input.ipAddress,
     userAgent: input.userAgent,
