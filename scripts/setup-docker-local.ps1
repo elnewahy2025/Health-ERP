@@ -240,6 +240,25 @@ if ($ResetDb) {
     Write-Ok "Data volumes removed - a fresh database will be created"
 }
 
+# Older versions of this repository used fixed names such as vision-erp-minio.
+# Remove only those exact legacy containers; volumes and unrelated containers stay intact.
+Write-Step "Checking for legacy Health-ERP containers..."
+$legacyContainerNames = @(
+    'vision-erp-postgres',
+    'vision-erp-redis',
+    'vision-erp-minio',
+    'vision-erp-backend',
+    'vision-erp-frontend'
+)
+foreach ($legacyName in $legacyContainerNames) {
+    $legacyId = (& docker ps -aq --filter "name=^/$legacyName$" 2>$null | Select-Object -First 1)
+    if ($legacyId) {
+        Write-Warn "Removing stale legacy container $legacyName (Docker volumes are preserved)"
+        & docker rm -f $legacyName | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Could not remove stale container $legacyName." }
+    }
+}
+
 if ($SkipBuild) {
     Write-Step "Starting stack (reusing existing images)..."
     docker compose up -d
