@@ -5,6 +5,9 @@ export interface TenantProviderRuntime {
   providerKey: string;
   environment: 'sandbox' | 'production';
   status: string;
+  validationMode: 'structural' | 'live' | string;
+  liveValidationEnabled: boolean;
+  validationTimeoutMs: number;
   config: Record<string, unknown>;
   secrets: Record<string, string>;
 }
@@ -26,6 +29,9 @@ export async function getTenantProviderRuntime(tenantId: string, providerKey: st
       id: string;
       environment: 'sandbox' | 'production';
       status: string;
+      validation_mode: 'structural' | 'live' | string;
+      live_validation_enabled: boolean;
+      validation_timeout_ms: number;
       config_json: unknown;
     } | undefined;
 
@@ -52,6 +58,9 @@ export async function getTenantProviderRuntime(tenantId: string, providerKey: st
     providerKey,
     environment: connection.environment,
     status: connection.status,
+    validationMode: connection.validation_mode || 'structural',
+    liveValidationEnabled: connection.live_validation_enabled === true,
+    validationTimeoutMs: connection.validation_timeout_ms || 5000,
     config,
     secrets,
   };
@@ -67,6 +76,9 @@ export async function providerRuntimeOrFallback(
       providerKey,
       environment: 'production',
       status: 'environment_fallback',
+      validationMode: 'structural',
+      liveValidationEnabled: false,
+      validationTimeoutMs: 5000,
       config: fallback.config || {},
       secrets: fallback.secrets || {},
     };
@@ -79,6 +91,9 @@ export async function providerRuntimeOrFallback(
     providerKey,
     environment: 'production',
     status: 'environment_fallback',
+    validationMode: 'structural',
+    liveValidationEnabled: false,
+    validationTimeoutMs: 5000,
     config: fallback.config || {},
     secrets: fallback.secrets || {},
   };

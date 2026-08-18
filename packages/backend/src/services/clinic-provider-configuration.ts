@@ -7,6 +7,9 @@ import { validateClinicProviderAdapter } from './clinic-provider-adapters.js';
 export type ProviderEnvironment = 'sandbox' | 'production';
 export type ProviderConnectionStatus = 'setup_required' | 'configured' | 'disabled' | 'invalid';
 export type ProviderTestStatus = 'not_tested' | 'passed' | 'failed' | 'expired';
+export const DEFAULT_PROVIDER_VALIDATION_TIMEOUT_MS = 5000;
+export const MIN_PROVIDER_VALIDATION_TIMEOUT_MS = 1000;
+export const MAX_PROVIDER_VALIDATION_TIMEOUT_MS = 30000;
 
 interface ProviderDefinition {
   providerKey: string;
@@ -14,6 +17,7 @@ interface ProviderDefinition {
   displayName: string;
   jurisdictionCode?: string;
   configKeys: readonly string[];
+  optionalConfigKeys?: readonly string[];
   secretKeys: readonly string[];
   requiredSecretKeys?: readonly string[];
   secretGroups?: readonly (readonly string[])[];
@@ -26,7 +30,8 @@ export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     moduleKey: 'integrations',
     displayName: 'Egyptian Tax Authority',
     jurisdictionCode: 'EG',
-    configKeys: ['taxRegistrationNumber', 'invoiceSeries', 'activityCode'],
+    configKeys: ['taxRegistrationNumber', 'invoiceSeries', 'activityCode', 'validationEndpointUrl'],
+    optionalConfigKeys: ['validationEndpointUrl'],
     secretKeys: ['clientId', 'clientSecret', 'signingKey'],
     requiredSecretKeys: ['clientId', 'clientSecret', 'signingKey'],
     moduleConfigurationKey: 'eta',
@@ -36,7 +41,8 @@ export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     moduleKey: 'integrations',
     displayName: 'Fawry',
     jurisdictionCode: 'EG',
-    configKeys: ['merchantCode', 'merchantReferencePrefix', 'currencyCode'],
+    configKeys: ['merchantCode', 'merchantReferencePrefix', 'currencyCode', 'validationEndpointUrl'],
+    optionalConfigKeys: ['validationEndpointUrl'],
     secretKeys: ['secureKey', 'hashKey'],
     requiredSecretKeys: ['secureKey'],
   },
@@ -44,7 +50,8 @@ export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     providerKey: 'stripe',
     moduleKey: 'integrations',
     displayName: 'Stripe',
-    configKeys: ['currency'],
+    configKeys: ['currency', 'validationEndpointUrl'],
+    optionalConfigKeys: ['validationEndpointUrl'],
     secretKeys: ['secretKey', 'publishableKey', 'webhookSecret'],
     requiredSecretKeys: ['secretKey'],
   },
@@ -52,7 +59,8 @@ export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     providerKey: 'twilio',
     moduleKey: 'integrations',
     displayName: 'Twilio',
-    configKeys: [],
+    configKeys: ['validationEndpointUrl'],
+    optionalConfigKeys: ['validationEndpointUrl'],
     secretKeys: ['account_sid', 'auth_token', 'messaging_service_sid', 'whatsapp_number', 'voice_number'],
     requiredSecretKeys: ['account_sid', 'auth_token'],
     secretGroups: [['messaging_service_sid', 'whatsapp_number', 'voice_number']],
@@ -97,6 +105,9 @@ interface ProviderConnectionRow {
   last_tested_at: Date | string | null;
   last_error_code: string | null;
   last_error_message: string | null;
+  validation_mode: 'structural' | 'live' | string;
+  live_validation_enabled: boolean;
+  validation_timeout_ms: number;
   enabled_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
@@ -155,6 +166,9 @@ export interface ProviderConfigurationView {
     lastTestStatus: ProviderTestStatus;
     lastTestedAt: Date | string | null;
     lastErrorCode: string | null;
+    validationMode: 'structural' | 'live' | string;
+    liveValidationEnabled: boolean;
+    validationTimeoutMs: number;
     enabledAt: Date | string | null;
   } | null;
   secrets: Record<string, {
@@ -280,9 +294,18 @@ function evaluateReadiness(
   if (connection.status === 'invalid') {
     return { status: 'invalid', missing: [], errors: [connection.last_error_message || 'Provider configuration is invalid'] };
   }
+  if (connection.validation_mode === 'live' && connection.live_validation_enabled && connection.last_test_status === 'failed') {
+    if (connection.last_error_code === 'live_validation_endpoint_missing') {
+      return { status: 'setup_required', missing: ['config:validationEndpointUrl'], errors: [connection.last_error_message || 'Live validation endpoint is not configured'] };
+    }
+    if (connection.last_error_code?.startsWith('live_')) {
+      return { status: 'connection_failed', missing: [], errors: [connection.last_error_message || 'Live validation failed'] };
+    }
+  }
 
   const config = asRecord(moduleConfiguration?.config_json ?? connection.config_json);
-  const missing = definition.configKeys
+  const requiredConfigKeys = definition.configKeys.filter((key) => !definition.optionalConfigKeys?.includes(key));
+  const missing = requiredConfigKeys
     .filter((key) => config[key] === undefined || config[key] === null || config[key] === '')
     .map((key) => `config:${key}`);
   const requiredSecretKeys = definition.requiredSecretKeys || definition.secretKeys;
@@ -436,6 +459,9 @@ export async function listProviderConfigurations(tenantId: string): Promise<Prov
         lastTestStatus: connection.last_test_status,
         lastTestedAt: connection.last_tested_at,
         lastErrorCode: connection.last_error_code,
+        validationMode: connection.validation_mode,
+        liveValidationEnabled: connection.live_validation_enabled,
+        validationTimeoutMs: connection.validation_timeout_ms,
         enabledAt: connection.enabled_at,
       } : null,
       secrets: Object.fromEntries(definition.secretKeys.map((key) => [key, mapSecret(secrets.get(key))])),
@@ -451,9 +477,20 @@ export async function updateProviderConfiguration(input: ConfigurationMutationCo
   config: Record<string, unknown>;
   expectedVersion?: number;
   expectedModuleVersion?: number;
+  validationMode?: 'structural' | 'live';
+  liveValidationEnabled?: boolean;
+  validationTimeoutMs?: number;
 }): Promise<ProviderConfigurationView> {
   const definition = providerDefinition(input.providerKey);
   const config = normalizeConfig(definition, input.config);
+  const validationMode = input.validationMode || 'structural';
+  if (!['structural', 'live'].includes(validationMode)) {
+    throw new ValidationError('Unsupported provider validation mode');
+  }
+  const validationTimeoutMs = input.validationTimeoutMs ?? DEFAULT_PROVIDER_VALIDATION_TIMEOUT_MS;
+  if (!Number.isInteger(validationTimeoutMs) || validationTimeoutMs < MIN_PROVIDER_VALIDATION_TIMEOUT_MS || validationTimeoutMs > MAX_PROVIDER_VALIDATION_TIMEOUT_MS) {
+    throw new ValidationError(`Provider validation timeout must be between ${MIN_PROVIDER_VALIDATION_TIMEOUT_MS} and ${MAX_PROVIDER_VALIDATION_TIMEOUT_MS} milliseconds`);
+  }
 
   await db.transaction(async (trx) => {
     const existing = await trx('tenant_provider_connections')
@@ -487,6 +524,9 @@ export async function updateProviderConfiguration(input: ConfigurationMutationCo
       last_test_status: 'not_tested',
       last_error_code: null,
       last_error_message: null,
+      validation_mode: validationMode,
+      live_validation_enabled: input.liveValidationEnabled ?? existing?.live_validation_enabled ?? false,
+      validation_timeout_ms: validationTimeoutMs,
       updated_at: now,
     };
     if (existing) {
@@ -531,6 +571,9 @@ export async function updateProviderConfiguration(input: ConfigurationMutationCo
       environment: input.environment || 'sandbox',
       configKeys: Object.keys(config),
       moduleConfigurationKey: definition.moduleConfigurationKey || null,
+      validationMode,
+      liveValidationEnabled: input.liveValidationEnabled ?? false,
+      validationTimeoutMs,
     },
     ipAddress: input.ipAddress,
     userAgent: input.userAgent,

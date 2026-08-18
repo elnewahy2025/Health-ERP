@@ -72,6 +72,11 @@ describe('Clinic provider configuration foundation', () => {
     expect(migration).not.toContain("dropTableIfExists('tenant_regional_profiles')");
     expect(migration).not.toContain("dropTableIfExists('tenant_module_configurations')");
     expect(migration).not.toContain("dropTableIfExists('tenant_provider_connections')");
+    const livePolicyMigration = source('migrations/054_provider_live_validation_policy.ts');
+    expect(livePolicyMigration).toContain("hasColumn('tenant_provider_connections', column)");
+    expect(livePolicyMigration).toContain("validation_mode: 'structural'");
+    expect(livePolicyMigration).toContain('live_validation_enabled: false');
+    expect(livePolicyMigration).not.toContain('dropColumn');
     const service = source('src/services/clinic-provider-configuration.ts');
     expect(service).toContain("trx('tenant_module_configurations')");
     expect(service).toContain('last_validation_errors');
@@ -80,5 +85,7 @@ describe('Clinic provider configuration foundation', () => {
     expect(source('src/services/sms.ts')).toContain("providerRuntimeOrFallback(options.tenantId, 'twilio'");
     expect(source('src/services/voice.ts')).toContain("providerRuntimeOrFallback(options.tenantId, 'twilio'");
     expect(source('src/modules/financial-deepening/index.ts')).toContain("providerRuntimeOrFallback(tenantId, 'fawry'");
+    expect(service).toContain('validation_timeout_ms');
+    expect(source('src/modules/clinic-settings/index.ts')).toContain("validationMode: z.enum(['structural', 'live'])");
   });
 });

@@ -127,6 +127,9 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
       config: z.record(z.string(), z.unknown()).default({}),
       expectedVersion: z.number().int().positive().optional(),
       expectedModuleVersion: z.number().int().positive().optional(),
+      validationMode: z.enum(['structural', 'live']).optional(),
+      liveValidationEnabled: z.boolean().optional(),
+      validationTimeoutMs: z.number().int().min(1000).max(30000).optional(),
     }).parse(request.body);
     return sendSuccess(reply, await updateProviderConfiguration({
       tenantId: ctx.tenantId,
@@ -183,6 +186,9 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
       config: z.record(z.string(), z.unknown()).default({}),
       expectedVersion: z.number().int().positive().optional(),
       expectedModuleVersion: z.number().int().positive().optional(),
+      validationMode: z.enum(['structural', 'live']).optional(),
+      liveValidationEnabled: z.boolean().optional(),
+      validationTimeoutMs: z.number().int().min(1000).max(30000).optional(),
     }).parse(request.body);
     return sendSuccess(reply, await updateProviderConfiguration({
       tenantId: ctx.tenantId,

@@ -1,13 +1,15 @@
+import { isIP } from 'node:net';
 import { getTenantProviderRuntime, type TenantProviderRuntime } from './clinic-provider-runtime.js';
 
-export type ProviderAdapterStatus = 'ready' | 'setup_required' | 'invalid' | 'disabled' | 'unsupported';
+export type ProviderAdapterStatus = 'ready' | 'setup_required' | 'invalid' | 'disabled' | 'connection_failed' | 'unsupported';
+export type ProviderAdapterTestMode = 'structural' | 'live';
 
 export interface ProviderAdapterResult {
   status: ProviderAdapterStatus;
   code: string;
   message: string;
   missing: string[];
-  testMode: 'structural';
+  testMode: ProviderAdapterTestMode;
 }
 
 export interface ProviderAdapterContext extends TenantProviderRuntime {
@@ -113,6 +115,93 @@ export function getClinicProviderAdapter(providerKey: string): ClinicProviderAda
   return CLINIC_PROVIDER_ADAPTERS[providerKey] || null;
 }
 
+function isBlockedHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (normalized === 'localhost' || normalized.endsWith('.localhost') || normalized.endsWith('.local')) return true;
+
+  const ipVersion = isIP(normalized);
+  if (ipVersion === 4) {
+    const parts = normalized.split('.').map(Number);
+    const [first, second] = parts;
+    return first === 0 || first === 10 || first === 127 ||
+      (first === 169 && second === 254) ||
+      (first === 172 && second >= 16 && second <= 31) ||
+      (first === 192 && second === 168);
+  }
+  if (ipVersion === 6) {
+    return normalized === '::1' || normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe80:');
+  }
+  return false;
+}
+
+export function validateProviderValidationEndpoint(rawEndpoint: unknown, environment: string): { url: string } | { error: string } {
+  if (typeof rawEndpoint !== 'string' || rawEndpoint.trim().length === 0) return { error: 'Live validation endpoint is not configured' };
+  try {
+    const parsed = new URL(rawEndpoint.trim());
+    if (!['http:', 'https:'].includes(parsed.protocol)) return { error: 'Live validation endpoint must use HTTP or HTTPS' };
+    if (parsed.username || parsed.password) return { error: 'Live validation endpoint cannot include credentials' };
+    if (isBlockedHostname(parsed.hostname)) return { error: 'Live validation endpoint host is not allowed' };
+    if (environment === 'production' && parsed.protocol !== 'https:') return { error: 'Production live validation requires HTTPS' };
+    return { url: parsed.toString() };
+  } catch {
+    return { error: 'Live validation endpoint is not a valid URL' };
+  }
+}
+
+export async function probeProviderValidationEndpoint(context: ProviderAdapterContext): Promise<ProviderAdapterResult> {
+  const endpoint = validateProviderValidationEndpoint(context.config.validationEndpointUrl, context.environment);
+  if ('error' in endpoint) {
+    return {
+      status: 'setup_required',
+      code: 'live_validation_endpoint_missing',
+      message: endpoint.error,
+      missing: ['config:validationEndpointUrl'],
+      testMode: 'live',
+    };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), context.validationTimeoutMs);
+  try {
+    const response = await fetch(endpoint.url, {
+      method: 'GET',
+      headers: { accept: 'application/json, text/plain;q=0.9, */*;q=0.8' },
+      redirect: 'error',
+      signal: controller.signal,
+    });
+    if (response.body) {
+      try { await response.body.cancel(); } catch { /* response status is sufficient */ }
+    }
+    if (!response.ok) {
+      return {
+        status: 'connection_failed',
+        code: `live_endpoint_http_${response.status}`,
+        message: `Live validation endpoint returned HTTP ${response.status}`,
+        missing: [],
+        testMode: 'live',
+      };
+    }
+    return {
+      status: 'ready',
+      code: 'live_endpoint_reachable',
+      message: 'Configured live validation endpoint is reachable',
+      missing: [],
+      testMode: 'live',
+    };
+  } catch (error: unknown) {
+    const timedOut = error instanceof Error && error.name === 'AbortError';
+    return {
+      status: 'connection_failed',
+      code: timedOut ? 'live_validation_timeout' : 'live_endpoint_unreachable',
+      message: timedOut ? 'Live validation endpoint timed out' : 'Live validation endpoint could not be reached',
+      missing: [],
+      testMode: 'live',
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function validateClinicProviderAdapter(tenantId: string, providerKey: string): Promise<ProviderAdapterResult> {
   const adapter = getClinicProviderAdapter(providerKey);
   if (!adapter) {
@@ -142,5 +231,8 @@ export async function validateClinicProviderAdapter(tenantId: string, providerKe
     };
   }
 
-  return adapter.validate({ tenantId, ...runtime });
+  const structural = adapter.validate({ tenantId, ...runtime });
+  if (structural.status !== 'ready') return structural;
+  if (runtime.validationMode !== 'live' || !runtime.liveValidationEnabled) return structural;
+  return probeProviderValidationEndpoint({ tenantId, ...runtime });
 }

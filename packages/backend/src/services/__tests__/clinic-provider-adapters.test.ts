@@ -10,6 +10,9 @@ describe('Clinic provider structural adapters', () => {
       providerKey: 'eta',
       environment: 'sandbox',
       status: 'configured',
+      validationMode: 'structural',
+      liveValidationEnabled: false,
+      validationTimeoutMs: 5000,
       config: { taxRegistrationNumber: 'TRN' },
       secrets: { clientId: 'client-plaintext-value' },
     });
@@ -26,6 +29,9 @@ describe('Clinic provider structural adapters', () => {
       providerKey: 'fawry',
       environment: 'sandbox',
       status: 'configured',
+      validationMode: 'structural',
+      liveValidationEnabled: false,
+      validationTimeoutMs: 5000,
       config: { merchantCode: 'merchant', merchantReferencePrefix: 'INV', currencyCode: 'EGP_TOO_LONG' },
       secrets: { secureKey: 'secret-value' },
     });
@@ -42,6 +48,9 @@ describe('Clinic provider structural adapters', () => {
       providerKey: 'twilio',
       environment: 'production',
       status: 'configured',
+      validationMode: 'structural',
+      liveValidationEnabled: false,
+      validationTimeoutMs: 5000,
       config: {},
       secrets: { account_sid: 'AC123', auth_token: 'token', voice_number: '+10000000000' },
     });

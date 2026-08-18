@@ -100,6 +100,9 @@ export interface ClinicProviderConfiguration {
     lastTestStatus: string;
     lastTestedAt: string | null;
     lastErrorCode: string | null;
+    validationMode: 'structural' | 'live' | string;
+    liveValidationEnabled: boolean;
+    validationTimeoutMs: number;
     enabledAt: string | null;
   } | null;
   secrets: Record<string, ClinicProviderSecretMetadata>;
@@ -153,6 +156,9 @@ export const clinicConfigurationApi = {
     config: Record<string, unknown>;
     expectedVersion?: number;
     expectedModuleVersion?: number;
+    validationMode?: 'structural' | 'live';
+    liveValidationEnabled?: boolean;
+    validationTimeoutMs?: number;
   }) => apiClient.put(`/clinic-providers/${encodeURIComponent(providerKey)}`, payload)
     .then((response) => response.data.data as ClinicProviderConfiguration),
   testProvider: (providerKey: string) => apiClient.post(`/clinic-providers/${encodeURIComponent(providerKey)}/test`)

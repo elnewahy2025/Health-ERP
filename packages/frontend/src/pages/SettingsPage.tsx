@@ -131,6 +131,7 @@ export default function SettingsPage() {
   const [secretSaving, setSecretSaving] = useState<string | null>(null);
   const [providerConfigDraft, setProviderConfigDraft] = useState<Record<string, Record<string, unknown>>>({});
   const [providerEnvironmentDraft, setProviderEnvironmentDraft] = useState<Record<string, 'sandbox' | 'production'>>({});
+  const [providerValidationDraft, setProviderValidationDraft] = useState<Record<string, { mode: 'structural' | 'live'; enabled: boolean; timeoutMs: number }>>({});
   const [providerSecretDraft, setProviderSecretDraft] = useState<Record<string, Record<string, string>>>({});
   const [loading, setLoading] = useState(true);
   const [modulesLoading, setModulesLoading] = useState(true);
@@ -189,6 +190,14 @@ export default function SettingsPage() {
         setProviderEnvironmentDraft(Object.fromEntries(providerList.map((provider) => [
           provider.providerKey,
           provider.connection?.environment || 'sandbox',
+        ])));
+        setProviderValidationDraft(Object.fromEntries(providerList.map((provider) => [
+          provider.providerKey,
+          {
+            mode: provider.connection?.validationMode === 'live' ? 'live' : 'structural',
+            enabled: provider.connection?.liveValidationEnabled || false,
+            timeoutMs: provider.connection?.validationTimeoutMs || 5000,
+          },
         ])));
       } catch {
         setIntegrationsError(true);
@@ -376,8 +385,16 @@ export default function SettingsPage() {
 
   const replaceProvider = (updated: ClinicProviderConfiguration) => {
     setProviders((current) => current.map((item) => item.providerKey === updated.providerKey ? updated : item));
-    setProviderConfigDraft((current) => ({ ...current, [updated.providerKey]: updated.connection?.config || {} }));
+    setProviderConfigDraft((current) => ({ ...current, [updated.providerKey]: updated.moduleConfiguration?.config || updated.connection?.config || {} }));
     setProviderEnvironmentDraft((current) => ({ ...current, [updated.providerKey]: updated.connection?.environment || 'sandbox' }));
+    setProviderValidationDraft((current) => ({
+      ...current,
+      [updated.providerKey]: {
+        mode: updated.connection?.validationMode === 'live' ? 'live' : 'structural',
+        enabled: updated.connection?.liveValidationEnabled || false,
+        timeoutMs: updated.connection?.validationTimeoutMs || 5000,
+      },
+    }));
   };
 
   const handleSaveProvider = async (provider: ClinicProviderConfiguration) => {
@@ -389,6 +406,9 @@ export default function SettingsPage() {
         config: providerConfigDraft[provider.providerKey] || {},
         expectedVersion: provider.connection?.version || undefined,
         expectedModuleVersion: provider.moduleConfiguration?.version || undefined,
+        validationMode: providerValidationDraft[provider.providerKey]?.mode || (provider.connection?.validationMode === 'live' ? 'live' : 'structural'),
+        liveValidationEnabled: providerValidationDraft[provider.providerKey]?.enabled || false,
+        validationTimeoutMs: providerValidationDraft[provider.providerKey]?.timeoutMs || 5000,
       });
       replaceProvider(updated);
       toast.success(t('settings.providerSaved'));
@@ -759,10 +779,16 @@ export default function SettingsPage() {
                 <div>
                   <h3 className="text-lg font-semibold text-[var(--text-primary)]">{t('settings.providers')}</h3>
                   <p className="text-sm text-[var(--text-muted)] mt-1">{t('settings.providersDescription')}</p>
+                  <p className="text-xs text-[var(--text-muted)] mt-2">{t('settings.providerValidationDescription')}</p>
                 </div>
                 {providers.map((provider) => {
                   const config = providerConfigDraft[provider.providerKey] || {};
                   const environment = providerEnvironmentDraft[provider.providerKey] || provider.connection?.environment || 'sandbox';
+                  const validation = providerValidationDraft[provider.providerKey] || {
+                    mode: provider.connection?.validationMode === 'live' ? 'live' as const : 'structural' as const,
+                    enabled: provider.connection?.liveValidationEnabled || false,
+                    timeoutMs: provider.connection?.validationTimeoutMs || 5000,
+                  };
                   const readinessLabel = provider.readiness.status === 'ready'
                     ? t('settings.ready')
                     : provider.readiness.status === 'setup_required'
@@ -800,6 +826,41 @@ export default function SettingsPage() {
                             ]}
                             onChange={(event) => setProviderEnvironmentDraft((current) => ({ ...current, [provider.providerKey]: event.target.value as 'sandbox' | 'production' }))}
                           />
+                          <Select
+                            label={t('settings.validationMode')}
+                            value={validation.mode}
+                            options={[
+                              { value: 'structural', label: t('settings.structuralValidation') },
+                              { value: 'live', label: t('settings.liveValidation') },
+                            ]}
+                            onChange={(event) => setProviderValidationDraft((current) => ({
+                              ...current,
+                              [provider.providerKey]: { ...validation, mode: event.target.value as 'structural' | 'live' },
+                            }))}
+                          />
+                          <Input
+                            type="number"
+                            min={1000}
+                            max={30000}
+                            label={t('settings.validationTimeout')}
+                            value={String(validation.timeoutMs)}
+                            onChange={(event) => setProviderValidationDraft((current) => ({
+                              ...current,
+                              [provider.providerKey]: { ...validation, timeoutMs: Number(event.target.value) || 5000 },
+                            }))}
+                          />
+                          <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] self-end pb-2">
+                            <input
+                              type="checkbox"
+                              checked={validation.enabled}
+                              disabled={validation.mode !== 'live'}
+                              onChange={(event) => setProviderValidationDraft((current) => ({
+                                ...current,
+                                [provider.providerKey]: { ...validation, enabled: event.target.checked },
+                              }))}
+                            />
+                            {t('settings.enableLiveValidation')}
+                          </label>
                           {provider.configKeys.map((key) => (
                             <Input
                               key={key}
