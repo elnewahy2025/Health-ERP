@@ -80,6 +80,18 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
     return sendSuccess(reply, { scopeType: query.scopeType, scopeId, entries });
   });
 
+  app.get('/api/v1/clinic-configuration/identity', { preHandler: [authenticate] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const entries = await listEffectiveClinicConfiguration(ctx.tenantId);
+    const value = (key: string, fallback: unknown) => entries.find((entry) => entry.key === key)?.value ?? fallback;
+    return sendSuccess(reply, {
+      displayName: value('clinic.profile.display_name', ''),
+      logoUrl: value('clinic.profile.logo_url', ''),
+      timezone: value('clinic.timezone.default', 'UTC'),
+      locale: value('clinic.locale.default', 'en'),
+    });
+  });
+
   app.get('/api/v1/clinic-configuration/readiness', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
     const ctx = getCtx(request);
     const modules = await listTenantModules(ctx.tenantId);
@@ -125,6 +137,16 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
   app.get('/api/v1/clinic-modules', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
     const ctx = getCtx(request);
     return sendSuccess(reply, await listTenantModules(ctx.tenantId));
+  });
+
+  app.get('/api/v1/clinic-modules/visibility', { preHandler: [authenticate] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const modules = await listTenantModules(ctx.tenantId);
+    return sendSuccess(reply, modules.map((module) => ({
+      moduleKey: module.moduleKey,
+      core: module.core,
+      active: module.core || module.activationStatus === 'enabled',
+    })));
   });
 
   app.get('/api/v1/system/clinic-module-entitlements', { preHandler: [authenticate, authorize({ permission: 'saas_billing.manage', scope: 'system' })] }, async (request, reply) => {

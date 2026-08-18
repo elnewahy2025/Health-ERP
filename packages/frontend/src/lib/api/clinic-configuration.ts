@@ -41,7 +41,24 @@ export interface ClinicModuleReadiness {
   missingRequiredKeys: string[];
 }
 
+export interface ClinicShellIdentity {
+  displayName: string;
+  logoUrl: string;
+  timezone: string;
+  locale: string;
+}
+
+export interface ClinicModuleVisibility {
+  moduleKey: string;
+  core: boolean;
+  active: boolean;
+}
+
 export const clinicConfigurationApi = {
+  identity: () => apiClient.get('/clinic-configuration/identity')
+    .then((response) => response.data.data as ClinicShellIdentity),
+  visibility: () => apiClient.get('/clinic-modules/visibility')
+    .then((response) => response.data.data as ClinicModuleVisibility[]),
   get: (scopeType: ClinicConfigurationScope = 'tenant', scopeId?: string) =>
     apiClient.get('/clinic-configuration', { params: { scopeType, scopeId } })
       .then((response) => response.data.data as { scopeType: ClinicConfigurationScope; scopeId: string; entries: ClinicConfigurationEntry[] }),

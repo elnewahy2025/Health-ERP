@@ -148,5 +148,5 @@ export type {
   CreateBiWidgetPayload,
 } from './bi';
 export { clinicConfigurationApi } from './clinic-configuration';
-export type { ClinicConfigurationEntry, ClinicConfigurationScope, ClinicModuleReadiness, ClinicModuleStatus } from './clinic-configuration';
+export type { ClinicConfigurationEntry, ClinicConfigurationScope, ClinicModuleReadiness, ClinicModuleStatus, ClinicModuleVisibility, ClinicShellIdentity } from './clinic-configuration';
 export { commonApi } from './common';

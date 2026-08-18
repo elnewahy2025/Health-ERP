@@ -5,6 +5,7 @@ import { useAuth } from '../../stores/authStore';
 import { useTheme } from '../../stores/themeStore';
 import QuickSearch from './QuickSearch';
 import { Button } from '../ui';
+import { useClinicConfiguration } from '../../stores/clinicConfigurationStore';
 import {
   Menu, Search, Bell, Globe, User, LogOut,
   ChevronDown, Settings, Sun, Moon, Command,
@@ -14,6 +15,8 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { user, tenant, memberships, activeMembership, switchMembership, logout, setLocale } = useAuth();
+  const { identity } = useClinicConfiguration();
+  const clinicDisplayName = identity?.displayName || tenant?.name || t('app.name');
   const { theme, toggleTheme } = useTheme();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
@@ -117,6 +120,12 @@ export default function Header({ onMenuClick }: { onMenuClick: () => void }) {
           >
             <Search className="w-5 h-5 text-gray-600" />
           </button>
+          <div className="hidden lg:flex items-center gap-2 min-w-0 max-w-[260px]" title={clinicDisplayName}>
+            {identity?.logoUrl ? (
+              <img src={identity.logoUrl} alt="" className="h-7 w-7 rounded object-contain shrink-0" />
+            ) : null}
+            <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">{clinicDisplayName}</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2">

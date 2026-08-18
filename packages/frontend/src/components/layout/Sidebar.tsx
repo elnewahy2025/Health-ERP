@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../stores/authStore';
+import { useClinicConfiguration } from '../../stores/clinicConfigurationStore';
 import {
   LayoutDashboard, Users, CalendarCheck, FileText,
   Receipt, PillBottle, FlaskConical, ScanLine,
@@ -189,6 +190,32 @@ const secondaryItems: NavItem[] = [
   { path: '/user-preferences', icon: UserCog, labelKey: 'nav.userPreferences', permission: 'settings.view' },
 ];
 
+const OPTIONAL_MODULE_BY_PERMISSION_PREFIX: ReadonlyArray<readonly [string, string]> = [
+  ['pharmacy.', 'pharmacy'],
+  ['laboratory.', 'laboratory'],
+  ['radiology.', 'radiology'],
+  ['nursing.', 'nursing'],
+  ['inventory.', 'inventory'],
+  ['insurance.', 'insurance'],
+  ['insurance_claims.', 'insurance_claims'],
+  ['patient_portal.', 'patient_portal'],
+  ['patient_self_service.', 'patient_portal'],
+  ['online_booking.', 'online_booking'],
+  ['integrations.', 'integrations'],
+  ['ai_hub.', 'ai'],
+  ['clinical_ai.', 'ai'],
+  ['predictive_analytics.', 'ai'],
+  ['smart_scheduling.', 'ai'],
+  ['bi.', 'bi'],
+  ['automation.', 'automation'],
+  ['advanced_reporting.', 'advanced_reporting'],
+];
+
+function optionalModuleForPermission(permission?: string): string | undefined {
+  if (!permission) return undefined;
+  return OPTIONAL_MODULE_BY_PERMISSION_PREFIX.find(([prefix]) => permission.startsWith(prefix))?.[1];
+}
+
 function SidebarGroup({
   group,
   isExpanded,
@@ -278,21 +305,30 @@ export default function Sidebar({
 }) {
   const { t, i18n } = useTranslation();
   const { tenant, can } = useAuth();
+  const { identity, modules, modulesReady } = useClinicConfiguration();
   const location = useLocation();
   const isRtl = i18n.language === 'ar';
+  const activeModules = useMemo(
+    () => new Map(modules.map((module) => [module.moduleKey, module.active])),
+    [modules],
+  );
+  const moduleVisible = useCallback((item: NavItem) => {
+    const moduleKey = optionalModuleForPermission(item.permission);
+    return !moduleKey || !modulesReady || activeModules.get(moduleKey) === true;
+  }, [activeModules, modulesReady]);
 
   const visibleGroups = useMemo(() => {
     return navGroups
       .map((group) => ({
         ...group,
-        items: filterMenu(group.items, can),
+        items: filterMenu(group.items.filter(moduleVisible), can),
       }))
       .filter((group) => group.items.length > 0);
-  }, [can]);
+  }, [can, moduleVisible]);
 
   const visibleSecondary = useMemo(
-    () => filterMenu(secondaryItems, can),
-    [can],
+    () => filterMenu(secondaryItems.filter(moduleVisible), can),
+    [can, moduleVisible],
   );
 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
@@ -376,8 +412,7 @@ export default function Sidebar({
         ),
       }))
       .filter((group) => group.items.length > 0);
-  }, [search, t]);
-
+    }, [search, t, visibleGroups]);
   const filteredSecondary = useMemo(() => {
     if (!search.trim()) return visibleSecondary;
     const q = search.toLowerCase();
@@ -386,8 +421,7 @@ export default function Sidebar({
         t(item.labelKey).toLowerCase().includes(q) ||
         item.path.toLowerCase().includes(q)
     );
-  }, [search, t]);
-
+    }, [search, t, visibleSecondary]);
   const totalItems = visibleGroups.reduce((sum, g) => sum + g.items.length, 0);
 
   const handleNavigate = useCallback(() => {
@@ -419,11 +453,15 @@ export default function Sidebar({
         {/* Header */}
         <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 shrink-0 dark:border-gray-800">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center shrink-0">
-              <Stethoscope className="w-5 h-5 text-white" />
-            </div>
+            {identity?.logoUrl ? (
+              <img src={identity.logoUrl} alt="" className="w-8 h-8 rounded-lg object-contain shrink-0" />
+            ) : (
+              <div className="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center shrink-0">
+                <Stethoscope className="w-5 h-5 text-white" />
+              </div>
+            )}
             <span className="font-bold text-gray-900 truncate text-sm dark:text-gray-100">
-              {tenant?.settings?.theme?.brandName || t('app.name')}
+              {identity?.displayName || tenant?.settings?.theme?.brandName || tenant?.name || t('app.name')}
             </span>
           </div>
           <button
@@ -451,7 +489,7 @@ export default function Sidebar({
             <span className="text-xs text-gray-400">
               {search
                 ? `${filteredGroups.reduce((s, g) => s + g.items.length, 0) + filteredSecondary.length} ${t('sidebar.results')}`
-                : `${totalItems + secondaryItems.length} ${t('sidebar.modules')}`}
+                : `${totalItems + visibleSecondary.length} ${t('sidebar.modules')}`}
             </span>
             <div className="flex gap-1">
               <button onClick={expandAll} className="text-xs text-primary-600 hover:text-primary-700">

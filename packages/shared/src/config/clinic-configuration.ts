@@ -38,6 +38,7 @@ export const CLINIC_OPTIONAL_MODULES = [
   'patient_portal',
   'online_booking',
   'integrations',
+  'ai',
   'advanced_reporting',
   'bi',
   'automation',

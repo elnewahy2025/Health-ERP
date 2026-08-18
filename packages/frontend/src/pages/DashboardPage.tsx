@@ -5,6 +5,7 @@ import { dashboardApi, appointmentsApi, commonApi } from '../lib/api';
 import { Spinner } from '../components/ui';
 import { Can } from '../components/auth/Authorization';
 import { useAuth } from '../stores/authStore';
+import { formatClinicDate, useClinicConfiguration } from '../stores/clinicConfigurationStore';
 import {
   CalendarCheck, Receipt, Users, DollarSign,
   Stethoscope, TrendingUp, Activity as ActivityIcon,
@@ -27,10 +28,8 @@ interface ActivityItem {
   timestamp: string;
 }
 
-function formatActivityTime(timestamp: string, locale: string): string {
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return timestamp;
-  return date.toLocaleString(locale === 'ar' ? 'ar-EG' : 'en-EG', {
+function formatActivityTime(timestamp: string, locale: string, timezone: string): string {
+  return formatClinicDate(timestamp, locale === 'ar' ? 'ar-EG' : 'en-EG', timezone, {
     dateStyle: 'short',
     timeStyle: 'short',
   });
@@ -40,6 +39,7 @@ export default function DashboardPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { can } = useAuth();
+  const { identity } = useClinicConfiguration();
   const canViewAnalytics = can('analytics_dashboard.view');
   const canViewAppointments = can('appointments.view');
   const canViewActivity = can('audit.view');
@@ -87,7 +87,7 @@ interface TodayAppointment { id: string; patientName: string; doctorName: string
         <div>
           <h1 className="page-title">{t('dashboard.title')}</h1>
           <p className="text-muted-txt mt-1">
-            {new Date().toLocaleDateString(i18n.language === 'ar' ? 'ar-EG' : 'en-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            {formatClinicDate(new Date(), i18n.language === 'ar' ? 'ar-EG' : 'en-EG', identity?.timezone || 'UTC', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
         <Can permission="analytics_dashboard.view">
@@ -194,7 +194,7 @@ interface TodayAppointment { id: string; patientName: string; doctorName: string
                       <p className="text-sm font-medium text-[var(--text-primary)]">{item.action.replace(/[._]/g, ' ')}</p>
                       <p className="text-xs text-[var(--text-muted)] truncate">{[item.entity, item.entityId].filter(Boolean).join(' · ') || t('common.noData')}</p>
                     </div>
-                    <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">{formatActivityTime(item.timestamp, i18n.language)}</span>
+                    <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">{formatActivityTime(item.timestamp, i18n.language, identity?.timezone || 'UTC')}</span>
                   </div>
                 ))}
               </div>
