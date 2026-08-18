@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { dashboardApi, appointmentsApi } from '../lib/api';
 import { Spinner } from '../components/ui';
 import { Can } from '../components/auth/Authorization';
+import { useAuth } from '../stores/authStore';
 import {
   CalendarCheck, Receipt, Users, DollarSign,
   Stethoscope, TrendingUp, ArrowUp,
@@ -22,6 +23,9 @@ interface DashboardStats {
 export default function DashboardPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { can } = useAuth();
+  const canViewAnalytics = can('analytics_dashboard.view');
+  const canViewAppointments = can('appointments.view');
   const [stats, setStats] = useState<DashboardStats>({
     totalPatients: 0, totalAppointments: 0, todayAppointments: 0,
     pendingBills: 0, revenueToday: 0, activeDoctors: 0,
@@ -33,13 +37,13 @@ interface TodayAppointment { id: string; patientName: string; doctorName: string
 
   useEffect(() => {
     Promise.all([
-      dashboardApi.stats(),
-      appointmentsApi.today().catch(() => null),
+      canViewAnalytics ? dashboardApi.stats().catch(() => null) : Promise.resolve(null),
+      canViewAppointments ? appointmentsApi.today().catch(() => null) : Promise.resolve(null),
     ]).then(([stats, today]) => {
       if (stats) setStats(stats);
       if (today) setTodayData(today);
     }).finally(() => setLoading(false));
-  }, []);
+  }, [canViewAnalytics, canViewAppointments]);
 
   const statCards = [
     { label: t('dashboard.todayAppointments'), value: stats.todayAppointments, icon: CalendarCheck, color: 'bg-blue-500', change: '+12%' },
