@@ -1,7 +1,8 @@
 <#
 .SYNOPSIS
     One-shot setup for running the Healthcare ERP backend on a Windows PC
-    against the production Neon database (frontend stays on Vercel).
+    against a user-supplied production PostgreSQL database (frontend stays on Vercel).
+    For a safe local trial, use scripts/setup-docker-local.ps1 instead.
 
 .DESCRIPTION
     Checks prerequisites, prepares the .env file, installs dependencies,
@@ -11,10 +12,10 @@
 
 .PARAMETER RepoUrl
     Git URL to clone when this script is run outside the repository.
-    Default: https://github.com/elnewahy2025/vision-healthcare-erp.git
+    Default: https://github.com/elnewahy2025/Health-ERP.git
 
 .PARAMETER TargetDir
-    Directory to clone into when RepoUrl is used. Default: C:\vision-healthcare-erp
+    Directory to clone into when RepoUrl is used. Default: C:\Health-ERP
 
 .PARAMETER Seed
     Run the demo seed after migrations (destroys existing demo tables).
@@ -46,8 +47,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$RepoUrl = "https://github.com/elnewahy2025/vision-healthcare-erp.git",
-    [string]$TargetDir = "C:\vision-healthcare-erp",
+    [string]$RepoUrl = "https://github.com/elnewahy2025/Health-ERP.git",
+    [string]$TargetDir = "C:\Health-ERP",
     [switch]$Seed,
     [switch]$SkipInstall,
     [switch]$SkipMigrate,

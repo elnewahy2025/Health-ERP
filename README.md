@@ -160,31 +160,37 @@ vision-healthcare-erp/
 ### Windows (PowerShell)
 
 ```powershell
-# Clone
-cd C:\Projects
-git clone https://github.com/elnewahy2025/vision-healthcare-erp.git
-cd vision-healthcare-erp
-
-# Easiest: run the full stack in Docker (Postgres + Redis + MinIO + backend +
-# frontend). Generates .env automatically, builds, seeds, and prints the URL
-# for your phone on the same Wi-Fi.
-powershell -ExecutionPolicy Bypass -File scripts/setup-docker-local.ps1
-
-# Alternative — dev mode with local Node (Vite on :5173, backend on :3000):
-Copy-Item .env.docker.example .env     # then fill in every value
-docker compose up -d postgres redis minio
-npm install
-npm run build
-cd packages/backend && npm run migrate && cd ../..
-npm run dev
+# Recommended: install missing prerequisites, clone the repository if needed,
+# start Docker Desktop, create the local environment, build the stack, seed the
+# demo tenant, and open the browser automatically.
+powershell -ExecutionPolicy Bypass -File .\scripts\try-windows.ps1 -InstallPrerequisites -Seed -OpenBrowser
 ```
+
+If Git, Node.js, and Docker Desktop are already installed and the repository is
+open in PowerShell, the shorter command is sufficient:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\try-windows.ps1 -Seed -OpenBrowser
+```
+
+The default trial is local to the PC and never uses a production database. For
+phone access on the same Wi-Fi network, add `-LanAccess`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\try-windows.ps1 -Seed -LanAccess -OpenBrowser
+```
+
+The script creates a local `.env`, generates or reuses local secrets, starts
+PostgreSQL, Redis, MinIO, the backend, and the frontend, waits for health, and
+prints the URL and demo login details. It does not seed data unless `-Seed` is
+provided.
 
 ### Linux / macOS
 
 ```bash
 # Clone
-git clone https://github.com/elnewahy2025/vision-healthcare-erp.git
-cd vision-healthcare-erp
+git clone https://github.com/elnewahy2025/Health-ERP.git
+cd Health-ERP
 
 # Create environment files
 cp .env.example .env
@@ -219,60 +225,53 @@ npm run build -w packages/frontend
 
 ---
 
-## ⚡ Everything on Your PC with Docker (reachable from phone)
+## Windows local trial with Docker
 
-Runs **Postgres + Redis + MinIO + backend + frontend** entirely in Docker on
-your Windows PC and exposes the app on your LAN so your phone can use it — no
-cloud, no credit card, no free-tier expiry. Everything is env-driven: nothing
-is hardcoded, the script generates every secret and port for you.
+The recommended trial runs **PostgreSQL, Redis, MinIO, the backend, and the
+frontend** in Docker Desktop on the Windows PC. It is local-only by default,
+uses generated local secrets, and does not connect to a production database.
 
-### One command (recommended)
-
-```powershell
-# From the repo root (Docker Desktop must be running)
-powershell -ExecutionPolicy Bypass -File scripts/setup-docker-local.ps1
-```
-
-The script automatically:
-
-- Verifies Docker and detects your PC's LAN IP (for phone access)
-- Generates strong random secrets (Postgres, Redis, JWT, CSRF, MinIO)
-- Picks free host ports so it never clashes with a local Postgres/Redis/IIS
-- Writes a complete `.env` (single source of truth; an existing `.env` is backed up)
-- Builds & starts the stack, waits for health, seeds demo data
-- Prints your PC URL, your phone URL, and the demo logins
-
-Open the printed phone URL on your phone — it must be on the same Wi-Fi network.
-If the phone can't connect, allow the port through Windows Firewall once:
+### Recommended command
 
 ```powershell
-New-NetFirewallRule -DisplayName 'Vision ERP' -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow
+powershell -ExecutionPolicy Bypass -File .\scripts\try-windows.ps1 -Seed -OpenBrowser
 ```
 
-### Manual (same result, no script)
+Add `-InstallPrerequisites` when starting on a new Windows PC. Add `-LanAccess`
+when you want to open the application from a phone on the same Wi-Fi network.
+The script automatically starts Docker Desktop when it is installed but not
+running, waits for Docker to become ready, creates the local `.env`, builds and
+starts the stack, waits for the backend health endpoint, and prints the access
+URL.
 
-```powershell
-Copy-Item .env.docker.example .env   # fill every value; secrets must be strong and unique
-docker compose up -d --build
-docker compose exec -T backend npx --no-install tsx src/core/seed.ts
-```
+The `-Seed` switch is intentionally explicit because the demo seed replaces the
+local demo database contents. Omit it when you want to test the blank,
+progressively configurable clinic setup.
 
 ### Common commands
 
 ```powershell
 docker compose logs -f backend   # watch backend logs
-docker compose up -d             # start again later (data kept)
-docker compose down              # stop (data kept in named volumes)
-docker compose down -v           # stop and delete all data
+docker compose up -d             # start again later; named volumes remain
+docker compose down              # stop containers; data remains
+docker compose down -v           # stop containers and delete local data
 ```
 
-### Going online later (HTTPS)
+To start fresh after a corrupted or incompatible local database, run:
 
-The stack runs in production mode (`NODE_ENV=production`) with
-`COOKIE_SECURE=false` so login cookies work over plain LAN HTTP. To expose it
-to the internet with HTTPS (e.g. Cloudflare Tunnel), set `COOKIE_SECURE=true`
-in `.env` and point `APP_URL` / `CORS_ORIGIN` at your tunnel URL, then
-`docker compose up -d --build` again.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\try-windows.ps1 -ResetDb -Seed -OpenBrowser
+```
+
+For phone access, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\try-windows.ps1 -Seed -LanAccess -OpenBrowser
+```
+
+The phone must be on the same Wi-Fi network. Windows may request Administrator
+permission to add the inbound firewall rule. This local HTTP mode is for
+private testing only; do not expose it directly to the public internet.
 
 ---
 
@@ -305,8 +304,8 @@ and starts the backend. See `scripts/setup-windows.ps1` for all switches
 ```powershell
 # 1. Prerequisites: Node.js 20.19+ (winget install OpenJS.NodeJS.LTS), Git
 # 2. Get the code and the environment file
-git clone https://github.com/elnewahy2025/vision-healthcare-erp.git
-cd vision-healthcare-erp
+git clone https://github.com/elnewahy2025/Health-ERP.git
+cd Health-ERP
 # Put the production .env.production (with the Neon URL, JWT/CSRF secrets,
 # CORS_ORIGIN=https://vision-healthcare-erp.vercel.app) in the repo root.
 
@@ -362,7 +361,7 @@ git add vercel.json && git commit -m "chore: point API rewrites at tunnel" && gi
 
 ```powershell
 # One-command production build and deploy
-git clone https://github.com/elnewahy2025/vision-healthcare-erp.git; cd vision-healthcare-erp; Copy-Item .env.example .env; docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+git clone https://github.com/elnewahy2025/Health-ERP.git; cd Health-ERP; Copy-Item .env.example .env; docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 ```
 
 This command will:
@@ -374,8 +373,8 @@ This command will:
 ### Linux / macOS
 
 ```bash
-git clone https://github.com/elnewahy2025/vision-healthcare-erp.git && \
-cd vision-healthcare-erp && \
+git clone https://github.com/elnewahy2025/Health-ERP.git && \
+cd Health-ERP && \
 cp .env.example .env && \
 docker compose -f docker-compose.prod.yml --env-file .env up -d --build
 ```

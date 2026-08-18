@@ -11,9 +11,8 @@ services:
       - .env
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      # Fixed local password - same value in .env, scripts and example files.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-visionhc-local-db-2026}
-      POSTGRES_DB: ${POSTGRES_DB:-vision_erp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -72,9 +71,9 @@ services:
       HOST: 0.0.0.0
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${POSTGRES_DB:-vision_erp}
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-visionhc-local-db-2026}
+      DB_NAME: ${POSTGRES_DB:?POSTGRES_DB is required}
+      DB_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       DB_SSL: ${DB_SSL:-false}
       REDIS_HOST: redis
       REDIS_PORT: 6379
