@@ -294,6 +294,9 @@ function evaluateReadiness(
   if (connection.status === 'invalid') {
     return { status: 'invalid', missing: [], errors: [connection.last_error_message || 'Provider configuration is invalid'] };
   }
+  if (connection.last_test_status === 'failed' && (connection.last_error_code?.endsWith('_configuration_invalid') || connection.last_error_code === 'provider_adapter_unsupported')) {
+    return { status: 'invalid', missing: [], errors: [connection.last_error_message || 'Provider configuration is invalid'] };
+  }
   if (connection.validation_mode === 'live' && connection.live_validation_enabled && connection.last_test_status === 'failed') {
     if (connection.last_error_code === 'live_validation_endpoint_missing') {
       return { status: 'setup_required', missing: ['config:validationEndpointUrl'], errors: [connection.last_error_message || 'Live validation endpoint is not configured'] };
@@ -483,14 +486,15 @@ export async function updateProviderConfiguration(input: ConfigurationMutationCo
 }): Promise<ProviderConfigurationView> {
   const definition = providerDefinition(input.providerKey);
   const config = normalizeConfig(definition, input.config);
-  const validationMode = input.validationMode || 'structural';
-  if (!['structural', 'live'].includes(validationMode)) {
+  if (input.validationMode && !['structural', 'live'].includes(input.validationMode)) {
     throw new ValidationError('Unsupported provider validation mode');
   }
-  const validationTimeoutMs = input.validationTimeoutMs ?? DEFAULT_PROVIDER_VALIDATION_TIMEOUT_MS;
-  if (!Number.isInteger(validationTimeoutMs) || validationTimeoutMs < MIN_PROVIDER_VALIDATION_TIMEOUT_MS || validationTimeoutMs > MAX_PROVIDER_VALIDATION_TIMEOUT_MS) {
+  if (input.validationTimeoutMs !== undefined && (!Number.isInteger(input.validationTimeoutMs) || input.validationTimeoutMs < MIN_PROVIDER_VALIDATION_TIMEOUT_MS || input.validationTimeoutMs > MAX_PROVIDER_VALIDATION_TIMEOUT_MS)) {
     throw new ValidationError(`Provider validation timeout must be between ${MIN_PROVIDER_VALIDATION_TIMEOUT_MS} and ${MAX_PROVIDER_VALIDATION_TIMEOUT_MS} milliseconds`);
   }
+  let effectiveValidationMode: 'structural' | 'live' = input.validationMode || 'structural';
+  let effectiveLiveValidationEnabled = input.liveValidationEnabled ?? false;
+  let effectiveValidationTimeoutMs = input.validationTimeoutMs ?? DEFAULT_PROVIDER_VALIDATION_TIMEOUT_MS;
 
   await db.transaction(async (trx) => {
     const existing = await trx('tenant_provider_connections')
@@ -506,6 +510,12 @@ export async function updateProviderConfiguration(input: ConfigurationMutationCo
     }
     if (input.expectedModuleVersion !== undefined && (existingModuleConfiguration?.version || 0) !== input.expectedModuleVersion) {
       throw new ConflictError('Module configuration was changed by another administrator');
+    }
+    effectiveValidationMode = input.validationMode || (existing?.validation_mode === 'live' ? 'live' : 'structural');
+    effectiveLiveValidationEnabled = input.liveValidationEnabled ?? existing?.live_validation_enabled ?? false;
+    effectiveValidationTimeoutMs = input.validationTimeoutMs ?? existing?.validation_timeout_ms ?? DEFAULT_PROVIDER_VALIDATION_TIMEOUT_MS;
+    if (!Number.isInteger(effectiveValidationTimeoutMs) || effectiveValidationTimeoutMs < MIN_PROVIDER_VALIDATION_TIMEOUT_MS || effectiveValidationTimeoutMs > MAX_PROVIDER_VALIDATION_TIMEOUT_MS) {
+      throw new ValidationError(`Provider validation timeout must be between ${MIN_PROVIDER_VALIDATION_TIMEOUT_MS} and ${MAX_PROVIDER_VALIDATION_TIMEOUT_MS} milliseconds`);
     }
 
     const now = trx.fn.now();
@@ -524,9 +534,9 @@ export async function updateProviderConfiguration(input: ConfigurationMutationCo
       last_test_status: 'not_tested',
       last_error_code: null,
       last_error_message: null,
-      validation_mode: validationMode,
-      live_validation_enabled: input.liveValidationEnabled ?? existing?.live_validation_enabled ?? false,
-      validation_timeout_ms: validationTimeoutMs,
+      validation_mode: effectiveValidationMode,
+      live_validation_enabled: effectiveLiveValidationEnabled,
+      validation_timeout_ms: effectiveValidationTimeoutMs,
       updated_at: now,
     };
     if (existing) {
@@ -571,9 +581,9 @@ export async function updateProviderConfiguration(input: ConfigurationMutationCo
       environment: input.environment || 'sandbox',
       configKeys: Object.keys(config),
       moduleConfigurationKey: definition.moduleConfigurationKey || null,
-      validationMode,
-      liveValidationEnabled: input.liveValidationEnabled ?? false,
-      validationTimeoutMs,
+      validationMode: effectiveValidationMode,
+      liveValidationEnabled: effectiveLiveValidationEnabled,
+      validationTimeoutMs: effectiveValidationTimeoutMs,
     },
     ipAddress: input.ipAddress,
     userAgent: input.userAgent,
