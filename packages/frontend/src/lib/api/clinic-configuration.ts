@@ -56,6 +56,53 @@ export interface ClinicModuleVisibility {
   active: boolean;
 }
 
+export interface RegionalProfile {
+  tenantId: string;
+  countryCode: string | null;
+  profileKey: string;
+  status: string;
+  nationalIdentifierPolicy: string;
+  phonePolicy: string;
+  taxProfileKey: string | null;
+  metadata: Record<string, unknown>;
+  version: number;
+  configuredAt: string | null;
+}
+
+export interface ClinicProviderSecretMetadata {
+  configured: boolean;
+  lastFour: string | null;
+  version: number | null;
+  rotatedAt: string | null;
+  expiresAt: string | null;
+}
+
+export interface ClinicProviderConfiguration {
+  providerKey: string;
+  moduleKey: string;
+  displayName: string;
+  jurisdictionCode: string | null;
+  configKeys: string[];
+  connection: {
+    id: string;
+    displayName: string | null;
+    environment: 'sandbox' | 'production';
+    status: string;
+    config: Record<string, unknown>;
+    version: number;
+    lastTestStatus: string;
+    lastTestedAt: string | null;
+    lastErrorCode: string | null;
+    enabledAt: string | null;
+  } | null;
+  secrets: Record<string, ClinicProviderSecretMetadata>;
+  readiness: {
+    status: 'setup_required' | 'ready' | 'disabled' | 'invalid' | 'connection_failed' | string;
+    missing: string[];
+    errors: string[];
+  };
+}
+
 export const clinicConfigurationApi = {
   identity: () => apiClient.get('/clinic-configuration/identity')
     .then((response) => response.data.data as ClinicShellIdentity),
@@ -86,4 +133,26 @@ export const clinicConfigurationApi = {
   setModuleEnabled: (moduleKey: string, enabled: boolean) =>
     apiClient.put(`/clinic-modules/${encodeURIComponent(moduleKey)}`, { enabled })
       .then((response) => response.data.data as ClinicModuleStatus),
+  regionalProfile: () => apiClient.get('/clinic-regional-profile')
+    .then((response) => response.data.data as RegionalProfile),
+  updateRegionalProfile: (payload: Partial<Omit<RegionalProfile, 'tenantId' | 'version' | 'configuredAt'>> & { expectedVersion?: number }) =>
+    apiClient.put('/clinic-regional-profile', payload)
+      .then((response) => response.data.data as RegionalProfile),
+  providers: () => apiClient.get('/clinic-providers')
+    .then((response) => response.data.data as ClinicProviderConfiguration[]),
+  updateProvider: (providerKey: string, payload: {
+    displayName?: string | null;
+    environment?: 'sandbox' | 'production';
+    config: Record<string, unknown>;
+    expectedVersion?: number;
+  }) => apiClient.put(`/clinic-providers/${encodeURIComponent(providerKey)}`, payload)
+    .then((response) => response.data.data as ClinicProviderConfiguration),
+  testProvider: (providerKey: string) => apiClient.post(`/clinic-providers/${encodeURIComponent(providerKey)}/test`)
+    .then((response) => response.data.data as ClinicProviderConfiguration),
+  updateProviderSecret: (providerKey: string, secretKey: string, value: string, expectedVersion?: number) =>
+    apiClient.put(`/clinic-providers/${encodeURIComponent(providerKey)}/secrets/${encodeURIComponent(secretKey)}`, { value, expectedVersion })
+      .then((response) => response.data.data as ClinicProviderConfiguration),
+  revokeProviderSecret: (providerKey: string, secretKey: string, expectedVersion?: number) =>
+    apiClient.delete(`/clinic-providers/${encodeURIComponent(providerKey)}/secrets/${encodeURIComponent(secretKey)}`, { data: { expectedVersion } })
+      .then((response) => response.data.data as ClinicProviderConfiguration),
 };

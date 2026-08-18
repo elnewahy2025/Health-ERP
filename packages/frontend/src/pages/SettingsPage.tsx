@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { UserCog, Palette, Bell, Globe, Printer, Shield, Building2, Save, Loader2, Puzzle, CheckCircle2, AlertCircle } from 'lucide-react';
+import { UserCog, Palette, Bell, Globe, Printer, Shield, Building2, Save, Loader2, Puzzle, Plug, KeyRound, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Card, CardBody, Input, Button, Select } from '../components/ui';
 import { apiClient as api, clinicConfigurationApi, type ClinicModuleReadiness, type ClinicModuleStatus } from '../lib/api';
 import { Can } from '../components/auth/Authorization';
 import toast from 'react-hot-toast';
 import { CLINIC_CONFIGURATION_REGISTRY, clinicConfigurationDefinition } from '@healthcare/shared/config/clinic-configuration';
-import type { ClinicConfigurationEntry, ClinicConfigurationScope } from '../lib/api/clinic-configuration';
+import type { ClinicConfigurationEntry, ClinicConfigurationScope, ClinicProviderConfiguration, RegionalProfile } from '../lib/api/clinic-configuration';
 import { isSupportedClinicLocale, isValidClinicTimezone } from '../lib/clinic-settings-validation';
 import { ClinicWorkingHoursEditor } from '../components/clinic/ClinicWorkingHoursEditor';
 import { parseClinicWorkingHours, validateClinicWorkingHours, type ClinicWorkingHoursInterval } from '@healthcare/shared/config/clinic-working-hours';
@@ -34,7 +34,7 @@ interface ClinicSettings {
   twilioConfigured?: boolean;
 }
 
-type SettingsTab = 'clinic' | 'modules' | 'navigation';
+type SettingsTab = 'clinic' | 'integrations' | 'modules' | 'navigation';
 type ScopedSettingsType = Exclude<ClinicConfigurationScope, 'tenant'>;
 interface ScopeOption { id: string; name: string; code?: string; }
 
@@ -97,6 +97,21 @@ function scopeOptions(value: unknown): ScopeOption[] {
     .map((row) => ({ id: String(row.id), name: String(row.name || row.code || row.id), code: row.code ? String(row.code) : undefined }));
 }
 
+function providerFieldLabel(key: string): string {
+  return key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/[_-]+/g, ' ')
+    .replace(/^\w/, (letter) => letter.toUpperCase())
+    .trim();
+}
+
+function readinessClass(status: string): string {
+  if (status === 'ready') return 'text-green-700 bg-green-50 border-green-200';
+  if (status === 'invalid' || status === 'connection_failed') return 'text-red-700 bg-red-50 border-red-200';
+  if (status === 'disabled') return 'text-gray-700 bg-gray-50 border-gray-200';
+  return 'text-amber-800 bg-amber-50 border-amber-200';
+}
+
 export default function SettingsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -106,6 +121,17 @@ export default function SettingsPage() {
   const [workingHoursDraft, setWorkingHoursDraft] = useState<ClinicWorkingHoursInterval[]>([]);
   const [modules, setModules] = useState<ClinicModuleStatus[]>([]);
   const [readinessByModule, setReadinessByModule] = useState<Record<string, ClinicModuleReadiness>>({});
+  const [regionalProfile, setRegionalProfile] = useState<RegionalProfile | null>(null);
+  const [providers, setProviders] = useState<ClinicProviderConfiguration[]>([]);
+  const [integrationsLoading, setIntegrationsLoading] = useState(true);
+  const [integrationsError, setIntegrationsError] = useState(false);
+  const [regionalSaving, setRegionalSaving] = useState(false);
+  const [providerSaving, setProviderSaving] = useState<string | null>(null);
+  const [providerTesting, setProviderTesting] = useState<string | null>(null);
+  const [secretSaving, setSecretSaving] = useState<string | null>(null);
+  const [providerConfigDraft, setProviderConfigDraft] = useState<Record<string, Record<string, unknown>>>({});
+  const [providerEnvironmentDraft, setProviderEnvironmentDraft] = useState<Record<string, 'sandbox' | 'production'>>({});
+  const [providerSecretDraft, setProviderSecretDraft] = useState<Record<string, Record<string, string>>>({});
   const [loading, setLoading] = useState(true);
   const [modulesLoading, setModulesLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -147,6 +173,27 @@ export default function SettingsPage() {
         setModuleError(true);
       } finally {
         setModulesLoading(false);
+      }
+
+      try {
+        const [profile, providerList] = await Promise.all([
+          clinicConfigurationApi.regionalProfile(),
+          clinicConfigurationApi.providers(),
+        ]);
+        setRegionalProfile(profile);
+        setProviders(providerList);
+        setProviderConfigDraft(Object.fromEntries(providerList.map((provider) => [
+          provider.providerKey,
+          provider.connection?.config || {},
+        ])));
+        setProviderEnvironmentDraft(Object.fromEntries(providerList.map((provider) => [
+          provider.providerKey,
+          provider.connection?.environment || 'sandbox',
+        ])));
+      } catch {
+        setIntegrationsError(true);
+      } finally {
+        setIntegrationsLoading(false);
       }
     };
     void load();
@@ -304,6 +351,101 @@ export default function SettingsPage() {
     }
   };
 
+  const handleSaveRegionalProfile = async () => {
+    if (!regionalProfile) return;
+    setRegionalSaving(true);
+    try {
+      const updated = await clinicConfigurationApi.updateRegionalProfile({
+        countryCode: regionalProfile.countryCode,
+        profileKey: regionalProfile.profileKey,
+        status: regionalProfile.status as 'incomplete' | 'configured' | 'invalid',
+        nationalIdentifierPolicy: regionalProfile.nationalIdentifierPolicy,
+        phonePolicy: regionalProfile.phonePolicy,
+        taxProfileKey: regionalProfile.taxProfileKey,
+        metadata: regionalProfile.metadata,
+        expectedVersion: regionalProfile.version || undefined,
+      });
+      setRegionalProfile(updated);
+      toast.success(t('settings.regionalProfileSaved'));
+    } catch {
+      toast.error(t('settings.regionalProfileError'));
+    } finally {
+      setRegionalSaving(false);
+    }
+  };
+
+  const replaceProvider = (updated: ClinicProviderConfiguration) => {
+    setProviders((current) => current.map((item) => item.providerKey === updated.providerKey ? updated : item));
+    setProviderConfigDraft((current) => ({ ...current, [updated.providerKey]: updated.connection?.config || {} }));
+    setProviderEnvironmentDraft((current) => ({ ...current, [updated.providerKey]: updated.connection?.environment || 'sandbox' }));
+  };
+
+  const handleSaveProvider = async (provider: ClinicProviderConfiguration) => {
+    setProviderSaving(provider.providerKey);
+    try {
+      const updated = await clinicConfigurationApi.updateProvider(provider.providerKey, {
+        displayName: provider.connection?.displayName || null,
+        environment: providerEnvironmentDraft[provider.providerKey] || provider.connection?.environment || 'sandbox',
+        config: providerConfigDraft[provider.providerKey] || {},
+        expectedVersion: provider.connection?.version || undefined,
+      });
+      replaceProvider(updated);
+      toast.success(t('settings.providerSaved'));
+    } catch {
+      toast.error(t('settings.providerSaveError'));
+    } finally {
+      setProviderSaving(null);
+    }
+  };
+
+  const handleTestProvider = async (provider: ClinicProviderConfiguration) => {
+    setProviderTesting(provider.providerKey);
+    try {
+      const updated = await clinicConfigurationApi.testProvider(provider.providerKey);
+      replaceProvider(updated);
+      if (updated.readiness.status === 'ready') toast.success(t('settings.providerTested'));
+      else toast.error(t('settings.providerTestError'));
+    } catch {
+      toast.error(t('settings.providerTestError'));
+    } finally {
+      setProviderTesting(null);
+    }
+  };
+
+  const handleSaveSecret = async (provider: ClinicProviderConfiguration, secretKey: string) => {
+    const value = providerSecretDraft[provider.providerKey]?.[secretKey]?.trim();
+    if (!value) return;
+    const mutationKey = `${provider.providerKey}:${secretKey}`;
+    setSecretSaving(mutationKey);
+    try {
+      const updated = await clinicConfigurationApi.updateProviderSecret(provider.providerKey, secretKey, value, provider.connection?.version || undefined);
+      replaceProvider(updated);
+      setProviderSecretDraft((current) => ({
+        ...current,
+        [provider.providerKey]: { ...(current[provider.providerKey] || {}), [secretKey]: '' },
+      }));
+      toast.success(t('settings.secretSaved'));
+    } catch {
+      toast.error(t('settings.secretSaveError'));
+    } finally {
+      setSecretSaving(null);
+    }
+  };
+
+  const handleRevokeSecret = async (provider: ClinicProviderConfiguration, secretKey: string) => {
+    const mutationKey = `${provider.providerKey}:${secretKey}`;
+    setSecretSaving(mutationKey);
+    try {
+      const updated = await clinicConfigurationApi.revokeProviderSecret(provider.providerKey, secretKey, provider.connection?.version || undefined);
+      replaceProvider(updated);
+      toast.success(t('settings.secretRevoked'));
+    } catch {
+      toast.error(t('settings.secretSaveError'));
+    } finally {
+      setSecretSaving(null);
+    }
+  };
+
   const navSections = [
     { titleKey: 'settings.profileSettings', descKey: 'settings.profileSettingsDesc', path: '/user-preferences', icon: UserCog },
     { titleKey: 'settings.appearance', descKey: 'settings.appearanceDesc', path: '/user-preferences', icon: Palette },
@@ -325,6 +467,9 @@ export default function SettingsPage() {
       <div className="flex gap-2 border-b border-[var(--border)] pb-2 overflow-x-auto">
         <button onClick={() => setActiveTab('clinic')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${activeTab === 'clinic' ? 'bg-[var(--primary-soft)] text-[var(--primary)] border-b-2 border-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'}`}>
           <Building2 className="w-4 h-4 inline mr-2" />{t('settings.clinicInformation')}
+        </button>
+        <button onClick={() => setActiveTab('integrations')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${activeTab === 'integrations' ? 'bg-[var(--primary-soft)] text-[var(--primary)] border-b-2 border-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'}`}>
+          <Plug className="w-4 h-4 inline mr-2" />{t('settings.integrations')}
         </button>
         <button onClick={() => setActiveTab('modules')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${activeTab === 'modules' ? 'bg-[var(--primary-soft)] text-[var(--primary)] border-b-2 border-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'}`}>
           <Puzzle className="w-4 h-4 inline mr-2" />{t('settings.modules')}
@@ -509,6 +654,233 @@ export default function SettingsPage() {
             </div>
           </CardBody>
         </Card>
+      )}
+
+      {activeTab === 'integrations' && (
+        <div className="space-y-4">
+          <Card>
+            <CardBody className="p-6">
+              <div className="flex items-start gap-3">
+                <Globe className="w-5 h-5 text-[var(--primary)] mt-0.5" />
+                <div>
+                  <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('settings.integrations')}</h2>
+                  <p className="text-sm text-[var(--text-muted)] mt-1">{t('settings.integrationsDescription')}</p>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+
+          {integrationsError && (
+            <Card>
+              <CardBody className="p-6 flex items-start gap-3 text-amber-800 bg-amber-50 rounded-lg">
+                <AlertCircle className="w-5 h-5 mt-0.5" />
+                <p className="text-sm">{t('settings.providerSaveError')}</p>
+              </CardBody>
+            </Card>
+          )}
+
+          {integrationsLoading ? (
+            <div className="flex items-center justify-center h-32"><Loader2 className="w-6 h-6 animate-spin text-primary-600" /></div>
+          ) : (
+            <>
+              {regionalProfile && (
+                <Card>
+                  <CardBody className="p-6 space-y-5">
+                    <div>
+                      <h3 className="text-lg font-semibold text-[var(--text-primary)]">{t('settings.regionalProfile')}</h3>
+                      <p className="text-sm text-[var(--text-muted)] mt-1">{t('settings.regionalProfileDescription')}</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <Input
+                          label={t('settings.countryCode')}
+                          value={regionalProfile.countryCode || ''}
+                          maxLength={2}
+                          onChange={(event) => setRegionalProfile((current) => current ? { ...current, countryCode: event.target.value.toUpperCase() } : current)}
+                          helpText={t('settings.countryCodeHelp')}
+                        />
+                      </div>
+                      <Input
+                        label={t('settings.profileKey')}
+                        value={regionalProfile.profileKey}
+                        onChange={(event) => setRegionalProfile((current) => current ? { ...current, profileKey: event.target.value } : current)}
+                      />
+                      <Select
+                        label={t('settings.nationalIdentifierPolicy')}
+                        value={regionalProfile.nationalIdentifierPolicy}
+                        options={[
+                          { value: 'generic', label: t('settings.policyGeneric') },
+                          { value: 'optional', label: t('settings.policyOptional') },
+                          { value: 'required', label: t('settings.policyRequired') },
+                          { value: 'strict', label: t('settings.policyStrict') },
+                        ]}
+                        onChange={(event) => setRegionalProfile((current) => current ? { ...current, nationalIdentifierPolicy: event.target.value } : current)}
+                      />
+                      <Select
+                        label={t('settings.phonePolicy')}
+                        value={regionalProfile.phonePolicy}
+                        options={[
+                          { value: 'international_or_local', label: t('settings.policyGeneric') },
+                          { value: 'optional', label: t('settings.policyOptional') },
+                          { value: 'required', label: t('settings.policyRequired') },
+                          { value: 'strict', label: t('settings.policyStrict') },
+                        ]}
+                        onChange={(event) => setRegionalProfile((current) => current ? { ...current, phonePolicy: event.target.value } : current)}
+                      />
+                      <Input
+                        label={t('settings.taxProfileKey')}
+                        value={regionalProfile.taxProfileKey || ''}
+                        onChange={(event) => setRegionalProfile((current) => current ? { ...current, taxProfileKey: event.target.value || null } : current)}
+                      />
+                      <Select
+                        label={t('settings.providerStatus')}
+                        value={regionalProfile.status}
+                        options={[
+                          { value: 'incomplete', label: t('settings.setupRequired') },
+                          { value: 'configured', label: t('settings.ready') },
+                          { value: 'invalid', label: t('settings.invalid') },
+                        ]}
+                        onChange={(event) => setRegionalProfile((current) => current ? { ...current, status: event.target.value } : current)}
+                      />
+                    </div>
+                    <div className="flex justify-end pt-4 border-t border-[var(--border)]">
+                      <Can permission="settings.manage">
+                        <Button onClick={() => void handleSaveRegionalProfile()} loading={regionalSaving} icon={<Save className="w-4 h-4" />}>
+                          {t('settings.saveRegionalProfile')}
+                        </Button>
+                      </Can>
+                    </div>
+                  </CardBody>
+                </Card>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-[var(--text-primary)]">{t('settings.providers')}</h3>
+                  <p className="text-sm text-[var(--text-muted)] mt-1">{t('settings.providersDescription')}</p>
+                </div>
+                {providers.map((provider) => {
+                  const config = providerConfigDraft[provider.providerKey] || {};
+                  const environment = providerEnvironmentDraft[provider.providerKey] || provider.connection?.environment || 'sandbox';
+                  const readinessLabel = provider.readiness.status === 'ready'
+                    ? t('settings.ready')
+                    : provider.readiness.status === 'setup_required'
+                      ? t('settings.setupRequired')
+                      : provider.readiness.status === 'connection_failed'
+                        ? t('settings.connectionFailed')
+                        : provider.readiness.status === 'disabled'
+                          ? t('settings.connectionDisabled')
+                          : t('settings.invalid');
+                  return (
+                    <Card key={provider.providerKey}>
+                      <CardBody className="p-6 space-y-5">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <KeyRound className="w-5 h-5 text-[var(--primary)]" />
+                              <h4 className="text-lg font-semibold text-[var(--text-primary)]">{provider.displayName}</h4>
+                            </div>
+                            <p className="text-sm text-[var(--text-muted)] mt-1">{provider.providerKey}</p>
+                            {provider.jurisdictionCode && <p className="text-xs text-[var(--text-muted)] mt-1">{t('settings.providerJurisdiction', { value: provider.jurisdictionCode })}</p>}
+                          </div>
+                          <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium ${readinessClass(provider.readiness.status)}`}>
+                            {provider.readiness.status === 'ready' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                            {readinessLabel}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <Select
+                            label={t('settings.environment')}
+                            value={environment}
+                            options={[
+                              { value: 'sandbox', label: t('settings.sandbox') },
+                              { value: 'production', label: t('settings.production') },
+                            ]}
+                            onChange={(event) => setProviderEnvironmentDraft((current) => ({ ...current, [provider.providerKey]: event.target.value as 'sandbox' | 'production' }))}
+                          />
+                          {provider.configKeys.map((key) => (
+                            <Input
+                              key={key}
+                              label={providerFieldLabel(key)}
+                              value={String(config[key] ?? '')}
+                              onChange={(event) => setProviderConfigDraft((current) => ({
+                                ...current,
+                                [provider.providerKey]: { ...(current[provider.providerKey] || {}), [key]: event.target.value },
+                              }))}
+                            />
+                          ))}
+                        </div>
+                        {provider.configKeys.length === 0 && <p className="text-sm text-[var(--text-muted)]">{t('settings.providerNoConfig')}</p>}
+
+                        <div className="flex flex-wrap justify-end gap-2 border-t border-[var(--border)] pt-4">
+                          <Can permission="settings.manage">
+                            <Button size="sm" onClick={() => void handleSaveProvider(provider)} loading={providerSaving === provider.providerKey} icon={<Save className="w-4 h-4" />}>
+                              {t('settings.saveProvider')}
+                            </Button>
+                            <Button size="sm" variant="secondary" onClick={() => void handleTestProvider(provider)} loading={providerTesting === provider.providerKey} icon={<RefreshCw className="w-4 h-4" />}>
+                              {providerTesting === provider.providerKey ? t('settings.testingProvider') : t('settings.testProvider')}
+                            </Button>
+                          </Can>
+                        </div>
+
+                        <div className="border-t border-[var(--border)] pt-4 space-y-3">
+                          <div>
+                            <h5 className="font-medium text-[var(--text-primary)]">{t('settings.providerSecrets')}</h5>
+                            <p className="text-xs text-[var(--text-muted)] mt-1">{t('settings.providerNoSecrets')}</p>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {Object.entries(provider.secrets).map(([secretKey, metadata]) => {
+                              const mutationKey = `${provider.providerKey}:${secretKey}`;
+                              return (
+                                <div key={secretKey} className="rounded-lg border border-[var(--border)] p-3 space-y-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-sm font-medium text-[var(--text-primary)]">{providerFieldLabel(secretKey)}</span>
+                                    <span className={`text-xs ${metadata.configured ? 'text-green-700' : 'text-[var(--text-muted)]'}`}>
+                                      {metadata.configured ? t('settings.secretConfigured') : t('settings.secretNotConfigured')}
+                                    </span>
+                                  </div>
+                                  {metadata.lastFour && <p className="text-xs text-[var(--text-muted)]">{t('settings.lastFour', { value: metadata.lastFour })}</p>}
+                                  <Input
+                                    type="password"
+                                    label={t('settings.secretValue')}
+                                    value={providerSecretDraft[provider.providerKey]?.[secretKey] || ''}
+                                    onChange={(event) => setProviderSecretDraft((current) => ({
+                                      ...current,
+                                      [provider.providerKey]: { ...(current[provider.providerKey] || {}), [secretKey]: event.target.value },
+                                    }))}
+                                  />
+                                  <div className="flex justify-end gap-2">
+                                    <Can permission="settings.manage">
+                                      <Button size="sm" onClick={() => void handleSaveSecret(provider, secretKey)} loading={secretSaving === mutationKey}>
+                                        {t('settings.saveSecret')}
+                                      </Button>
+                                      {metadata.configured && <Button size="sm" variant="secondary" onClick={() => void handleRevokeSecret(provider, secretKey)} loading={secretSaving === mutationKey}>
+                                        {t('settings.revokeSecret')}
+                                      </Button>}
+                                    </Can>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {(provider.readiness.missing.length > 0 || provider.readiness.errors.length > 0) && (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                            <p className="text-xs font-medium text-amber-900">{t('settings.readiness')}</p>
+                            {provider.readiness.missing.length > 0 && <p className="text-xs text-amber-800 mt-1">{t('settings.missing')}: {provider.readiness.missing.join(', ')}</p>}
+                            {provider.readiness.errors.length > 0 && <p className="text-xs text-red-700 mt-1">{provider.readiness.errors.join(', ')}</p>}
+                          </div>
+                        )}
+                      </CardBody>
+                    </Card>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
       )}
 
       {activeTab === 'modules' && (
