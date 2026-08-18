@@ -12,6 +12,7 @@ import {
 import {
   listTenantModules,
   setTenantModuleActivation,
+  setTenantModuleEntitlement,
 } from '../../services/clinic-modules.js';
 
 const LEGACY_FIELD_MAP = {
@@ -124,6 +125,34 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
   app.get('/api/v1/clinic-modules', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
     const ctx = getCtx(request);
     return sendSuccess(reply, await listTenantModules(ctx.tenantId));
+  });
+
+  app.get('/api/v1/system/clinic-module-entitlements', { preHandler: [authenticate, authorize({ permission: 'saas_billing.manage', scope: 'system' })] }, async (request, reply) => {
+    const query = z.object({ tenantId: z.string().uuid() }).parse(request.query);
+    return sendSuccess(reply, await listTenantModules(query.tenantId));
+  });
+
+  app.put('/api/v1/system/clinic-module-entitlements/:tenantId/:moduleKey', { preHandler: [authenticate, authorize({ permission: 'saas_billing.manage', scope: 'system' })] }, async (request, reply) => {
+    const params = z.object({ tenantId: z.string().uuid(), moduleKey: z.string().min(1).max(80) }).parse(request.params);
+    const body = z.object({
+      status: z.enum(['available', 'suspended', 'expired', 'revoked']),
+      source: z.string().max(120).nullable().optional(),
+      startsAt: z.coerce.date().nullable().optional(),
+      expiresAt: z.coerce.date().nullable().optional(),
+    }).parse(request.body);
+    const ctx = getCtx(request);
+    const status = await setTenantModuleEntitlement({
+      tenantId: params.tenantId,
+      actorId: ctx.userId,
+      moduleKey: params.moduleKey,
+      status: body.status,
+      source: body.source,
+      startsAt: body.startsAt,
+      expiresAt: body.expiresAt,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] as string | undefined,
+    });
+    return sendSuccess(reply, status, 'Clinic module entitlement updated');
   });
 
   app.put('/api/v1/clinic-modules/:moduleKey', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {

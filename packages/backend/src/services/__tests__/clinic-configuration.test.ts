@@ -6,9 +6,9 @@ import {
   clinicConfigurationDefinition,
   isClinicModuleKey,
 } from '@healthcare/shared';
-import { ValidationError } from '@healthcare/shared/errors';
+import { ForbiddenError, ValidationError } from '@healthcare/shared/errors';
 import { validateConfigurationShape, type EffectiveClinicConfigurationEntry } from '../clinic-configuration.js';
-import { validateModuleConfiguration } from '../clinic-modules.js';
+import { setTenantModuleEntitlement, validateModuleConfiguration } from '../clinic-modules.js';
 
 describe('clinic configuration registry', () => {
   it('contains unique allowlisted keys with valid scopes', () => {
@@ -64,6 +64,19 @@ describe('clinic configuration registry', () => {
         definition,
       }));
     expect(validateModuleConfiguration('patients', configured).status).toBe('valid');
+  });
+
+  it('rejects unsafe explicit entitlement changes before database writes', async () => {
+    await expect(setTenantModuleEntitlement({
+      tenantId: 'tenant-1', actorId: 'user-1', moduleKey: 'patients', status: 'revoked',
+    })).rejects.toThrow(ForbiddenError);
+    await expect(setTenantModuleEntitlement({
+      tenantId: 'tenant-1', actorId: 'user-1', moduleKey: 'pharmacy', status: 'available',
+      startsAt: new Date('2026-01-02'), expiresAt: new Date('2026-01-01'),
+    })).rejects.toThrow(ValidationError);
+    await expect(setTenantModuleEntitlement({
+      tenantId: 'tenant-1', actorId: 'user-1', moduleKey: 'not-a-module', status: 'available',
+    })).rejects.toThrow(ValidationError);
   });
 
   it('requires module configuration only for the module that declares it', () => {

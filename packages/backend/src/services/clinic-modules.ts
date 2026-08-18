@@ -213,6 +213,73 @@ export async function listTenantModules(tenantId: string): Promise<TenantModuleS
   });
 }
 
+export interface TenantModuleEntitlementInput {
+  tenantId: string;
+  actorId: string;
+  moduleKey: string;
+  status: 'available' | 'suspended' | 'expired' | 'revoked';
+  source?: string | null;
+  startsAt?: Date | null;
+  expiresAt?: Date | null;
+  ipAddress?: string;
+  userAgent?: string | null;
+}
+
+export async function setTenantModuleEntitlement(input: TenantModuleEntitlementInput): Promise<TenantModuleStatus> {
+  if (!isClinicModuleKey(input.moduleKey)) {
+    throw new ValidationError(`Unknown clinic module: ${input.moduleKey}`);
+  }
+  if ((CLINIC_CORE_MODULES as readonly string[]).includes(input.moduleKey) && input.status !== 'available') {
+    throw new ForbiddenError(`Core clinic module ${input.moduleKey} must remain available`);
+  }
+  if (input.startsAt && input.expiresAt && input.expiresAt <= input.startsAt) {
+    throw new ValidationError('Entitlement expiry must be after its start');
+  }
+
+  await db('tenant_module_entitlements')
+    .insert({
+      tenant_id: input.tenantId,
+      module_key: input.moduleKey,
+      status: input.status,
+      source: input.source || null,
+      starts_at: input.startsAt || null,
+      expires_at: input.expiresAt || null,
+      updated_by: input.actorId,
+      updated_at: db.fn.now(),
+    })
+    .onConflict(['tenant_id', 'module_key'])
+    .merge({
+      status: input.status,
+      source: input.source || null,
+      starts_at: input.startsAt || null,
+      expires_at: input.expiresAt || null,
+      updated_by: input.actorId,
+      updated_at: db.fn.now(),
+    });
+
+  await logAudit({
+    tenantId: input.tenantId,
+    userId: input.actorId,
+    action: 'clinic_module.entitlement_updated',
+    entityType: 'tenant_module_entitlement',
+    branchId: undefined,
+    ipAddress: input.ipAddress,
+    userAgent: input.userAgent,
+    result: 'success',
+    metadata: {
+      moduleKey: input.moduleKey,
+      status: input.status,
+      source: input.source || null,
+      startsAt: input.startsAt?.toISOString() || null,
+      expiresAt: input.expiresAt?.toISOString() || null,
+    },
+  });
+
+  const status = (await listTenantModules(input.tenantId)).find((module) => module.moduleKey === input.moduleKey);
+  if (!status) throw new ValidationError(`Clinic module ${input.moduleKey} could not be reloaded`);
+  return status;
+}
+
 export async function setTenantModuleActivation(input: {
   tenantId: string;
   actorId: string;
