@@ -18,7 +18,7 @@ import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
 import { isValidPortalPhone } from '@healthcare/shared/utils/portal';
 import { COUNTRY_CODES } from '../lib/countryCodes';
-import { useClinicMoney } from '../stores/clinicConfigurationStore';
+import { useClinicConfiguration, useClinicMoney } from '../stores/clinicConfigurationStore';
 
 type Page = 'home' | 'appointments' | 'records' | 'surveys' | 'notifications' | 'bills' | 'documents' | 'messages';
 
@@ -61,6 +61,7 @@ interface NotificationEntry {
 
 export default function PatientMobileAppPage() {
   const { t } = useTranslation();
+  const { identity } = useClinicConfiguration();
   const formatMoney = useClinicMoney();
 
   const [page, setPage] = useState<Page>('home');
@@ -166,7 +167,7 @@ export default function PatientMobileAppPage() {
       <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full">
           <Smartphone className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-center mb-6">{t('patientApp.title')}</h1>
+          <h1 className="text-xl font-bold text-center mb-6">{identity?.displayName || t('patientApp.title')}</h1>
 
           {otpStep === 'phone' && (
             <>
@@ -238,7 +239,7 @@ export default function PatientMobileAppPage() {
       <div className="w-full max-w-sm mx-auto bg-white shadow-2xl flex flex-col h-screen max-h-[800px]">
         <div className="bg-blue-600 text-white p-4 pt-6">
           <div className="flex justify-between items-center mb-4">
-            <p className="text-sm opacity-75">{t('patientApp.title')}</p>
+            <p className="text-sm opacity-75">{identity?.displayName || t('patientApp.title')}</p>
             <button onClick={handleLogout} className="p-1" type="button">
               <LogOut className="w-5 h-5" />
             </button>

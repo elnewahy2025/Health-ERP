@@ -1,5 +1,5 @@
 /**
- * Route configuration for Vision Healthcare ERP.
+ * Route configuration for the Clinic Management System.
  *
  * All routes are defined in App.tsx using React Router v6.
  * This file provides the route definitions as a single source of truth

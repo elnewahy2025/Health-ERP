@@ -1,5 +1,6 @@
 import { getEnv } from '@healthcare/shared/config';
 import { db } from '../core/database.js';
+import { loadClinicNotificationContext } from './notification.js';
 
 interface VoiceCallOptions {
   tenantId: string;
@@ -57,6 +58,7 @@ export async function makeVoiceCall(options: VoiceCallOptions): Promise<{
   try {
     const client = getTwilioClient();
     const env = getEnv();
+    const clinic = options.twiml ? null : await loadClinicNotificationContext(options.tenantId);
 
     if (!client) {
       await db('voice_calls').insert({
@@ -77,7 +79,7 @@ export async function makeVoiceCall(options: VoiceCallOptions): Promise<{
     const call = await client.calls.create({
       to: options.toNumber,
       from: options.fromNumber,
-      twiml: options.twiml || `<Response><Say>This is a call from Vision Healthcare.</Say></Response>`,
+      twiml: options.twiml || `<Response><Say>This is a call from ${clinic?.displayName || 'the clinic'}.</Say></Response>`,
       url: options.voiceUrl || undefined,
       statusCallback: `${env.APP_URL}/api/v1/advanced-communication/voice/status`,
       statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],

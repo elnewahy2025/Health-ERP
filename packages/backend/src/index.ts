@@ -186,7 +186,7 @@ async function buildApp() {
   await app.register(swagger, {
     openapi: {
       info: {
-        title: 'Vision Healthcare ERP API',
+        title: 'Clinic Management System API',
         description: 'Enterprise Healthcare ERP SaaS Platform API',
         version: '1.0.0',
       },

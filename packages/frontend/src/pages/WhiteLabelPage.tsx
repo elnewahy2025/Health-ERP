@@ -23,6 +23,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useClinicConfiguration } from '../stores/clinicConfigurationStore';
 
 type TabType = 'branding' | 'domains';
 
@@ -31,6 +32,7 @@ const DOMAIN_REGEX = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-
 
 export default function WhiteLabelPage() {
   const { t } = useTranslation();
+  const { identity } = useClinicConfiguration();
 
   const [tab, setTab] = useState<TabType>('branding');
   const [domains, setDomains] = useState<TenantDomain[]>([]);
@@ -315,14 +317,14 @@ export default function WhiteLabelPage() {
                 style={{ backgroundColor: primaryColor }}
               >
                 <span className="text-white text-xl font-bold">
-                  {(brandName ?? 'V').charAt(0).toUpperCase() || 'V'}
+                  {(brandName || identity?.displayName || t('wl.defaultBrandName')).charAt(0).toUpperCase() || 'C'}
                 </span>
               </div>
               <p
                 className="text-xl font-bold"
                 style={{ fontFamily }}
               >
-                {brandName || 'Vision Healthcare'}
+                {brandName || identity?.displayName || t('wl.defaultBrandName')}
               </p>
               <div className="flex gap-2 mt-2">
                 <span

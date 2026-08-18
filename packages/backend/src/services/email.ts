@@ -44,9 +44,9 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
     const transport = await getTransporter();
     const env = getEnv();
     if (transport.send) {
-      await transport.send({ to: options.to, from: env.SMTP_FROM || 'noreply@visionhealthcare.com', subject: options.subject, text: options.text, html: options.html });
+      await transport.send({ to: options.to, from: env.SMTP_FROM || 'no-reply@localhost', subject: options.subject, text: options.text, html: options.html });
     } else {
-      await transport.sendMail({ from: `"Vision Healthcare" <${env.SMTP_FROM || 'noreply@visionhealthcare.com'}>`, to: options.to, subject: options.subject, text: options.text, html: options.html });
+      await transport.sendMail({ from: `"Clinic Management System" <${env.SMTP_FROM || 'no-reply@localhost'}>`, to: options.to, subject: options.subject, text: options.text, html: options.html });
     }
     return true;
   } catch (error: any) {

@@ -1,7 +1,7 @@
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 
-const APP_NAME = 'Vision Healthcare';
+const APP_NAME = 'Clinic Management System';
 
 export function generateSecret(): { secret: string; otpauthUrl: string } {
   const secret = authenticator.generateSecret();
