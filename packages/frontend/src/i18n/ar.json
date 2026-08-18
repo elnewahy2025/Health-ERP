@@ -2740,6 +2740,7 @@
   "settings.workingHours": "ساعات العمل",
   "settings.licenseNumber": "رقم الترخيص",
   "settings.taxNumber": "الرقم الضريبي",
+  "settings.currency": "العملة (ISO 4217)",
   "settings.saveClinicSettings": "حفظ إعدادات العيادة",
   "settings.saved": "تم حفظ إعدادات العيادة",
   "settings.saveError": "فشل حفظ إعدادات العيادة",

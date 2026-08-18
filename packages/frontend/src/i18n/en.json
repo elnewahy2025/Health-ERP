@@ -2742,6 +2742,7 @@
   "settings.workingHours": "Working Hours",
   "settings.licenseNumber": "License Number",
   "settings.taxNumber": "Tax Number",
+  "settings.currency": "Currency (ISO 4217)",
   "settings.saveClinicSettings": "Save Clinic Settings",
   "settings.saved": "Clinic settings saved",
   "settings.saveError": "Failed to save clinic settings",

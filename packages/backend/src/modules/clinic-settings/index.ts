@@ -30,6 +30,7 @@ const LEGACY_FIELD_MAP = {
   workingHours: 'clinic.operations.working_hours',
   licenseNumber: 'clinic.legal.license_number',
   taxNumber: 'clinic.legal.tax_number',
+  currency: 'clinic.finance.currency',
 } as const;
 
 type LegacyClinicField = keyof typeof LEGACY_FIELD_MAP;
@@ -50,6 +51,7 @@ const LEGACY_SETTINGS_SCHEMA = z.object({
   workingHours: z.string().max(2000).optional(),
   licenseNumber: z.string().max(200).optional(),
   taxNumber: z.string().max(200).optional(),
+  currency: z.string().regex(/^[A-Z]{3}$/).optional(),
 }).strict();
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -214,6 +216,7 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
       workingHours: legacyValue(entries, LEGACY_FIELD_MAP.workingHours, legacy.workingHours || 'Sun-Thu: 9AM-5PM'),
       licenseNumber: legacyValue(entries, LEGACY_FIELD_MAP.licenseNumber, legacy.licenseNumber || ''),
       taxNumber: legacyValue(entries, LEGACY_FIELD_MAP.taxNumber, legacy.taxNumber || ''),
+      currency: legacyValue(entries, LEGACY_FIELD_MAP.currency, legacy.currency || 'EGP'),
       twilioConfigured: Boolean(legacy.twilioAccountSid || legacy.twilioAuthToken || legacy.twilioMessagingServiceSid),
     });
   });

@@ -27,6 +27,8 @@ describe('clinic configuration registry', () => {
   it('allows tenant-only identity and legal settings to reject narrower overrides', () => {
     expect(clinicConfigurationDefinition('clinic.profile.display_name')?.allowedScopes).toEqual(['tenant']);
     expect(clinicConfigurationDefinition('clinic.legal.tax_number')?.allowedScopes).toEqual(['tenant']);
+    expect(clinicConfigurationDefinition('clinic.finance.currency')?.allowedScopes).toEqual(['tenant']);
+    expect(clinicConfigurationDefinition('clinic.finance.currency')?.requiredFor).toContain('billing');
     expect(clinicConfigurationDefinition('clinic.contact.email')?.allowedScopes).toContain('branch');
   });
 

@@ -22,6 +22,7 @@ interface ClinicSettings {
   workingHours: string;
   licenseNumber: string;
   taxNumber: string;
+  currency: string;
   twilioConfigured?: boolean;
 }
 
@@ -30,7 +31,7 @@ type SettingsTab = 'clinic' | 'modules' | 'navigation';
 const INITIAL_CLINIC: ClinicSettings = {
   clinicName: '', branch: '', landPhone: '', whatsappPhone: '', logoUrl: '',
   address: '', city: '', country: '', googleMapsLocation: '', email: '',
-  website: '', workingHours: 'Sun-Thu: 9AM-5PM', licenseNumber: '', taxNumber: '',
+  website: '', workingHours: 'Sun-Thu: 9AM-5PM', licenseNumber: '', taxNumber: '', currency: 'EGP',
 };
 
 function moduleLabel(moduleKey: string): string {
@@ -55,6 +56,7 @@ const CONFIGURATION_FIELD_IDS: Record<string, string> = {
   'clinic.operations.working_hours': 'clinic-settings-working-hours',
   'clinic.legal.license_number': 'clinic-settings-license-number',
   'clinic.legal.tax_number': 'clinic-settings-tax-number',
+  'clinic.finance.currency': 'clinic-settings-currency',
 };
 
 function validationKeys(module: ClinicModuleStatus, readiness?: ClinicModuleReadiness): string[] {
@@ -212,6 +214,7 @@ export default function SettingsPage() {
                   <Input id="clinic-settings-working-hours" label={t('settings.workingHours')} value={clinic.workingHours} onChange={e => setClinic(p => ({ ...p, workingHours: e.target.value }))} />
                   <Input id="clinic-settings-license-number" label={t('settings.licenseNumber')} value={clinic.licenseNumber} onChange={e => setClinic(p => ({ ...p, licenseNumber: e.target.value }))} />
                   <Input id="clinic-settings-tax-number" label={t('settings.taxNumber')} value={clinic.taxNumber} onChange={e => setClinic(p => ({ ...p, taxNumber: e.target.value }))} />
+                  <Input id="clinic-settings-currency" label={t('settings.currency')} value={clinic.currency} maxLength={3} onChange={e => setClinic(p => ({ ...p, currency: e.target.value.toUpperCase() }))} placeholder="EGP" />
                 </div>
               </div>
 

@@ -174,6 +174,14 @@ export const CLINIC_CONFIGURATION_REGISTRY: readonly ClinicConfigurationDefiniti
     description: 'The tenant default IANA timezone.',
   },
   {
+    key: 'clinic.finance.currency',
+    valueType: 'string',
+    allowedScopes: TENANT_ONLY,
+    requiredFor: ['billing'],
+    defaultValue: 'EGP',
+    description: 'The ISO 4217 currency code used for clinic financial documents.',
+  },
+  {
     key: 'clinic.legal.license_number',
     valueType: 'string',
     allowedScopes: TENANT_ONLY,

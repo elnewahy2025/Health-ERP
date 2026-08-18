@@ -4,6 +4,9 @@ import { listEffectiveClinicConfiguration } from './clinic-configuration.js';
 export interface ClinicDocumentContext {
   displayName: string;
   legalName: string;
+  licenseNumber: string;
+  taxNumber: string;
+  currency: string;
   timezone: string;
   locale: string;
 }
@@ -15,6 +18,18 @@ function isValidTimeZone(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function formatDocumentMoney(value: number | string | null | undefined, currency: string, locale = 'en'): string {
+  const safeCurrency = /^[A-Z]{3}$/.test(currency) ? currency : 'EGP';
+  const safeLocale = locale.toLowerCase().startsWith('ar') ? 'ar-EG' : 'en-EG';
+  return new Intl.NumberFormat(safeLocale, {
+    style: 'currency',
+    currency: safeCurrency,
+    currencyDisplay: 'code',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value || 0));
 }
 
 export function formatDocumentDate(value: string | Date, timezone: string, locale = 'en'): string {
@@ -40,9 +55,13 @@ async function loadClinicDocumentContext(tenantId: string): Promise<ClinicDocume
   };
   const locale = text('clinic.locale.default') || 'en';
   const timezone = text('clinic.timezone.default') || 'UTC';
+  const currency = text('clinic.finance.currency').toUpperCase();
   return {
     displayName: text('clinic.profile.display_name') || tenant?.name || 'Vision Healthcare',
     legalName: text('clinic.profile.legal_name') || text('clinic.profile.display_name') || tenant?.name || 'Vision Healthcare',
+    licenseNumber: text('clinic.legal.license_number'),
+    taxNumber: text('clinic.legal.tax_number'),
+    currency: /^[A-Z]{3}$/.test(currency) ? currency : 'EGP',
     timezone,
     locale,
   };
@@ -80,7 +99,12 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer | nu
 
     const content: any[] = [
       { columns: [{ text: clinic.displayName, style: 'title', width: '*' }, { text: invoice.invoice_number, style: 'invoiceNumber', width: 'auto', alignment: 'right' }] },
-      { text: '', margin: [0, 10] },
+      { text: [
+        { text: `${clinic.legalName}\n`, bold: true },
+        ...(clinic.licenseNumber ? [{ text: `License: ${clinic.licenseNumber}\n` }] : []),
+        ...(clinic.taxNumber ? [{ text: `Tax number: ${clinic.taxNumber}` }] : []),
+      ], fontSize: 8, color: 'gray' },
+      { text: '', margin: [0, 8] },
       { columns: [
         { width: '*', text: [{ text: 'Patient: ', bold: true }, `${invoice.first_name} ${invoice.last_name}\n`, { text: 'Phone: ', bold: true }, `${invoice.phone || 'N/A'}\n`, { text: 'National ID: ', bold: true }, `${invoice.national_id || 'N/A'}\n`] },
         { width: '*', text: [{ text: 'Date: ', bold: true }, `${formatDocumentDate(invoice.created_at, clinic.timezone, clinic.locale)}\n`, { text: 'Due: ', bold: true }, `${invoice.due_date ? formatDocumentDate(invoice.due_date, clinic.timezone, clinic.locale) : 'N/A'}\n`, { text: 'Status: ', bold: true }, { text: invoice.status.toUpperCase(), color: invoice.status === 'paid' ? 'green' : 'orange' }], alignment: 'right' },
@@ -88,16 +112,16 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer | nu
       { text: '', margin: [0, 15] },
       { table: { headerRows: 1, widths: [25, '*', 40, 80, 80], body: [
         [{ text: '#', style: 'tableHeader' }, { text: 'Description', style: 'tableHeader' }, { text: 'Qty', style: 'tableHeader', alignment: 'center' }, { text: 'Price', style: 'tableHeader', alignment: 'right' }, { text: 'Total', style: 'tableHeader', alignment: 'right' }],
-        ...items.map((item: any, i: number) => [String(i + 1), `${item.description || ''} ${item.code ? '(' + item.code + ')' : ''}`, String(item.quantity), `${Number(item.unitPrice || 0).toFixed(2)} EGP`, `${(Number(item.quantity || 1) * Number(item.unitPrice || 0)).toFixed(2)} EGP`]),
+        ...items.map((item: any, i: number) => [String(i + 1), `${item.description || ''} ${item.code ? '(' + item.code + ')' : ''}`, String(item.quantity), formatDocumentMoney(item.unitPrice, clinic.currency, clinic.locale), formatDocumentMoney(Number(item.quantity || 1) * Number(item.unitPrice || 0), clinic.currency, clinic.locale)]),
       ]}, layout: 'lightHorizontalLines' },
       { text: '', margin: [0, 10] },
       { columns: [{ width: '*', text: '' }, { width: 250, table: { widths: [120, 130], body: [
-        ['Subtotal:', `${Number(invoice.total || 0).toFixed(2)} EGP`],
-        ...(invoice.discount > 0 ? [['Discount:', `-${Number(invoice.discount).toFixed(2)} EGP`]] : []),
-        ...(invoice.tax > 0 ? [['Tax:', `${Number(invoice.tax).toFixed(2)} EGP`]] : []),
-        [{ text: 'Total:', bold: true }, { text: `${Number(invoice.total).toFixed(2)} EGP`, bold: true }],
-        [{ text: 'Paid:', color: 'green', bold: true }, { text: `${Number(invoice.paid || 0).toFixed(2)} EGP`, color: 'green', bold: true }],
-        [{ text: 'Due:', color: 'red', bold: true }, { text: `${Number(invoice.due || 0).toFixed(2)} EGP`, color: 'red', bold: true }],
+        ['Subtotal:', formatDocumentMoney(invoice.subtotal ?? invoice.total, clinic.currency, clinic.locale)],
+        ...(invoice.discount > 0 ? [['Discount:', formatDocumentMoney(-Number(invoice.discount), clinic.currency, clinic.locale)]] : []),
+        ...(invoice.tax > 0 ? [['Tax:', formatDocumentMoney(invoice.tax, clinic.currency, clinic.locale)]] : []),
+        [{ text: 'Total:', bold: true }, { text: formatDocumentMoney(invoice.total, clinic.currency, clinic.locale), bold: true }],
+        [{ text: 'Paid:', color: 'green', bold: true }, { text: formatDocumentMoney(invoice.paid, clinic.currency, clinic.locale), color: 'green', bold: true }],
+        [{ text: 'Due:', color: 'red', bold: true }, { text: formatDocumentMoney(invoice.due, clinic.currency, clinic.locale), color: 'red', bold: true }],
       ]}, layout: 'noBorders' }] },
       { text: '', margin: [0, 20] },
       { text: [{ text: 'Thank you for your visit!\n', bold: true, alignment: 'center' }, { text: `${clinic.displayName}`, alignment: 'center', fontSize: 9, color: 'gray' }] },
