@@ -11,6 +11,7 @@ import { apiClient as api } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
 import { isValidEgyptianPhone } from '../lib/validators';
 import { formatDateTime } from '../lib/format';
+import { buildWhatsAppDeviceLink, confirmAndOpenDeviceLink } from '../lib/device-actions';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -172,29 +173,23 @@ export default function WhatsAppPage() {
 
     setSendLoading(true);
     try {
-      const payload: Record<string, unknown> = {
-        to: sendForm.to.trim(),
-        messageType: sendForm.messageType,
-      };
-      if (sendForm.messageType === 'template') {
-        payload.templateName = sendForm.templateName.trim();
-        payload.templateParams = ['en', ...sendForm.templateParams.split(',').map((s) => s.trim()).filter(Boolean)];
-      } else {
-        payload.message = sanitizeString(sendForm.message);
-      }
-      const res = await api.post('/whatsapp/send', payload);
-      const waLink = res.data?.data?.waLink;
-      if (waLink) window.open(waLink, '_blank');
-      toast.success(t('whatsapp.messageSent'));
+      const message = sendForm.messageType === 'template'
+        ? [sendForm.templateName.trim(), sendForm.templateParams.trim()].filter(Boolean).join('\n')
+        : sanitizeString(sendForm.message);
+      const opened = confirmAndOpenDeviceLink(
+        buildWhatsAppDeviceLink(sendForm.to.trim(), message),
+        t('whatsapp.confirmOpenApp'),
+      );
+      if (!opened) return;
+      toast.success(t('whatsapp.appOpened'));
       setShowSendModal(false);
       setSendForm({ to: '', message: '', templateName: '', templateParams: '', messageType: 'text' });
-      void fetchMessages();
     } catch {
       toast.error(t('whatsapp.messageFailed'));
     } finally {
       setSendLoading(false);
     }
-  }, [sendForm, t, fetchMessages]);
+  }, [sendForm, t]);
 
   /* ── Table columns ── */
 

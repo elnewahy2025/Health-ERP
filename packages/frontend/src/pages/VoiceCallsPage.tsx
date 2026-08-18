@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import {
-  PhoneCall, Phone, Clock, BarChart3, Plus, Video,
+  PhoneCall, Phone, Clock, BarChart3, Plus,
 } from 'lucide-react';
 import {
   Card, CardBody, Button, Input, Select, Modal, Badge, Table,
@@ -10,9 +10,10 @@ import {
   type Column,
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
-import { sanitizeString, escapeHtml } from '../lib/sanitize';
+import { escapeHtml } from '../lib/sanitize';
 import { isValidEgyptianPhone } from '../lib/validators';
 import { formatDateTime } from '../lib/format';
+import { buildPhoneDeviceLink, confirmAndOpenDeviceLink } from '../lib/device-actions';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -38,11 +39,6 @@ interface VoiceStats {
   totalMinutes: number;
   byStatus: Array<{ status: string; count: number }>;
   byType: Array<{ call_type: string; count: number }>;
-}
-
-interface Participant {
-  phone: string;
-  role: 'doctor' | 'patient' | 'staff';
 }
 
 /* ── Constants ─────────────────────────────────────────────────────── */
@@ -83,16 +79,9 @@ export default function VoiceCallsPage() {
   const [stats, setStats] = useState<VoiceStats | null>(null);
 
   /* ── Make call ── */
-  const [callForm, setCallForm] = useState({ toNumber: '', notes: '' });
+  const [callForm, setCallForm] = useState({ toNumber: '' });
   const [callErrors, setCallErrors] = useState<Record<string, string>>({});
   const [callLoading, setCallLoading] = useState(false);
-
-  /* ── Conference ── */
-  const [showConference, setShowConference] = useState(false);
-  const [participants, setParticipants] = useState<Participant[]>([
-    { phone: '', role: 'doctor' },
-    { phone: '', role: 'patient' },
-  ]);
 
   /* ── Data fetching ── */
 
@@ -167,50 +156,19 @@ export default function VoiceCallsPage() {
 
     setCallLoading(true);
     try {
-      const res = await api.post('/voice/call', {
-        toNumber: callForm.toNumber.trim(),
-        notes: sanitizeString(callForm.notes) || undefined,
-      });
-      const telLink = res.data?.data?.telLink;
-      if (telLink) window.location.href = telLink;
-      toast.success(t('voice.callInitiated'));
-      setCallForm({ toNumber: '', notes: '' });
-      setTab('calls');
-      void fetchCalls();
+      const opened = confirmAndOpenDeviceLink(
+        buildPhoneDeviceLink(callForm.toNumber.trim()),
+        t('voice.confirmOpenApp'),
+      );
+      if (!opened) return;
+      toast.success(t('voice.appOpened'));
+      setCallForm({ toNumber: '' });
     } catch {
       toast.error(t('voice.callFailed'));
     } finally {
       setCallLoading(false);
     }
-  }, [callForm, t, fetchCalls]);
-
-  /* ── Conference handler ── */
-
-  const handleConference = useCallback(async (): Promise<void> => {
-    const valid = participants.filter((p) => p.phone.trim());
-    if (valid.length < 2) {
-      toast.error(t('voice.minParticipants'));
-      return;
-    }
-
-    setCallLoading(true);
-    try {
-      await api.post('/voice/conference', {
-        participants: valid.map((p) => ({
-          phone: p.phone.trim(),
-          role: p.role,
-        })),
-      });
-      toast.success(t('voice.conferenceStarted'));
-      setShowConference(false);
-      setParticipants([{ phone: '', role: 'doctor' }, { phone: '', role: 'patient' }]);
-      void fetchCalls();
-    } catch {
-      toast.error(t('voice.conferenceFailed'));
-    } finally {
-      setCallLoading(false);
-    }
-  }, [participants, t, fetchCalls]);
+  }, [callForm, t]);
 
   /* ── Table columns ── */
 
@@ -278,10 +236,6 @@ export default function VoiceCallsPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setShowConference(true)}>
-            <Video className="w-4 h-4 mr-1" />
-            {t('voice.conferenceCall')}
-          </Button>
           <Button onClick={() => setTab('make')}>
             <Phone className="w-4 h-4 mr-1" />
             {t('voice.makeCall')}
@@ -376,12 +330,6 @@ export default function VoiceCallsPage() {
                     onChange={(e) => setCallForm((p) => ({ ...p, toNumber: e.target.value }))}
                     error={callErrors.toNumber}
                   />
-                  <Input
-                    label={t('voice.notes')}
-                    placeholder={t('voice.notesPlaceholder')}
-                    value={callForm.notes}
-                    onChange={(e) => setCallForm((p) => ({ ...p, notes: e.target.value }))}
-                  />
                   <Button onClick={() => void handleCall()} disabled={callLoading}>
                     <Phone className="w-4 h-4 mr-1" />
                     {callLoading ? t('voice.calling') : t('voice.makeCall')}
@@ -461,66 +409,6 @@ export default function VoiceCallsPage() {
         )}
       </Modal>
 
-      {/* ── Conference Modal ── */}
-      <Modal
-        open={showConference}
-        onClose={() => setShowConference(false)}
-        title={t('voice.conferenceCall')}
-        size="md"
-        footer={
-          <div className="flex gap-3 justify-end">
-            <Button variant="secondary" onClick={() => setShowConference(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={() => void handleConference()}
-              disabled={callLoading || participants.filter((p) => p.phone.trim()).length < 2}
-            >
-              <Video className="w-4 h-4 mr-1" />
-              {callLoading ? t('voice.starting') : t('voice.startConference')}
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-gray-500">{t('voice.minParticipants')}</p>
-          {participants.map((p, idx) => (
-            <div key={idx} className="grid grid-cols-2 gap-3">
-              <Input
-                label={t('voice.participantPhone', { num: String(idx + 1) } as Record<string, unknown>)}
-                placeholder={t('voice.toNumberPlaceholder')}
-                value={p.phone}
-                onChange={(e) => {
-                  const next = [...participants];
-                  next[idx] = { ...next[idx], phone: e.target.value };
-                  setParticipants(next);
-                }}
-              />
-              <Select
-                label={t('voice.role')}
-                value={p.role}
-                onChange={(e) => {
-                  const next = [...participants];
-                  next[idx] = { ...next[idx], role: e.target.value as Participant['role'] };
-                  setParticipants(next);
-                }}
-                options={[
-                  { value: 'doctor', label: t('voice.doctor') },
-                  { value: 'patient', label: t('voice.patient') },
-                  { value: 'staff', label: t('voice.staff') },
-                ]}
-              />
-            </div>
-          ))}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setParticipants((prev) => [...prev, { phone: '', role: 'staff' }])}
-          >
-            {t('voice.addParticipant')}
-          </Button>
-        </div>
-      </Modal>
     </div>
   );
 }
