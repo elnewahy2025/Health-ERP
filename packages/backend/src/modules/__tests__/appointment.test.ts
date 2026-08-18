@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
+import { clinicWorkingHoursWindow } from '@healthcare/shared';
+
 // ── Helper functions extracted from controller/mapper ──
 // These are pure functions that can be tested without DB
 
@@ -9,10 +11,6 @@ function calculateEndTime(startTime: string, durationMinutes: number): string {
   const endHours = Math.floor(totalMinutes / 60);
   const endMinutes = totalMinutes % 60;
   return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
-}
-
-function isWithinWorkingHours(time: string): boolean {
-  return time >= '08:00' && time <= '17:00';
 }
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -149,23 +147,21 @@ describe('Appointment Module', () => {
 
   // ── #7: Working hours validation ──
   describe('Working Hours Validation', () => {
-    it('accepts times within working hours', () => {
-      expect(isWithinWorkingHours('08:00')).toBe(true);
-      expect(isWithinWorkingHours('12:00')).toBe(true);
-      expect(isWithinWorkingHours('17:00')).toBe(true);
-      expect(isWithinWorkingHours('09:30')).toBe(true);
+    const configuredHours = [{ day: 'mon' as const, from: '09:00', to: '17:00' }];
+
+    it('accepts a configured appointment interval on the matching weekday', () => {
+      expect(clinicWorkingHoursWindow(configuredHours, '2026-08-17', '09:00', 15).allowed).toBe(true);
+      expect(clinicWorkingHoursWindow(configuredHours, '2026-08-17', '16:45', 15).allowed).toBe(true);
     });
 
-    it('rejects times before opening', () => {
-      expect(isWithinWorkingHours('07:59')).toBe(false);
-      expect(isWithinWorkingHours('00:00')).toBe(false);
-      expect(isWithinWorkingHours('06:00')).toBe(false);
+    it('rejects appointments before opening, after closing, or on a closed day', () => {
+      expect(clinicWorkingHoursWindow(configuredHours, '2026-08-17', '08:59', 15).allowed).toBe(false);
+      expect(clinicWorkingHoursWindow(configuredHours, '2026-08-17', '16:45', 30).allowed).toBe(false);
+      expect(clinicWorkingHoursWindow(configuredHours, '2026-08-18', '10:00', 15).allowed).toBe(false);
     });
 
-    it('rejects times after closing', () => {
-      expect(isWithinWorkingHours('17:01')).toBe(false);
-      expect(isWithinWorkingHours('23:59')).toBe(false);
-      expect(isWithinWorkingHours('18:00')).toBe(false);
+    it('allows appointments while no clinic schedule is configured', () => {
+      expect(clinicWorkingHoursWindow([], '2026-08-17', '23:00', 60).allowed).toBe(true);
     });
   });
 

@@ -26,6 +26,10 @@
       "types": "./dist/config/clinic-configuration.d.ts",
       "import": "./dist/config/clinic-configuration.js"
     },
+    "./config/clinic-working-hours": {
+      "types": "./dist/config/clinic-working-hours.d.ts",
+      "import": "./dist/config/clinic-working-hours.js"
+    },
     "./utils": {
       "types": "./dist/utils/index.d.ts",
       "import": "./dist/utils/index.js"

@@ -66,6 +66,21 @@ export type {
   ClinicModuleKey,
 } from './config/clinic-configuration.js';
 
+export {
+  CLINIC_WORKING_DAYS,
+  parseClinicWorkingHours,
+  validateClinicWorkingHours,
+  isValidClinicWorkingHours,
+  clinicWorkingDayForDate,
+  clinicWorkingHoursWindow,
+  formatClinicWorkingHours,
+} from './config/clinic-working-hours.js';
+export type {
+  ClinicWorkingDay,
+  ClinicWorkingHoursInterval,
+  ClinicWorkingHoursValidationError,
+} from './config/clinic-working-hours.js';
+
 export { getEnv } from './config/environment.js';
 export type { Environment } from './config/environment.js';
 

@@ -2,6 +2,7 @@ import { ConflictError, ForbiddenError, ValidationError } from '@healthcare/shar
 import {
   clinicConfigurationDefinition,
   CLINIC_CONFIGURATION_REGISTRY,
+  validateClinicWorkingHours,
 } from '@healthcare/shared';
 import type {
   ClinicConfigurationDefinition,
@@ -64,6 +65,12 @@ function validateValue(definition: ClinicConfigurationDefinition, value: unknown
   }
   if (definition.valueType === 'json' && value === undefined) {
     throw new ValidationError(`${definition.key} must contain a JSON value`);
+  }
+  if (definition.key === 'clinic.operations.working_hours') {
+    const errors = validateClinicWorkingHours(value);
+    if (errors.length > 0) {
+      throw new ValidationError(`${definition.key} is invalid: ${errors[0].message}`);
+    }
   }
 }
 

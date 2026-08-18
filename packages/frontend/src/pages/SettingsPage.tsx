@@ -9,6 +9,8 @@ import toast from 'react-hot-toast';
 import { CLINIC_CONFIGURATION_REGISTRY, clinicConfigurationDefinition } from '@healthcare/shared/config/clinic-configuration';
 import type { ClinicConfigurationEntry, ClinicConfigurationScope } from '../lib/api/clinic-configuration';
 import { isSupportedClinicLocale, isValidClinicTimezone } from '../lib/clinic-settings-validation';
+import { ClinicWorkingHoursEditor } from '../components/clinic/ClinicWorkingHoursEditor';
+import { parseClinicWorkingHours, validateClinicWorkingHours, type ClinicWorkingHoursInterval } from '@healthcare/shared/config/clinic-working-hours';
 
 interface ClinicSettings {
   clinicName: string;
@@ -101,6 +103,7 @@ export default function SettingsPage() {
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<SettingsTab>('clinic');
   const [clinic, setClinic] = useState<ClinicSettings>(INITIAL_CLINIC);
+  const [workingHoursDraft, setWorkingHoursDraft] = useState<ClinicWorkingHoursInterval[]>([]);
   const [modules, setModules] = useState<ClinicModuleStatus[]>([]);
   const [readinessByModule, setReadinessByModule] = useState<Record<string, ClinicModuleReadiness>>({});
   const [loading, setLoading] = useState(true);
@@ -122,7 +125,9 @@ export default function SettingsPage() {
     const load = async () => {
       try {
         const response = await api.get('/clinic-settings');
-        setClinic({ ...INITIAL_CLINIC, ...(response.data.data || response.data) });
+        const nextClinic = { ...INITIAL_CLINIC, ...(response.data.data || response.data) };
+        setClinic(nextClinic);
+        setWorkingHoursDraft(parseClinicWorkingHours(nextClinic.workingHours));
       } catch {
         toast.error(t('settings.loadError'));
       } finally {
@@ -254,7 +259,13 @@ export default function SettingsPage() {
     }
     setSaving(true);
     try {
-      await api.put('/clinic-settings', clinic);
+      const workingHoursErrors = validateClinicWorkingHours(workingHoursDraft);
+      if (workingHoursErrors.length > 0) {
+        toast.error(t(`settings.workingHoursError.${workingHoursErrors[0].code}`));
+        return;
+      }
+      await api.put('/clinic-settings', { ...clinic, workingHours: JSON.stringify(workingHoursDraft) });
+      setClinic((current) => ({ ...current, workingHours: JSON.stringify(workingHoursDraft) }));
       toast.success(t('settings.saved'));
     } catch {
       toast.error(t('settings.saveError'));
@@ -364,7 +375,10 @@ export default function SettingsPage() {
               <div>
                 <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">{t('settings.workingHoursLegal')}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input id="clinic-settings-working-hours" label={t('settings.workingHours')} value={clinic.workingHours} onChange={e => setClinic(p => ({ ...p, workingHours: e.target.value }))} />
+                  <div id="clinic-settings-working-hours" className="space-y-1 sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('settings.workingHours')}</label>
+                    <ClinicWorkingHoursEditor value={workingHoursDraft} onChange={setWorkingHoursDraft} />
+                  </div>
                   <Input id="clinic-settings-license-number" label={t('settings.licenseNumber')} value={clinic.licenseNumber} onChange={e => setClinic(p => ({ ...p, licenseNumber: e.target.value }))} />
                   <Input id="clinic-settings-tax-number" label={t('settings.taxNumber')} value={clinic.taxNumber} onChange={e => setClinic(p => ({ ...p, taxNumber: e.target.value }))} />
                   <Input id="clinic-settings-currency" label={t('settings.currency')} value={clinic.currency} maxLength={3} onChange={e => setClinic(p => ({ ...p, currency: e.target.value.toUpperCase() }))} placeholder={DEFAULT_CLINIC_CURRENCY} />
@@ -441,7 +455,21 @@ export default function SettingsPage() {
                     const hasOverride = entry.scopeType === scopeType && entry.scopeId === scopeId;
                     const statusLabel = hasOverride ? t('settings.overrideSaved') : t('settings.inheritedValue');
                     const statusClass = hasOverride ? 'text-blue-700' : 'text-[var(--text-muted)]';
-                    return entry.definition.valueType === 'json' ? (
+                    return entry.key === 'clinic.operations.working_hours' ? (
+                      <div key={entry.key} className="space-y-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+                        <ClinicWorkingHoursEditor
+                          value={value}
+                          onChange={(next) => setScopedDraft((current) => ({ ...current, [entry.key]: JSON.stringify(next) }))}
+                          disabled={scopedSaving}
+                        />
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs text-[var(--text-muted)]">{entry.definition.description}</p>
+                          <span className={`shrink-0 text-xs ${statusClass}`}>{statusLabel}</span>
+                        </div>
+                        {hasOverride && <button type="button" className="text-xs text-red-600 hover:underline" onClick={() => void handleResetScoped(entry)}>{t('settings.resetToInherited')}</button>}
+                      </div>
+                    ) : entry.definition.valueType === 'json' ? (
                       <div key={entry.key} className="space-y-1">
                         <label htmlFor={`scoped-${entry.key}`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
                         <textarea

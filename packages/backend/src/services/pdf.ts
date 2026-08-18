@@ -1,6 +1,6 @@
 import { db } from '../core/database.js';
 import { listEffectiveClinicConfiguration, type ClinicConfigurationScopeContext } from './clinic-configuration.js';
-import { clinicConfigurationDefinition } from '@healthcare/shared';
+import { clinicConfigurationDefinition, formatClinicWorkingHours } from '@healthcare/shared';
 
 const DEFAULT_CLINIC_CURRENCY = String(
   clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '',
@@ -79,6 +79,8 @@ export async function loadClinicDocumentContext(
     text('clinic.address.country'),
   ].filter(Boolean).join(', ');
   const workingHoursValue = values.get('clinic.operations.working_hours');
+  const workingHoursText = formatClinicWorkingHours(workingHoursValue, locale)
+    || (typeof workingHoursValue === 'string' ? workingHoursValue.trim() : '');
   return {
     displayName: text('clinic.profile.display_name') || tenant?.name || '',
     legalName: text('clinic.profile.legal_name') || text('clinic.profile.display_name') || tenant?.name || '',
@@ -90,7 +92,7 @@ export async function loadClinicDocumentContext(
     address,
     phone: text('clinic.contact.land_phone'),
     email: text('clinic.contact.email'),
-    workingHours: typeof workingHoursValue === 'string' ? workingHoursValue : JSON.stringify(workingHoursValue || []),
+    workingHours: workingHoursText,
   };
 }
 

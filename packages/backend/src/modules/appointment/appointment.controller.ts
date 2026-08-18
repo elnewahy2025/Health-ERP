@@ -24,6 +24,8 @@ import {
 import { ForbiddenError } from '@healthcare/shared/errors';
 import type { AppointmentRow } from './types.js';
 import type { PermissionScope } from '@healthcare/shared/authz';
+import { clinicWorkingHoursWindow, validateClinicWorkingHours } from '@healthcare/shared';
+import { listEffectiveClinicConfiguration } from '../../services/clinic-configuration.js';
 
 // ── #5: Valid status transitions ──
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -36,11 +38,36 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   no_show: [],
 };
 
-// ── #7: Default working hours (configurable per tenant in future) ──
-const WORKING_HOURS = { open: '08:00', close: '17:00' };
+// ── #7: Effective clinic working hours ──
+async function getBranchWorkingHours(tenantId: string, branchId: string): Promise<unknown> {
+  const entries = await listEffectiveClinicConfiguration(tenantId, {
+    scopeType: 'branch',
+    scopeId: branchId,
+  });
+  const value = entries.find((entry) => entry.key === 'clinic.operations.working_hours')?.value ?? [];
+  const errors = validateClinicWorkingHours(value);
+  if (errors.length > 0) {
+    throw new ValidationError(`Clinic working-hours configuration is invalid: ${errors[0].message}`);
+  }
+  return value;
+}
 
-function isWithinWorkingHours(time: string): boolean {
-  return time >= WORKING_HOURS.open && time <= WORKING_HOURS.close;
+async function assertWithinWorkingHours(
+  tenantId: string,
+  branchId: string,
+  appointmentDate: string,
+  startTime: string,
+  durationMinutes: number,
+): Promise<void> {
+  const value = await getBranchWorkingHours(tenantId, branchId);
+  const window = clinicWorkingHoursWindow(value, appointmentDate, startTime, durationMinutes);
+  if (!window.allowed) {
+    throw new WorkingHoursError(
+      startTime,
+      window.opening || 'configured working hours',
+      window.closing || 'configured working hours',
+    );
+  }
 }
 
 // ── #8: Cancellation policy — >24h free, <=24h requires reason ──
@@ -149,10 +176,14 @@ export async function createAppointment(request: FastifyRequest, reply: FastifyR
     throw new ForbiddenError('You can only create appointments in your assigned branches');
   }
 
-  // ── #7: Working hours validation ──
-  if (!isWithinWorkingHours(body.startTime)) {
-    throw new WorkingHoursError(body.startTime, WORKING_HOURS.open, WORKING_HOURS.close);
-  }
+  // ── #7: Effective clinic working-hours validation ──
+  await assertWithinWorkingHours(
+    tenantId,
+    body.branchId,
+    body.appointmentDate,
+    body.startTime,
+    body.duration,
+  );
 
   // ── #4: Scheduling conflict detection ──
   const overlap = await repo.findOverlappingAppointment(
@@ -250,15 +281,19 @@ export async function updateAppointment(request: FastifyRequest, reply: FastifyR
 
   if (body.appointmentDate) updateData.appointment_date = body.appointmentDate;
 
-  if (body.startTime) {
-    // ── #7: Working hours validation ──
-    if (!isWithinWorkingHours(body.startTime)) {
-      throw new WorkingHoursError(body.startTime, WORKING_HOURS.open, WORKING_HOURS.close);
-    }
-    updateData.start_time = body.startTime;
-  }
+  if (body.startTime) updateData.start_time = body.startTime;
 
   if (body.duration) updateData.duration = body.duration;
+
+  if (body.startTime || body.appointmentDate || body.duration) {
+    await assertWithinWorkingHours(
+      tenantId,
+      existing.branch_id,
+      body.appointmentDate || existing.appointment_date,
+      body.startTime || existing.start_time,
+      body.duration || existing.duration,
+    );
+  }
 
   // Keep end_time consistent whenever start time or duration changes
   const effectiveStart = body.startTime || existing.start_time;
@@ -477,9 +512,19 @@ export async function bulkCreateAppointments(request: FastifyRequest, reply: Fas
       continue;
     }
 
-    // Working hours
-    if (!isWithinWorkingHours(apt.startTime)) {
-      conflicts.push(`${apt.startTime} outside working hours for patient ${apt.patientId}`);
+    // Effective branch working hours
+    try {
+      await assertWithinWorkingHours(
+        tenantId,
+        apt.branchId,
+        apt.appointmentDate,
+        apt.startTime,
+        apt.duration,
+      );
+    } catch (error) {
+      conflicts.push(error instanceof WorkingHoursError
+        ? `${apt.startTime} outside configured working hours for patient ${apt.patientId}`
+        : `Invalid working-hours configuration for branch ${apt.branchId}`);
       continue;
     }
 
