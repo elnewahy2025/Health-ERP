@@ -39,7 +39,7 @@ const DEFAULT_CLINIC_CURRENCY = String(
 const INITIAL_CLINIC: ClinicSettings = {
   clinicName: '', legalName: '', branch: '', landPhone: '', whatsappPhone: '', logoUrl: '',
   address: '', city: '', country: '', googleMapsLocation: '', email: '',
-  website: '', workingHours: 'Sun-Thu: 9AM-5PM', licenseNumber: '', taxNumber: '', currency: DEFAULT_CLINIC_CURRENCY, timezone: 'UTC', locale: 'en',
+  website: '', workingHours: '', licenseNumber: '', taxNumber: '', currency: DEFAULT_CLINIC_CURRENCY, timezone: 'UTC', locale: 'en',
 };
 
 function moduleLabel(moduleKey: string): string {
@@ -234,7 +234,7 @@ export default function SettingsPage() {
                   <Input id="clinic-settings-license-number" label={t('settings.licenseNumber')} value={clinic.licenseNumber} onChange={e => setClinic(p => ({ ...p, licenseNumber: e.target.value }))} />
                   <Input id="clinic-settings-tax-number" label={t('settings.taxNumber')} value={clinic.taxNumber} onChange={e => setClinic(p => ({ ...p, taxNumber: e.target.value }))} />
                   <Input id="clinic-settings-currency" label={t('settings.currency')} value={clinic.currency} maxLength={3} onChange={e => setClinic(p => ({ ...p, currency: e.target.value.toUpperCase() }))} placeholder={DEFAULT_CLINIC_CURRENCY} />
-                  <Input id="clinic-settings-timezone" label={t('settings.timezone')} value={clinic.timezone} onChange={e => setClinic(p => ({ ...p, timezone: e.target.value }))} placeholder="Africa/Cairo" />
+                  <Input id="clinic-settings-timezone" label={t('settings.timezone')} value={clinic.timezone} onChange={e => setClinic(p => ({ ...p, timezone: e.target.value }))} placeholder="Area/City" />
                   <Input id="clinic-settings-locale" label={t('settings.locale')} value={clinic.locale} onChange={e => setClinic(p => ({ ...p, locale: e.target.value }))} placeholder="en" />
                 </div>
               </div>

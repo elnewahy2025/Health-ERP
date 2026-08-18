@@ -3,6 +3,7 @@ import {
   sendNotification,
   loadClinicNotificationContext,
   formatNotificationDate,
+  formatNotificationTime,
 } from './notification.js';
 import { sendEmail } from './email.js';
 import { sendSms } from './sms.js';
@@ -263,22 +264,26 @@ export async function sendManualReminder(appointmentId: string, tenantId: string
   try {
     const apt = await db('appointments')
       .join('patients', 'appointments.patient_id', 'patients.id')
-      .join('tenants', 'appointments.tenant_id', 'tenants.id')
       .where('appointments.id', appointmentId)
-      .select('appointments.*', 'patients.first_name', 'patients.last_name', 'patients.phone', 'patients.email', 'tenants.name as clinic_name')
+      .select('appointments.*', 'patients.first_name', 'patients.last_name', 'patients.phone', 'patients.email')
       .first();
 
     if (!apt) return false;
 
-    const aptDate = new Date(apt.appointment_date);
-    const timeStr = aptDate.toLocaleTimeString('en-EG', { hour: '2-digit', minute: '2-digit' });
-    const dateStr = aptDate.toLocaleDateString('en-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+    const clinic = await loadClinicNotificationContext(
+      tenantId,
+      apt.branch_id ? { scopeType: 'branch', scopeId: apt.branch_id } : undefined,
+    );
+    const appointmentDateTime = `${apt.appointment_date}T${apt.start_time || '00:00'}:00`;
+    const timeStr = formatNotificationTime(appointmentDateTime, clinic.timezone, clinic.locale);
+    const dateStr = formatNotificationDate(appointmentDateTime, clinic.timezone, clinic.locale);
 
     if (apt.phone) {
       await sendNotification({
         tenantId, channel: 'sms', recipient: apt.phone,
         templateKey: 'appointment_reminder_manual',
-        variables: { patientName: `${apt.first_name} ${apt.last_name}`, date: dateStr, time: timeStr, clinicName: apt.clinic_name || 'Vision Healthcare' },
+        variables: { patientName: `${apt.first_name} ${apt.last_name}`, date: dateStr, time: timeStr, clinicName: clinic.displayName },
+        locale: clinic.locale,
       });
     }
 
@@ -286,7 +291,8 @@ export async function sendManualReminder(appointmentId: string, tenantId: string
       await sendNotification({
         tenantId, channel: 'email', recipient: apt.email,
         templateKey: 'appointment_reminder_manual',
-        variables: { patientName: `${apt.first_name} ${apt.last_name}`, date: dateStr, time: timeStr, clinicName: apt.clinic_name || 'Vision Healthcare' },
+        variables: { patientName: `${apt.first_name} ${apt.last_name}`, date: dateStr, time: timeStr, clinicName: clinic.displayName },
+        locale: clinic.locale,
       });
     }
 
@@ -371,6 +377,8 @@ async function checkAndSendReminders(): Promise<void> {
       'appointments.id as appointment_id',
       'appointments.tenant_id',
       'appointments.appointment_date',
+      'appointments.start_time',
+      'appointments.branch_id',
       'appointments.type',
       'appointments.reason',
       'patients.first_name',
@@ -390,9 +398,14 @@ async function checkAndSendReminders(): Promise<void> {
 
   for (const apt of upcomingAppointments) {
     try {
-      const aptDate = new Date(apt.appointment_date);
-      const timeStr = aptDate.toLocaleTimeString('en-EG', { hour: '2-digit', minute: '2-digit' });
-      const dateStr = aptDate.toLocaleDateString('en-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+      const clinic = await loadClinicNotificationContext(
+        apt.tenant_id,
+        apt.branch_id ? { scopeType: 'branch', scopeId: apt.branch_id } : undefined,
+      );
+      const appointmentDateTime = `${apt.appointment_date}T${apt.start_time || '00:00'}:00`;
+      const aptDate = new Date(appointmentDateTime);
+      const timeStr = formatNotificationTime(appointmentDateTime, clinic.timezone, clinic.locale);
+      const dateStr = formatNotificationDate(appointmentDateTime, clinic.timezone, clinic.locale);
       const hoursUntil = Math.floor((aptDate.getTime() - Date.now()) / (1000 * 60 * 60));
 
       let reminderType = 'appointment_reminder_24h';
@@ -411,12 +424,13 @@ async function checkAndSendReminders(): Promise<void> {
           variables: {
             patientName: `${apt.first_name} ${apt.last_name}`,
             doctorName: 'the doctor',
-            clinicName: apt.clinic_name || 'Vision Healthcare',
+            clinicName: clinic.displayName,
             date: dateStr,
             time: timeStr,
             hoursUntil: String(hoursUntil),
             reason: apt.reason || 'follow-up',
           },
+          locale: clinic.locale,
         });
         sentCount++;
       }
@@ -430,12 +444,13 @@ async function checkAndSendReminders(): Promise<void> {
           variables: {
             patientName: `${apt.first_name} ${apt.last_name}`,
             doctorName: 'the doctor',
-            clinicName: apt.clinic_name || 'Vision Healthcare',
+            clinicName: clinic.displayName,
             date: dateStr,
             time: timeStr,
             hoursUntil: String(hoursUntil),
             reason: apt.reason || 'follow-up',
           },
+          locale: clinic.locale,
         });
         sentCount++;
       }

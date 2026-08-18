@@ -20,6 +20,7 @@ vi.mock('../clinic-configuration.js', () => ({
 
 import {
   formatNotificationDate,
+  formatNotificationTime,
   loadClinicNotificationContext,
 } from '../notification.js';
 
@@ -27,6 +28,11 @@ describe('clinic-aware notification formatting', () => {
   it('formats appointment dates using the configured timezone', () => {
     expect(formatNotificationDate('2026-01-15T23:30:00.000Z', 'Africa/Cairo', 'en'))
       .toContain('Friday, January 16, 2026');
+  });
+
+  it('formats appointment times using the configured timezone', () => {
+    expect(formatNotificationTime('2026-01-15T23:30:00.000Z', 'Africa/Cairo', 'en'))
+      .toMatch(/01:30/);
   });
 
   it('uses Arabic formatting for an Arabic clinic locale', () => {

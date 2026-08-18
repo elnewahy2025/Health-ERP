@@ -22,6 +22,18 @@ function isValidTimeZone(value: string): boolean {
   }
 }
 
+export function formatNotificationTime(value: string | Date, timezone: string, locale = 'en'): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const safeTimezone = isValidTimeZone(timezone) ? timezone : 'UTC';
+  const safeLocale = locale.toLowerCase().startsWith('ar') ? 'ar-EG' : 'en-EG';
+  return new Intl.DateTimeFormat(safeLocale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: safeTimezone,
+  }).format(date);
+}
+
 export function formatNotificationDate(value: string | Date, timezone: string, locale = 'en'): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);

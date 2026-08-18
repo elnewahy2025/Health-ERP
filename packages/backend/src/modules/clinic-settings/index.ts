@@ -225,10 +225,10 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
       googleMapsLocation: legacyValue(entries, LEGACY_FIELD_MAP.googleMapsLocation, legacy.googleMapsLocation || ''),
       email: legacyValue(entries, LEGACY_FIELD_MAP.email, legacy.email || ''),
       website: legacyValue(entries, LEGACY_FIELD_MAP.website, legacy.website || ''),
-      workingHours: legacyValue(entries, LEGACY_FIELD_MAP.workingHours, legacy.workingHours || 'Sun-Thu: 9AM-5PM'),
+      workingHours: legacyValue(entries, LEGACY_FIELD_MAP.workingHours, legacy.workingHours || ''),
       licenseNumber: legacyValue(entries, LEGACY_FIELD_MAP.licenseNumber, legacy.licenseNumber || ''),
       taxNumber: legacyValue(entries, LEGACY_FIELD_MAP.taxNumber, legacy.taxNumber || ''),
-      currency: legacyValue(entries, LEGACY_FIELD_MAP.currency, legacy.currency || 'EGP'),
+      currency: legacyValue(entries, LEGACY_FIELD_MAP.currency, legacy.currency || DEFAULT_CLINIC_CURRENCY),
       twilioConfigured: Boolean(legacy.twilioAccountSid || legacy.twilioAuthToken || legacy.twilioMessagingServiceSid),
     });
   });

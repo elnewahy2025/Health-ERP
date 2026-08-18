@@ -5,6 +5,7 @@ import { db } from '../../core/database.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { getCtx } from '../../utils/route-helper.js';
 import { logAudit } from '../../services/audit.js';
+import { loadClinicNotificationContext } from '../../services/notification.js';
 import { createRateLimiter } from '../../utils/rate-limiter.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
@@ -335,7 +336,8 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
   // ══ STAFF — OTP delivery queue (patients waiting for the hospital to send OTP) ══
   app.get('/api/v1/portal/otp-queue', { preHandler: [authenticate, authorize('patient_portal.manage')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
-    const rows = await db('portal_sessions')
+    const clinic = await loadClinicNotificationContext(tenantId);
+    const rows = await db('portal_sessions as portal_sessions')
       .join('patients', 'portal_sessions.patient_id', 'patients.id')
       .where('portal_sessions.tenant_id', tenantId)
       .whereIn('portal_sessions.delivery_status', ['pending', 'sent'])
@@ -356,7 +358,7 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
         otp = r.otp ? String(r.otp) : null;
       }
       const phone = String(r.patient_phone || '');
-      const message = `Your Vision Healthcare OTP is ${otp || '______'}. It expires in 10 minutes.`;
+      const message = `Your ${clinic.displayName || 'Clinic'} OTP is ${otp || '______'}. It expires in 10 minutes.`;
       return {
         id: r.id,
         patientId: r.patient_id,

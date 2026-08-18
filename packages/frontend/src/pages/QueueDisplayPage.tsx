@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ListOrdered, Bell, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 import { Spinner } from '../components/ui';
 import { sanitizeString } from '../lib/sanitize';
+import { formatClinicDate, useClinicConfiguration } from '../stores/clinicConfigurationStore';
 
 interface QueueEntry {
   id: string;
@@ -26,6 +27,9 @@ interface DisplayData {
 
 export default function QueueDisplayPage() {
   const { t } = useTranslation();
+  const { identity } = useClinicConfiguration();
+  const clinicLocale = identity?.locale?.toLowerCase().startsWith('ar') ? 'ar-EG' : 'en-EG';
+  const clinicTimezone = identity?.timezone || 'UTC';
 
   const [data, setData] = useState<DisplayData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -180,7 +184,7 @@ export default function QueueDisplayPage() {
           <ListOrdered className="w-10 h-10 text-blue-500" />
           <div>
             <h1 className="text-4xl font-bold">{t('queue.patientQueue')}</h1>
-            <p className="text-lg text-gray-300">{t('queue.clinicName')}</p>
+            <p className="text-lg text-gray-300">{identity?.displayName || t('queue.clinicName')}</p>
           </div>
         </div>
         <div className="text-right">
@@ -195,17 +199,13 @@ export default function QueueDisplayPage() {
               </span>
             )}
           </div>
-          <p className="text-3xl font-bold tabular-nums">{time.toLocaleTimeString()}</p>
+          <p className="text-3xl font-bold tabular-nums">{formatClinicDate(time, clinicLocale, clinicTimezone, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</p>
           <p className="text-lg text-gray-300">
-            {time.toLocaleDateString(undefined, {
-              weekday: 'long',
-              month: 'long',
-              day: 'numeric',
-            })}
+            {formatClinicDate(time, clinicLocale, clinicTimezone, { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
           {lastUpdate && (
             <p className="text-xs text-gray-300 mt-1">
-              {t('queue.updatedAt', { time: lastUpdate.toLocaleTimeString() })}
+              {t('queue.updatedAt', { time: formatClinicDate(lastUpdate, clinicLocale, clinicTimezone, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) })}
             </p>
           )}
         </div>
@@ -286,7 +286,7 @@ export default function QueueDisplayPage() {
       </div>
 
       <div className="text-center mt-6 text-gray-300 text-sm">
-        {connected ? t('queue.realTime') : t('queue.autoRefresh')} • Vision Healthcare ERP
+        {connected ? t('queue.realTime') : t('queue.autoRefresh')} • {identity?.displayName || t('queue.clinicName')}
       </div>
     </div>
   );

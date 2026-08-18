@@ -14,6 +14,7 @@ import {
 import * as repo from './appointment.repository.js';
 import { mapAppointment, calculateEndTime, generateTelemedicineLink } from './appointment.mapper.js';
 import { sendAppointmentConfirmation } from '../../services/reminder.service.js';
+import { loadClinicNotificationContext } from '../../services/notification.js';
 import { logAudit } from '../../services/audit.js';
 import {
   hasPermission,
@@ -178,7 +179,10 @@ export async function createAppointment(request: FastifyRequest, reply: FastifyR
     is_virtual: body.isVirtual,
     telemedicine_link: body.isVirtual ? generateTelemedicineLink() : null,
     status: 'scheduled',
-    timezone: body.timezone || 'Africa/Cairo',
+    timezone: body.timezone || (await loadClinicNotificationContext(
+      tenantId,
+      body.branchId ? { scopeType: 'branch', scopeId: body.branchId } : undefined,
+    )).timezone,
     created_by: userId,
   });
 
@@ -505,7 +509,10 @@ export async function bulkCreateAppointments(request: FastifyRequest, reply: Fas
       is_virtual: apt.isVirtual || false,
       telemedicine_link: apt.isVirtual ? generateTelemedicineLink() : null,
       status: 'scheduled',
-      timezone: 'Africa/Cairo',
+      timezone: (await loadClinicNotificationContext(
+        tenantId,
+        apt.branchId ? { scopeType: 'branch', scopeId: apt.branchId } : undefined,
+      )).timezone,
       created_by: userId,
     });
     created.push(inserted);

@@ -95,8 +95,8 @@ export async function registerTenant(request: FastifyRequest, reply: FastifyRepl
   try {
     const verifyUrl = `${env.APP_URL}/verify-email?token=${result.verificationToken}`;
     await sendEmail({
-      to: body.adminEmail, subject: 'Verify your email — Vision Healthcare',
-      html: `<p>Welcome to Vision Healthcare!</p><p>Please verify your email by clicking: <a href="${verifyUrl}">Verify Email</a></p><p>This link expires in 24 hours.</p>`,
+      to: body.adminEmail, subject: `Verify your email — ${result.tenant.name}`,
+      html: `<p>Welcome to ${result.tenant.name}!</p><p>Please verify your email by clicking: <a href="${verifyUrl}">Verify Email</a></p><p>This link expires in 24 hours.</p>`,
     });
   } catch { /* best-effort */ }
 
@@ -500,7 +500,7 @@ export async function forgotPassword(request: FastifyRequest, reply: FastifyRepl
   await repo.createPasswordReset({ user_id: user.id, tenant_id: tenant.id, token_hash: resetHash, expires_at: new Date(Date.now() + 60 * 60 * 1000) });
 
   try {
-    await sendEmail({ to: user.email, subject: 'Password Reset — Vision Healthcare',
+    await sendEmail({ to: user.email, subject: `Password Reset — ${tenant.name}`,
       html: `<p>You requested a password reset.</p><p>Click: <a href="${env.APP_URL}/reset-password?token=${resetToken}">Reset Password</a></p><p>This link expires in 1 hour.</p>` });
   } catch { /* best-effort */ }
 
@@ -555,7 +555,7 @@ export async function resendVerification(request: FastifyRequest, reply: Fastify
   const verificationToken = svc.generateVerificationToken();
   await repo.updateUser(user.id, { email_verification_token: verificationToken });
   try {
-    await sendEmail({ to: user.email, subject: 'Verify your email — Vision Healthcare',
+    await sendEmail({ to: user.email, subject: `Verify your email — ${tenant.name}`,
       html: `<p>Please verify your email: <a href="${env.APP_URL}/verify-email?token=${verificationToken}">Verify Email</a></p>` });
   } catch { /* best-effort */ }
   return sendSuccess(reply, { message: 'If an account exists, a verification email has been sent.' });

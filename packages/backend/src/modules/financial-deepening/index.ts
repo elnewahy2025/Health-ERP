@@ -5,6 +5,7 @@ import { db } from '../../core/database.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { sendSuccess, sendPaginated, sendError } from '../../utils/response.js';
 import { logAudit } from '../../services/audit.js';
+import { loadClinicDocumentContext } from '../../services/pdf.js';
 import { getEnv } from '@healthcare/shared/config';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
@@ -551,7 +552,11 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     const tenantId = getTenantId(request);
     const { id } = request.params as { id: string };
 
-    const invoice = await db('invoices').where({ id, tenant_id: tenantId }).first();
+    const invoice = await db('invoices')
+      .leftJoin('appointments as eta_appointments', 'invoices.appointment_id', 'eta_appointments.id')
+      .where({ 'invoices.id': id, 'invoices.tenant_id': tenantId })
+      .select('invoices.*', 'eta_appointments.branch_id as branch_id')
+      .first();
     if (!invoice) return sendError(reply, 'Invoice not found', 404);
 
     const etaInvoice = await db('eta_invoices').where({ invoice_id: id, tenant_id: tenantId }).first();
@@ -566,8 +571,8 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
       });
     }
 
-    const tenant = await db('tenants').where({ id: tenantId }).first();
-    const sellerName = tenant?.name || 'Vision Healthcare';
+    const clinic = await loadClinicDocumentContext(tenantId, { branchId: invoice.branch_id || undefined });
+    const sellerName = clinic.legalName || clinic.displayName;
     const taxRegNo = (env as unknown as Record<string, unknown>).TAX_REGISTRATION_NUMBER as string || '000000000000000';
     const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
     const total = Number(invoice.total);
