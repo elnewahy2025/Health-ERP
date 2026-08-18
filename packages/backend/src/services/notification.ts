@@ -1,6 +1,72 @@
 import { db } from '../core/database.js';
 import { sendEmail } from './email.js';
 import { sendSms } from './sms.js';
+import { listEffectiveClinicConfiguration } from './clinic-configuration.js';
+import type { ClinicConfigurationScopeRef } from './clinic-configuration.js';
+
+export interface ClinicNotificationContext {
+  displayName: string;
+  email: string;
+  phone: string;
+  address: string;
+  timezone: string;
+  locale: string;
+}
+
+function isValidTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function formatNotificationDate(value: string | Date, timezone: string, locale = 'en'): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const safeTimezone = isValidTimeZone(timezone) ? timezone : 'UTC';
+  const safeLocale = locale.toLowerCase().startsWith('ar') ? 'ar-EG' : 'en-EG';
+  return new Intl.DateTimeFormat(safeLocale, {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: safeTimezone,
+  }).format(date);
+}
+
+export async function loadClinicNotificationContext(
+  tenantId: string,
+  scope: ClinicConfigurationScopeRef = { scopeType: 'tenant', scopeId: tenantId },
+): Promise<ClinicNotificationContext> {
+  const [tenant, entries] = await Promise.all([
+    db('tenants').where({ id: tenantId }).select('name').first(),
+    listEffectiveClinicConfiguration(tenantId, scope),
+  ]);
+  const values = new Map(entries.map((entry) => [entry.key, entry.value]));
+  const text = (key: string): string => {
+    const value = values.get(key);
+    return typeof value === 'string' ? value.trim() : '';
+  };
+  const locale = text('clinic.locale.default') || 'en';
+  const timezone = text('clinic.timezone.default') || 'UTC';
+  const address = [
+    text('clinic.address.street'),
+    text('clinic.address.city'),
+    text('clinic.address.country'),
+  ].filter(Boolean).join(', ');
+  return {
+    displayName: text('clinic.profile.display_name') || tenant?.name || '',
+    email: text('clinic.contact.email'),
+    phone: text('clinic.contact.land_phone') || text('clinic.contact.whatsapp_phone'),
+    address,
+    timezone,
+    locale,
+  };
+}
 
 interface NotificationData {
   tenantId: string;

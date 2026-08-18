@@ -1,5 +1,9 @@
 import { db } from '../core/database.js';
-import { sendNotification } from './notification.js';
+import {
+  sendNotification,
+  loadClinicNotificationContext,
+  formatNotificationDate,
+} from './notification.js';
 import { sendEmail } from './email.js';
 import { sendSms } from './sms.js';
 import { logAudit } from './audit.js';
@@ -19,6 +23,8 @@ interface ReminderConfig {
   appointmentTime: string;
   clinicAddress?: string;
   clinicPhone?: string;
+  branchId?: string;
+  clinicContext?: Awaited<ReturnType<typeof loadClinicNotificationContext>>;
 }
 
 interface CronConfig {
@@ -49,7 +55,14 @@ const DEFAULT_CRON_CONFIG: CronConfig = {
 // ============================================
 
 export async function sendAppointmentReminder(config: ReminderConfig): Promise<boolean> {
-  const { tenantId, patientName, doctorName, appointmentTime, clinicPhone } = config;
+  const { tenantId, patientName, doctorName, appointmentTime } = config;
+  const clinic = config.clinicContext || await loadClinicNotificationContext(
+    tenantId,
+    config.branchId ? { scopeType: 'branch', scopeId: config.branchId } : undefined,
+  );
+  const clinicName = clinic.displayName || 'Clinic';
+  const clinicPhone = config.clinicPhone || clinic.phone;
+  const clinicAddress = config.clinicAddress || clinic.address;
 
   if (config.patientEmail) {
     await sendNotification({
@@ -61,14 +74,17 @@ export async function sendAppointmentReminder(config: ReminderConfig): Promise<b
         patientName,
         doctorName,
         appointmentTime,
-        clinicPhone: clinicPhone || '',
+        clinicName,
+        clinicAddress,
+        clinicPhone,
+        clinicEmail: clinic.email,
       },
-      locale: 'en',
+      locale: clinic.locale,
     }).catch(() => {});
   }
 
   if (config.patientPhone) {
-    const smsBody = `Hi ${patientName}, this is a reminder for your appointment with Dr. ${doctorName} on ${appointmentTime}. Please arrive 10 minutes early. For cancellation, call ${clinicPhone || 'us'}.`;
+    const smsBody = `${clinicName}: Hi ${patientName}, this is a reminder for your appointment with Dr. ${doctorName} on ${appointmentTime}. Please arrive 10 minutes early. For cancellation, call ${clinicPhone || clinicName}.`;
     await sendNotification({
       tenantId,
       channel: 'sms',
@@ -78,9 +94,11 @@ export async function sendAppointmentReminder(config: ReminderConfig): Promise<b
         patientName,
         doctorName,
         appointmentTime,
+        clinicName,
+        clinicPhone,
         message: smsBody,
       },
-      locale: 'en',
+      locale: clinic.locale,
     }).catch(() => {});
   }
 
@@ -88,7 +106,14 @@ export async function sendAppointmentReminder(config: ReminderConfig): Promise<b
 }
 
 export async function sendAppointmentConfirmation(config: ReminderConfig): Promise<boolean> {
-  const { tenantId, patientName, doctorName, appointmentTime, clinicPhone, clinicAddress } = config;
+  const { tenantId, patientName, doctorName, appointmentTime } = config;
+  const clinic = config.clinicContext || await loadClinicNotificationContext(
+    tenantId,
+    config.branchId ? { scopeType: 'branch', scopeId: config.branchId } : undefined,
+  );
+  const clinicName = clinic.displayName || 'Clinic';
+  const clinicPhone = config.clinicPhone || clinic.phone;
+  const clinicAddress = config.clinicAddress || clinic.address;
 
   if (config.patientEmail) {
     await sendNotification({
@@ -100,10 +125,12 @@ export async function sendAppointmentConfirmation(config: ReminderConfig): Promi
         patientName,
         doctorName,
         appointmentTime,
-        clinicAddress: clinicAddress || '',
-        clinicPhone: clinicPhone || '',
+        clinicName,
+        clinicAddress,
+        clinicPhone,
+        clinicEmail: clinic.email,
       },
-      locale: 'en',
+      locale: clinic.locale,
     }).catch(() => {});
   }
 
@@ -117,9 +144,11 @@ export async function sendAppointmentConfirmation(config: ReminderConfig): Promi
         patientName,
         doctorName,
         appointmentTime,
-        message: `Your appointment with Dr. ${doctorName} is confirmed for ${appointmentTime}.`,
+        clinicName,
+        clinicPhone,
+        message: `${clinicName}: Your appointment with Dr. ${doctorName} is confirmed for ${appointmentTime}.`,
       },
-      locale: 'en',
+      locale: clinic.locale,
     }).catch(() => {});
   }
 
@@ -144,6 +173,7 @@ export async function processPendingReminders(): Promise<{ sent: number; failed:
     .select(
       'appointment_reminders.*',
       'appointments.appointment_date',
+      'appointments.branch_id',
       'patients.first_name as patient_first_name',
       'patients.last_name as patient_last_name',
       'patients.phone as patient_phone',
@@ -157,6 +187,10 @@ export async function processPendingReminders(): Promise<{ sent: number; failed:
 
   for (const reminder of pendingReminders) {
     try {
+      const clinicContext = await loadClinicNotificationContext(
+        reminder.tenant_id,
+        reminder.branch_id ? { scopeType: 'branch', scopeId: reminder.branch_id } : undefined,
+      );
       const config: ReminderConfig = {
         tenantId: reminder.tenant_id,
         appointmentId: reminder.appointment_id,
@@ -165,10 +199,13 @@ export async function processPendingReminders(): Promise<{ sent: number; failed:
         patientPhone: reminder.patient_phone,
         patientEmail: reminder.patient_email,
         doctorName: `Dr. ${reminder.doctor_first_name} ${reminder.doctor_last_name}`,
-        appointmentTime: new Date(reminder.appointment_date).toLocaleString('en-EG', {
-          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-          hour: '2-digit', minute: '2-digit',
-        }),
+        branchId: reminder.branch_id || undefined,
+        clinicContext,
+        appointmentTime: formatNotificationDate(
+          reminder.appointment_date,
+          clinicContext.timezone,
+          clinicContext.locale,
+        ),
       };
 
       await sendAppointmentReminder(config);
