@@ -41,6 +41,8 @@ describe('Clinic provider configuration foundation', () => {
 
   it('keeps the supported provider catalog explicit and non-secret', () => {
     expect(CLINIC_PROVIDER_DEFINITIONS.map((item) => item.providerKey)).toEqual(['eta', 'fawry', 'stripe', 'twilio']);
+    expect(CLINIC_PROVIDER_DEFINITIONS.find((item) => item.providerKey === 'eta')?.moduleConfigurationKey).toBe('eta');
+    expect(CLINIC_PROVIDER_DEFINITIONS.find((item) => item.providerKey === 'fawry')?.configKeys).toContain('currencyCode');
     for (const provider of CLINIC_PROVIDER_DEFINITIONS) {
       expect(provider.providerKey === 'twilio' || provider.configKeys.length > 0).toBe(true);
       expect(provider.secretKeys.length).toBeGreaterThan(0);
@@ -70,5 +72,9 @@ describe('Clinic provider configuration foundation', () => {
     expect(migration).not.toContain("dropTableIfExists('tenant_regional_profiles')");
     expect(migration).not.toContain("dropTableIfExists('tenant_module_configurations')");
     expect(migration).not.toContain("dropTableIfExists('tenant_provider_connections')");
+    const service = source('src/services/clinic-provider-configuration.ts');
+    expect(service).toContain("trx('tenant_module_configurations')");
+    expect(service).toContain('last_validation_errors');
+    expect(service).not.toContain('encrypted_value: input');
   });
 });

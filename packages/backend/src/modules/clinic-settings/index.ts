@@ -126,6 +126,7 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
       environment: z.enum(['sandbox', 'production']).optional(),
       config: z.record(z.string(), z.unknown()).default({}),
       expectedVersion: z.number().int().positive().optional(),
+      expectedModuleVersion: z.number().int().positive().optional(),
     }).parse(request.body);
     return sendSuccess(reply, await updateProviderConfiguration({
       tenantId: ctx.tenantId,
@@ -181,6 +182,7 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
       environment: z.enum(['sandbox', 'production']).optional(),
       config: z.record(z.string(), z.unknown()).default({}),
       expectedVersion: z.number().int().positive().optional(),
+      expectedModuleVersion: z.number().int().positive().optional(),
     }).parse(request.body);
     return sendSuccess(reply, await updateProviderConfiguration({
       tenantId: ctx.tenantId,

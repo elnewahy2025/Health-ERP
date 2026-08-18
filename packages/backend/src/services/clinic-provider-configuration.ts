@@ -14,6 +14,7 @@ interface ProviderDefinition {
   jurisdictionCode?: string;
   configKeys: readonly string[];
   secretKeys: readonly string[];
+  moduleConfigurationKey?: string;
 }
 
 export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
@@ -24,13 +25,14 @@ export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     jurisdictionCode: 'EG',
     configKeys: ['taxRegistrationNumber', 'invoiceSeries', 'activityCode'],
     secretKeys: ['clientId', 'clientSecret', 'signingKey'],
+    moduleConfigurationKey: 'eta',
   },
   {
     providerKey: 'fawry',
     moduleKey: 'integrations',
     displayName: 'Fawry',
     jurisdictionCode: 'EG',
-    configKeys: ['merchantCode', 'merchantReferencePrefix'],
+    configKeys: ['merchantCode', 'merchantReferencePrefix', 'currencyCode'],
     secretKeys: ['secureKey', 'hashKey'],
   },
   {
@@ -62,6 +64,14 @@ interface RegionalProfileRow {
   configured_by: string | null;
   configured_at: Date | string | null;
   updated_at: Date | string;
+}
+
+interface ModuleConfigurationRow {
+  module_key: string;
+  config_json: unknown;
+  version: number;
+  last_validation_status: string;
+  last_validation_errors: unknown;
 }
 
 interface ProviderConnectionRow {
@@ -120,6 +130,13 @@ export interface ProviderConfigurationView {
   displayName: string;
   jurisdictionCode: string | null;
   configKeys: string[];
+  moduleConfiguration: {
+    moduleKey: string;
+    config: Record<string, unknown>;
+    version: number;
+    validationStatus: string;
+    validationErrors: string[];
+  } | null;
   connection: {
     id: string;
     displayName: string | null;
@@ -225,9 +242,24 @@ function mapSecret(secret: ProviderSecretRow | undefined) {
   return redactProviderSecretMetadata(secret);
 }
 
+function mapModuleConfiguration(row: ModuleConfigurationRow | null) {
+  if (!row) return null;
+  const errors = Array.isArray(row.last_validation_errors)
+    ? row.last_validation_errors.filter((value): value is string => typeof value === 'string')
+    : [];
+  return {
+    moduleKey: row.module_key,
+    config: asRecord(row.config_json),
+    version: row.version,
+    validationStatus: row.last_validation_status,
+    validationErrors: errors,
+  };
+}
+
 function evaluateReadiness(
   definition: ProviderDefinition,
   connection: ProviderConnectionRow | null,
+  moduleConfiguration: ModuleConfigurationRow | null,
   secrets: Map<string, ProviderSecretRow>,
   regionalProfile: RegionalProfileView,
 ): ProviderReadiness {
@@ -241,7 +273,7 @@ function evaluateReadiness(
     return { status: 'invalid', missing: [], errors: [connection.last_error_message || 'Provider configuration is invalid'] };
   }
 
-  const config = asRecord(connection.config_json);
+  const config = asRecord(moduleConfiguration?.config_json ?? connection.config_json);
   const missing = definition.configKeys
     .filter((key) => config[key] === undefined || config[key] === null || config[key] === '')
     .map((key) => `config:${key}`);
@@ -276,6 +308,12 @@ async function loadRegionalProfile(tenantId: string, trx = db): Promise<Regional
     version: 0,
     configuredAt: null,
   };
+}
+
+async function loadModuleConfiguration(tenantId: string, moduleKey: string, trx = db): Promise<ModuleConfigurationRow | null> {
+  return (await trx('tenant_module_configurations')
+    .where({ tenant_id: tenantId, module_key: moduleKey })
+    .first()) as ModuleConfigurationRow | undefined || null;
 }
 
 async function loadConnection(tenantId: string, providerKey: string, trx = db): Promise<ProviderConnectionRow | null> {
@@ -363,6 +401,9 @@ export async function listProviderConfigurations(tenantId: string): Promise<Prov
   const regionalProfile = await loadRegionalProfile(tenantId);
   return Promise.all(CLINIC_PROVIDER_DEFINITIONS.map(async (definition) => {
     const connection = await loadConnection(tenantId, definition.providerKey);
+    const moduleConfiguration = definition.moduleConfigurationKey
+      ? await loadModuleConfiguration(tenantId, definition.moduleConfigurationKey)
+      : null;
     const secrets = await loadSecrets(tenantId, definition.providerKey, connection?.id || null);
     return {
       providerKey: definition.providerKey,
@@ -370,6 +411,7 @@ export async function listProviderConfigurations(tenantId: string): Promise<Prov
       displayName: definition.displayName,
       jurisdictionCode: definition.jurisdictionCode || null,
       configKeys: [...definition.configKeys],
+      moduleConfiguration: mapModuleConfiguration(moduleConfiguration),
       connection: connection ? {
         id: connection.id,
         displayName: connection.display_name,
@@ -383,7 +425,7 @@ export async function listProviderConfigurations(tenantId: string): Promise<Prov
         enabledAt: connection.enabled_at,
       } : null,
       secrets: Object.fromEntries(definition.secretKeys.map((key) => [key, mapSecret(secrets.get(key))])),
-      readiness: evaluateReadiness(definition, connection, secrets, regionalProfile),
+      readiness: evaluateReadiness(definition, connection, moduleConfiguration, secrets, regionalProfile),
     } satisfies ProviderConfigurationView;
   }));
 }
@@ -394,6 +436,7 @@ export async function updateProviderConfiguration(input: ConfigurationMutationCo
   environment?: ProviderEnvironment;
   config: Record<string, unknown>;
   expectedVersion?: number;
+  expectedModuleVersion?: number;
 }): Promise<ProviderConfigurationView> {
   const definition = providerDefinition(input.providerKey);
   const config = normalizeConfig(definition, input.config);
@@ -402,18 +445,29 @@ export async function updateProviderConfiguration(input: ConfigurationMutationCo
     const existing = await trx('tenant_provider_connections')
       .where({ tenant_id: input.tenantId, provider_key: input.providerKey })
       .first() as ProviderConnectionRow | undefined;
+    const existingModuleConfiguration = definition.moduleConfigurationKey
+      ? await trx('tenant_module_configurations')
+        .where({ tenant_id: input.tenantId, module_key: definition.moduleConfigurationKey })
+        .first() as ModuleConfigurationRow | undefined
+      : undefined;
     if (input.expectedVersion !== undefined && (existing?.version || 0) !== input.expectedVersion) {
       throw new ConflictError('Provider configuration was changed by another administrator');
     }
+    if (input.expectedModuleVersion !== undefined && (existingModuleConfiguration?.version || 0) !== input.expectedModuleVersion) {
+      throw new ConflictError('Module configuration was changed by another administrator');
+    }
+
     const now = trx.fn.now();
-    const values = {
+    const connectionValues = {
       tenant_id: input.tenantId,
       module_key: definition.moduleKey,
       provider_key: definition.providerKey,
       display_name: input.displayName?.trim() || null,
       environment: input.environment || existing?.environment || 'sandbox',
       status: existing?.status === 'disabled' ? 'disabled' : 'configured',
-      config_json: JSON.stringify(config),
+      config_json: definition.moduleConfigurationKey
+        ? (existing?.config_json ? JSON.stringify(asRecord(existing.config_json)) : JSON.stringify({}))
+        : JSON.stringify(config),
       config_schema_version: 1,
       version: (existing?.version || 0) + 1,
       last_test_status: 'not_tested',
@@ -422,9 +476,34 @@ export async function updateProviderConfiguration(input: ConfigurationMutationCo
       updated_at: now,
     };
     if (existing) {
-      await trx('tenant_provider_connections').where({ id: existing.id }).update(values);
+      await trx('tenant_provider_connections').where({ id: existing.id }).update(connectionValues);
     } else {
-      await trx('tenant_provider_connections').insert(values);
+      await trx('tenant_provider_connections').insert(connectionValues);
+    }
+
+    if (definition.moduleConfigurationKey) {
+      const missing = definition.configKeys
+        .filter((key) => config[key] === undefined || config[key] === null || config[key] === '')
+        .map((key) => `config:${key}`);
+      const moduleValues = {
+        tenant_id: input.tenantId,
+        module_key: definition.moduleConfigurationKey,
+        config_json: JSON.stringify(config),
+        schema_version: 1,
+        version: (existingModuleConfiguration?.version || 0) + 1,
+        last_validation_status: missing.length > 0 ? 'incomplete' : 'valid',
+        last_validation_errors: JSON.stringify(missing),
+        validated_at: now,
+        updated_by: input.actorId,
+        updated_at: now,
+      };
+      if (existingModuleConfiguration) {
+        await trx('tenant_module_configurations')
+          .where({ tenant_id: input.tenantId, module_key: definition.moduleConfigurationKey })
+          .update(moduleValues);
+      } else {
+        await trx('tenant_module_configurations').insert(moduleValues);
+      }
     }
   });
 
@@ -433,7 +512,12 @@ export async function updateProviderConfiguration(input: ConfigurationMutationCo
     userId: input.actorId,
     action: 'provider_configuration.updated',
     entityType: 'tenant_provider_connection',
-    metadata: { providerKey: definition.providerKey, environment: input.environment || 'sandbox', configKeys: Object.keys(config) },
+    metadata: {
+      providerKey: definition.providerKey,
+      environment: input.environment || 'sandbox',
+      configKeys: Object.keys(config),
+      moduleConfigurationKey: definition.moduleConfigurationKey || null,
+    },
     ipAddress: input.ipAddress,
     userAgent: input.userAgent,
     result: 'success',

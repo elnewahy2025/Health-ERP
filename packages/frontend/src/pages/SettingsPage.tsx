@@ -184,7 +184,7 @@ export default function SettingsPage() {
         setProviders(providerList);
         setProviderConfigDraft(Object.fromEntries(providerList.map((provider) => [
           provider.providerKey,
-          provider.connection?.config || {},
+          provider.moduleConfiguration?.config || provider.connection?.config || {},
         ])));
         setProviderEnvironmentDraft(Object.fromEntries(providerList.map((provider) => [
           provider.providerKey,
@@ -388,6 +388,7 @@ export default function SettingsPage() {
         environment: providerEnvironmentDraft[provider.providerKey] || provider.connection?.environment || 'sandbox',
         config: providerConfigDraft[provider.providerKey] || {},
         expectedVersion: provider.connection?.version || undefined,
+        expectedModuleVersion: provider.moduleConfiguration?.version || undefined,
       });
       replaceProvider(updated);
       toast.success(t('settings.providerSaved'));

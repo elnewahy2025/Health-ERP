@@ -83,6 +83,13 @@ export interface ClinicProviderConfiguration {
   displayName: string;
   jurisdictionCode: string | null;
   configKeys: string[];
+  moduleConfiguration: {
+    moduleKey: string;
+    config: Record<string, unknown>;
+    version: number;
+    validationStatus: string;
+    validationErrors: string[];
+  } | null;
   connection: {
     id: string;
     displayName: string | null;
@@ -145,6 +152,7 @@ export const clinicConfigurationApi = {
     environment?: 'sandbox' | 'production';
     config: Record<string, unknown>;
     expectedVersion?: number;
+    expectedModuleVersion?: number;
   }) => apiClient.put(`/clinic-providers/${encodeURIComponent(providerKey)}`, payload)
     .then((response) => response.data.data as ClinicProviderConfiguration),
   testProvider: (providerKey: string) => apiClient.post(`/clinic-providers/${encodeURIComponent(providerKey)}/test`)
