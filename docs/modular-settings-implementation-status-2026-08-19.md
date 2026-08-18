@@ -3,7 +3,7 @@
 **Project:** Health-ERP Clinic Management System  
 **Status date:** 19 August 2026  
 **Repository branch:** `main`  
-**Latest commit:** `7ac98f8`
+**Latest commit:** `15ab9b6`
 
 ## Executive status
 
@@ -26,6 +26,7 @@ Administrators can now complete regional configuration progressively and manage 
 | `6846190` | ETA module storage boundary | ETA configuration is stored in `tenant_module_configurations`; Fawry’s `currencyCode` is a provider protocol field and is not a clinic default. |
 | `cbd79bd` | Operational provider consumption | Added backend-only runtime resolution and wired tenant provider settings into Stripe checkout, Fawry creation, SMS, and voice operations with safe fallback for unconfigured legacy tenants. |
 | `7ac98f8` | Callback provider resolution | Stripe confirmation, Fawry callback secret selection, and Twilio voice callback validation now recover tenant context before selecting provider secrets. |
+| `15ab9b6` | Structural provider adapters | Added safe ETA, Fawry, Stripe, and Twilio adapter validation with provider-specific required fields, no network calls, and safe result codes. |
 
 ## Database and security model
 
@@ -98,9 +99,15 @@ The following paths now use tenant-scoped runtime credentials when available:
 
 WhatsApp remains on its existing separate Meta provider configuration path because it is not represented by the Twilio provider catalog in this foundation. Vendor-specific ETA invoice submission and true provider network handshakes should be implemented as separate adapters once their exact API contracts, endpoints, certificate requirements, and test environments are supplied.
 
+## Provider adapter validation semantics
+
+The provider test endpoint now delegates to a provider adapter registry. The current adapters perform **structural validation only**: they verify that the tenant connection exists, the provider is enabled, required nonsecret fields are present, required encrypted secrets can be loaded, and provider-specific protocol fields are valid. The result records a safe code, readiness status, missing field names, and `testMode: structural`; it never includes decrypted secret values.
+
+This is deliberately not presented as a fabricated vendor handshake. No outbound provider request is made until the repository has an explicit adapter contract for that vendor’s endpoint, signing algorithm, certificate requirements, timeout, retry, and response-sanitization rules. Decryption failures are returned as a generic safe invalid result. Twilio accepts one configured sender option for voice or messaging while preserving optional legacy secret fields, and Fawry requires an administrator-entered three-letter `currencyCode` without inserting `EGP` as a clinic default.
+
 ## Validation results
 
-The final validation completed successfully. Backend lint passed. Backend tests passed with **30 test files, 232 tests passed, and 3 intentionally skipped integration tests**. Frontend tests passed with **11 test files and 43 tests passed**. Backend and frontend production builds passed, and `git diff --check` passed. The working tree is clean and `HEAD` matches `origin/main` at commit `7ac98f8`.
+The final validation completed successfully. Backend lint passed. Backend tests passed with **32 test files, 236 tests passed, and 3 intentionally skipped integration tests**. Frontend tests passed with **11 test files and 43 tests passed**. Backend and frontend production builds passed, and `git diff --check` passed. The working tree is clean and `HEAD` matches `origin/main` at commit `15ab9b6`.
 
 The backend test run still prints existing non-failing warnings about Redis connection attempts in the isolated test environment and the audit test’s intentionally swallowed database-write failure. These warnings did not fail the suite and were not introduced by the modular settings work.
 
