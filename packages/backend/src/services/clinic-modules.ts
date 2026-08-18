@@ -1,12 +1,17 @@
 import { ForbiddenError, ValidationError } from '@healthcare/shared/errors';
 import {
   CLINIC_CORE_MODULES,
+  CLINIC_CONFIGURATION_REGISTRY,
   CLINIC_MODULE_CATALOG,
   isClinicModuleKey,
 } from '@healthcare/shared';
 import type { ClinicModuleKey } from '@healthcare/shared';
 import { db } from '../core/database.js';
 import { logAudit } from './audit.js';
+import {
+  listEffectiveClinicConfiguration,
+} from './clinic-configuration.js';
+import type { EffectiveClinicConfigurationEntry } from './clinic-configuration.js';
 
 interface EntitlementRow {
   module_key: string;
@@ -23,6 +28,11 @@ interface ActivationRow {
   last_validation_status: string;
   last_validation_errors: unknown;
   activated_at: Date | string | null;
+}
+
+export interface ModuleConfigurationValidation {
+  status: 'valid' | 'incomplete';
+  errors: string[];
 }
 
 export interface TenantModuleStatus {
@@ -45,14 +55,34 @@ function isActiveEntitlement(row: EntitlementRow | undefined, now = new Date()):
   return true;
 }
 
+function isMissingConfigurationValue(value: unknown): boolean {
+  return value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
+}
+
+export function validateModuleConfiguration(
+  moduleKey: string,
+  entries: EffectiveClinicConfigurationEntry[],
+): ModuleConfigurationValidation {
+  const entryByKey = new Map(entries.map((entry) => [entry.key, entry]));
+  const requiredDefinitions = CLINIC_CONFIGURATION_REGISTRY.filter((definition) =>
+    definition.requiredFor.includes(moduleKey) ||
+    ((CLINIC_CORE_MODULES as readonly string[]).includes(moduleKey) && definition.requiredFor.includes('core')),
+  );
+  const errors = requiredDefinitions
+    .filter((definition) => isMissingConfigurationValue(entryByKey.get(definition.key)?.value))
+    .map((definition) => definition.key);
+  return { status: errors.length === 0 ? 'valid' : 'incomplete', errors };
+}
+
 export async function listTenantModules(tenantId: string): Promise<TenantModuleStatus[]> {
-  const [entitlements, activations] = await Promise.all([
+  const [entitlements, activations, configuration] = await Promise.all([
     db('tenant_module_entitlements').where({ tenant_id: tenantId }).select(
       'module_key', 'status', 'source', 'starts_at', 'expires_at',
     ),
     db('tenant_module_activations').where({ tenant_id: tenantId }).select(
       'module_key', 'status', 'config_version', 'last_validation_status', 'last_validation_errors', 'activated_at',
     ),
+    listEffectiveClinicConfiguration(tenantId),
   ]);
   const entitlementByKey = new Map((entitlements as EntitlementRow[]).map((row) => [row.module_key, row]));
   const activationByKey = new Map((activations as ActivationRow[]).map((row) => [row.module_key, row]));
@@ -61,16 +91,24 @@ export async function listTenantModules(tenantId: string): Promise<TenantModuleS
   return CLINIC_MODULE_CATALOG.map((moduleKey) => {
     const entitlement = entitlementByKey.get(moduleKey);
     const activation = activationByKey.get(moduleKey);
+    const validation = validateModuleConfiguration(moduleKey, configuration);
+    const activationStatus = activation?.status === 'disabled'
+      ? 'disabled'
+      : activation && validation.status === 'valid'
+        ? 'enabled'
+        : activation
+          ? 'setup_required'
+          : 'disabled';
     return {
       moduleKey,
       core: core.has(moduleKey),
       entitled: isActiveEntitlement(entitlement),
       entitlementStatus: entitlement?.status || null,
       entitlementSource: entitlement?.source || null,
-      activationStatus: activation?.status || 'disabled',
+      activationStatus,
       configVersion: activation?.config_version ?? null,
-      validationStatus: activation?.last_validation_status || 'incomplete',
-      validationErrors: activation?.last_validation_errors || [],
+      validationStatus: validation.status,
+      validationErrors: validation.errors,
       activatedAt: activation?.activated_at || null,
     };
   });
@@ -93,6 +131,8 @@ export async function setTenantModuleActivation(input: {
     throw new ForbiddenError(`Core clinic module ${input.moduleKey} cannot be disabled`);
   }
 
+  const configuration = await listEffectiveClinicConfiguration(input.tenantId);
+  const validation = validateModuleConfiguration(input.moduleKey, configuration);
   const entitlement = await db('tenant_module_entitlements')
     .where({ tenant_id: input.tenantId, module_key: input.moduleKey })
     .first() as EntitlementRow | undefined;
@@ -105,12 +145,17 @@ export async function setTenantModuleActivation(input: {
       .where({ tenant_id: input.tenantId, module_key: input.moduleKey })
       .first();
     const now = trx.fn.now();
-    const status = input.enabled ? 'enabled' : 'disabled';
+    const status = input.enabled
+      ? (validation.status === 'valid' ? 'enabled' : 'setup_required')
+      : 'disabled';
     const update = {
       status,
       ...(input.enabled
         ? { activated_by: input.actorId, activated_at: now, disabled_by: null, disabled_at: null }
         : { disabled_by: input.actorId, disabled_at: now }),
+      config_version: validation.status === 'valid' ? 1 : null,
+      last_validation_status: validation.status,
+      last_validation_errors: JSON.stringify(validation.errors),
       updated_at: now,
     };
 
@@ -121,8 +166,8 @@ export async function setTenantModuleActivation(input: {
         tenant_id: input.tenantId,
         module_key: input.moduleKey,
         ...update,
-        last_validation_status: 'incomplete',
-        last_validation_errors: JSON.stringify([]),
+        last_validation_status: validation.status,
+        last_validation_errors: JSON.stringify(validation.errors),
       });
     }
   });
