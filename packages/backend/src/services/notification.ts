@@ -120,7 +120,7 @@ export async function sendNotification(data: NotificationData): Promise<boolean>
     if (data.channel === 'email') {
       sent = await sendEmail({ to: data.recipient, subject, html: body.replace(/\n/g, '<br/>') });
     } else {
-      sent = await sendSms({ to: data.recipient, message: body });
+      sent = await sendSms({ tenantId: data.tenantId, to: data.recipient, message: body });
     }
 
     // Log

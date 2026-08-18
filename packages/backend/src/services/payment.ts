@@ -4,6 +4,7 @@ import { clinicConfigurationDefinition } from '@healthcare/shared/config/clinic-
 import { listEffectiveClinicConfiguration } from './clinic-configuration.js';
 import { db } from '../core/database.js';
 import { logAudit } from './audit.js';
+import { providerRuntimeOrFallback } from './clinic-provider-runtime.js';
 
 const DEFAULT_CURRENCY = String(clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '');
 
@@ -96,11 +97,14 @@ export function generateEtaQrCode( sellerName: string, taxRegistrationNumber: st
 // Stripe payment
 export async function createStripePayment(invoiceId: string, amount: number, currency: string, tenantId: string): Promise<PaymentResult> {
   const env = getEnv();
-  if (!env.STRIPE_SECRET_KEY) {
-    return { success: false, error: 'Stripe is not configured.' };
-  }
   try {
-    const stripe = require('stripe')(env.STRIPE_SECRET_KEY);
+    const runtime = await providerRuntimeOrFallback(tenantId, 'stripe', {
+      secrets: { secretKey: env.STRIPE_SECRET_KEY || '' },
+    });
+    if (runtime?.status === 'disabled') return { success: false, error: 'Stripe is disabled for this clinic.' };
+    const stripeSecretKey = runtime?.secrets.secretKey;
+    if (!stripeSecretKey) return { success: false, error: 'Stripe is not configured for this clinic.' };
+    const stripe = require('stripe')(stripeSecretKey);
     const invoice = await db('invoices').where({ id: invoiceId, tenant_id: tenantId }).first();
     if (!invoice) return { success: false, error: 'Invoice not found' };
     const patient = await db('patients').where({ id: invoice.patient_id }).first();

@@ -76,5 +76,9 @@ describe('Clinic provider configuration foundation', () => {
     expect(service).toContain("trx('tenant_module_configurations')");
     expect(service).toContain('last_validation_errors');
     expect(service).not.toContain('encrypted_value: input');
+    expect(source('src/services/payment.ts')).toContain("providerRuntimeOrFallback(tenantId, 'stripe'");
+    expect(source('src/services/sms.ts')).toContain("providerRuntimeOrFallback(options.tenantId, 'twilio'");
+    expect(source('src/services/voice.ts')).toContain("providerRuntimeOrFallback(options.tenantId, 'twilio'");
+    expect(source('src/modules/financial-deepening/index.ts')).toContain("providerRuntimeOrFallback(tenantId, 'fawry'");
   });
 });

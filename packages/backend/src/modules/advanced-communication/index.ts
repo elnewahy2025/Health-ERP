@@ -209,10 +209,9 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
       notes: z.string().optional(),
     }).parse(request.body);
 
-    const voiceEnv = getEnv();
     const result = await makeVoiceCall({
       tenantId,
-      fromNumber: body.fromNumber || voiceEnv.TWILIO_PHONE_NUMBER || '+201234567890',
+      fromNumber: body.fromNumber,
       toNumber: body.toNumber,
       patientId: body.patientId,
       appointmentId: body.appointmentId,

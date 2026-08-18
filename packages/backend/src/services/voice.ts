@@ -1,10 +1,11 @@
 import { getEnv } from '@healthcare/shared/config';
 import { db } from '../core/database.js';
 import { loadClinicNotificationContext } from './notification.js';
+import { providerRuntimeOrFallback, type TenantProviderRuntime } from './clinic-provider-runtime.js';
 
 interface VoiceCallOptions {
   tenantId: string;
-  fromNumber: string;
+  fromNumber?: string;
   toNumber: string;
   callerId?: string;
   twiml?: string;
@@ -34,19 +35,15 @@ interface TwilioClient {
   };
 }
 
-let twilioClient: TwilioClient | null = null;
-
-function getTwilioClient(): TwilioClient | null {
-  if (twilioClient) return twilioClient;
-  const env = getEnv();
-  if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const twilio = require('twilio');
-      twilioClient = twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN) as TwilioClient;
-      return twilioClient;
-    } catch { /* not installed */ }
-  }
+function getTwilioClient(runtime: TenantProviderRuntime | null): TwilioClient | null {
+  const accountSid = runtime?.secrets.account_sid;
+  const authToken = runtime?.secrets.auth_token;
+  if (!accountSid || !authToken) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const twilio = require('twilio');
+    return twilio(accountSid, authToken) as TwilioClient;
+  } catch { /* not installed */ }
   return null;
 }
 
@@ -55,18 +52,29 @@ export async function makeVoiceCall(options: VoiceCallOptions): Promise<{
   callSid?: string;
   error?: string;
 }> {
+  const env = getEnv();
+  let fromNumber = options.fromNumber || env.TWILIO_PHONE_NUMBER || '+10000000000';
   try {
-    const client = getTwilioClient();
-    const env = getEnv();
+    const runtime = await providerRuntimeOrFallback(options.tenantId, 'twilio', {
+      secrets: {
+        account_sid: env.TWILIO_ACCOUNT_SID || '',
+        auth_token: env.TWILIO_AUTH_TOKEN || '',
+        voice_number: env.TWILIO_PHONE_NUMBER || '',
+      },
+    });
+    if (runtime?.status === 'disabled') return { success: false, error: 'Twilio is disabled for this clinic.' };
+    fromNumber = options.fromNumber || runtime?.secrets.voice_number || runtime?.secrets.whatsapp_number || fromNumber;
+    const client = getTwilioClient(runtime);
     const clinic = options.twiml ? null : await loadClinicNotificationContext(options.tenantId);
 
     if (!client) {
+      if (runtime && runtime.status !== 'environment_fallback') return { success: false, error: 'Twilio is not ready for this clinic. Complete the provider setup in Settings > Integrations.' };
       await db('voice_calls').insert({
         tenant_id: options.tenantId,
         patient_id: options.patientId || null,
         appointment_id: options.appointmentId || null,
         call_type: 'outbound',
-        from_number: options.fromNumber,
+        from_number: fromNumber,
         to_number: options.toNumber,
         status: 'completed',
         duration_seconds: 0,
@@ -78,7 +86,7 @@ export async function makeVoiceCall(options: VoiceCallOptions): Promise<{
 
     const call = await client.calls.create({
       to: options.toNumber,
-      from: options.fromNumber,
+      from: fromNumber,
       twiml: options.twiml || `<Response><Say>This is a call from ${clinic?.displayName || 'the clinic'}.</Say></Response>`,
       url: options.voiceUrl || undefined,
       statusCallback: `${env.APP_URL}/api/v1/advanced-communication/voice/status`,
@@ -90,7 +98,7 @@ export async function makeVoiceCall(options: VoiceCallOptions): Promise<{
       patient_id: options.patientId || null,
       appointment_id: options.appointmentId || null,
       call_type: 'outbound',
-      from_number: options.fromNumber,
+      from_number: fromNumber,
       to_number: options.toNumber,
       status: call.status || 'initiated',
       notes: options.notes || null,
@@ -105,7 +113,7 @@ export async function makeVoiceCall(options: VoiceCallOptions): Promise<{
       patient_id: options.patientId || null,
       appointment_id: options.appointmentId || null,
       call_type: 'outbound',
-      from_number: options.fromNumber,
+      from_number: fromNumber,
       to_number: options.toNumber,
       status: 'failed',
       error_message: msg,
@@ -120,16 +128,26 @@ export async function createConferenceCall(options: ConferenceOptions): Promise<
   roomSid?: string;
   error?: string;
 }> {
+  const env = getEnv();
   try {
-    const client = getTwilioClient();
-    const env = getEnv();
+    const runtime = await providerRuntimeOrFallback(options.tenantId, 'twilio', {
+      secrets: {
+        account_sid: env.TWILIO_ACCOUNT_SID || '',
+        auth_token: env.TWILIO_AUTH_TOKEN || '',
+        voice_number: env.TWILIO_PHONE_NUMBER || '',
+      },
+    });
+    if (runtime?.status === 'disabled') return { success: false, error: 'Twilio is disabled for this clinic.' };
+    const fromNumber = runtime?.secrets.voice_number || runtime?.secrets.whatsapp_number || env.TWILIO_PHONE_NUMBER || '+10000000000';
+    const client = getTwilioClient(runtime);
 
     if (!client) {
+      if (runtime && runtime.status !== 'environment_fallback') return { success: false, error: 'Twilio is not ready for this clinic. Complete the provider setup in Settings > Integrations.' };
       await db('voice_calls').insert({
         tenant_id: options.tenantId,
         appointment_id: options.appointmentId || null,
         call_type: 'conference',
-        from_number: env.TWILIO_PHONE_NUMBER || '+10000000000',
+        from_number: fromNumber,
         to_number: options.participants.map(p => p.phone).join(','),
         status: 'completed',
         duration_seconds: 0,
@@ -139,26 +157,23 @@ export async function createConferenceCall(options: ConferenceOptions): Promise<
     }
 
     const roomName = options.roomName || `room_${Date.now()}`;
-
     for (const participant of options.participants) {
       await client.calls.create({
         to: participant.phone,
-        from: env.TWILIO_PHONE_NUMBER,
+        from: fromNumber,
         twiml: `<Response><Dial><Conference statusCallback="${env.APP_URL}/api/v1/advanced-communication/voice/conf-status" statusCallbackEvent="start end join leave">${roomName}</Conference></Dial></Response>`,
         statusCallback: `${env.APP_URL}/api/v1/advanced-communication/voice/status`,
       });
     }
-
     await db('voice_calls').insert({
       tenant_id: options.tenantId,
       appointment_id: options.appointmentId || null,
       call_type: 'conference',
-      from_number: env.TWILIO_PHONE_NUMBER,
+      from_number: fromNumber,
       to_number: options.participants.map(p => p.phone).join(','),
       status: 'initiated',
       external_call_sid: roomName,
     });
-
     return { success: true, roomSid: roomName };
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);

@@ -12,6 +12,7 @@ import { authorize } from '../../services/authorization.js';
 import { applyScopePolicy } from '../../services/scope-policy.js';
 import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 import { ForbiddenError } from '@healthcare/shared/errors';
+import { providerRuntimeOrFallback } from '../../services/clinic-provider-runtime.js';
 
 export async function registerFinancialDeepeningModule(app: FastifyInstance) {
   const env = getEnv();
@@ -480,7 +481,13 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     const invoice = await db('invoices').where({ id: invoiceId, tenant_id: tenantId }).first();
     if (!invoice) return sendError(reply, 'Invoice not found', 404);
 
-    const merchantCode = env.FAWRY_MERCHANT_CODE;
+    const runtime = await providerRuntimeOrFallback(tenantId, 'fawry', {
+      config: { merchantCode: env.FAWRY_MERCHANT_CODE || '' },
+      secrets: { secureKey: env.FAWRY_SECURITY_KEY || '' },
+    });
+    if (runtime?.status === 'disabled') return sendError(reply, 'Fawry is disabled for this clinic.', 409);
+    const merchantCode = String(runtime?.config.merchantCode || '');
+    if (!merchantCode) return sendError(reply, 'Fawry is not ready for this clinic. Complete the provider setup in Settings > Integrations.', 409);
     const referenceNumber = `FW-${Date.now()}-${crypto.randomInt(1000, 9999)}`;
 
     const [paymentTx] = await db('payment_transactions').insert({
@@ -498,7 +505,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     return sendSuccess(reply, {
       paymentTransactionId: paymentTx.id,
       referenceNumber,
-      merchantCode: merchantCode || 'PENDING_CONFIG',
+      merchantCode,
       amount,
       customerPhone,
       customerName,
