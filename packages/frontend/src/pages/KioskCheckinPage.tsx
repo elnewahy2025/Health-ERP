@@ -5,7 +5,7 @@ import { UserCheck, Clock, CheckCircle } from 'lucide-react';
 import { Button, Card, CardBody, Input } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
-import { isValidEgyptianNationalId } from '../lib/validators';
+import { isValidNationalId } from '../lib/validators';
 
 interface CheckinResult {
   checkinId: string;
@@ -54,8 +54,8 @@ export default function KioskCheckinPage() {
         setNationalIdError(t('kiosk.enterNationalId'));
         return false;
       }
-      if (!isValidEgyptianNationalId(sanitized)) {
-        setNationalIdError(t('validate.nationalId'));
+      if (!isValidNationalId(sanitized)) {
+        setNationalIdError(t('validate.nationalIdInvalid'));
         return false;
       }
       setNationalIdError('');
@@ -68,7 +68,11 @@ export default function KioskCheckinPage() {
     if (!validateNationalId(nationalId)) return;
     setLoading(true);
     try {
-      const slug = localStorage.getItem('tenantSlug') || 'demo';
+      const slug = localStorage.getItem('tenantSlug')?.trim();
+      if (!slug) {
+        toast.error(t('kiosk.organizationRequired'));
+        return;
+      }
       const sanitized = sanitizeString(nationalId.trim());
       const res = await api.post('/kiosk/checkin', {
         tenantSlug: slug,

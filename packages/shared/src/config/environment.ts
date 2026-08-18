@@ -120,7 +120,7 @@ export function getEnv(): Environment {
     SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),
     SMTP_USER: process.env.SMTP_USER || '',
     SMTP_PASS: process.env.SMTP_PASS || '',
-    SMTP_FROM: process.env.SMTP_FROM || 'noreply@visionhealthcare.com',
+    SMTP_FROM: process.env.SMTP_FROM || 'no-reply@localhost',
     SENDGRID_API_KEY: process.env.SENDGRID_API_KEY,
     SUPABASE_URL: process.env.SUPABASE_URL,
     SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY,

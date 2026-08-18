@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { patientsApi } from '../lib/api';
-import { isValidEgyptianPhone, isValidEgyptianNationalId, isValidEmail, isValidName } from '../lib/validators';
+import { isValidPhone, isValidNationalId, isValidEmail, isValidName } from '../lib/validators';
 import { Modal, Input, Select, PatientSearchField } from '../components/ui';
 import { confirmDialog } from '../components/ui';
 import { Plus, Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
@@ -78,14 +78,14 @@ export default function PatientsPage() {
         return null;
       case 'phone':
         if (!value.trim()) return 'Phone number is required';
-        if (!isValidEgyptianPhone(value)) return 'Enter a valid Egyptian phone (e.g. 01012345678)';
+        if (!isValidPhone(value)) return 'Enter a valid phone number';
         return null;
       case 'email':
         if (value && !isValidEmail(value)) return 'Enter a valid email address';
         return null;
       case 'nationalId':
         if (!value.trim()) return 'National ID is required';
-        if (!isValidEgyptianNationalId(value)) return 'Enter a valid 14-digit National ID';
+        if (!isValidNationalId(value)) return 'Enter a valid national identifier';
         return null;
       default:
         return null;
@@ -298,10 +298,10 @@ export default function PatientsPage() {
               options={[{ value: 'male', label: t('patient.gender.male') }, { value: 'female', label: t('patient.gender.female') }]} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input label={`${t('patient.phone')} *`} placeholder="01012345678" value={newPatient.phone}
+            <Input label={`${t('patient.phone')} *`} placeholder="e.g., +1234567890" value={newPatient.phone}
               onChange={e => handleFieldChange('phone', e.target.value)}
               onBlur={() => handleFieldBlur('phone')}
-              error={getFieldError('phone')} helpText="Egyptian format: 01X XXX XXXX" required />
+              error={getFieldError('phone')} helpText="International or local phone format" required />
             <Input label={t('patient.email')} type="email" value={newPatient.email}
               onChange={e => handleFieldChange('email', e.target.value)}
               onBlur={() => handleFieldBlur('email')}
@@ -312,11 +312,11 @@ export default function PatientsPage() {
               onChange={e => handleFieldChange('bloodType', e.target.value)}
               placeholder={t('common.filter')}
               options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(v => ({ value: v, label: v }))} />
-            <Input label={`${t('patient.nationalId')} *`} placeholder="14-digit National ID" maxLength={14}
+            <Input label={`${t('patient.nationalId')} *`} placeholder="National ID or clinic identifier" maxLength={32}
               value={newPatient.nationalId}
-              onChange={e => handleFieldChange('nationalId', e.target.value.replace(/\D/g, '').substring(0, 14))}
+              onChange={e => handleFieldChange('nationalId', e.target.value.substring(0, 32))}
               onBlur={() => handleFieldBlur('nationalId')}
-              error={getFieldError('nationalId')} helpText="14-digit Egyptian National ID" required />
+              error={getFieldError('nationalId')} helpText="Clinic-issued or national identifier" required />
           </div>
           <Input label={t('patient.nationality')} value={newPatient.nationality}
             onChange={e => handleFieldChange('nationality', e.target.value)} />

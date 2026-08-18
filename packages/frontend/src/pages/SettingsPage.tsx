@@ -352,8 +352,8 @@ export default function SettingsPage() {
               <div>
                 <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">{t('settings.contactInformation')}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input id="clinic-settings-land-phone" label={t('settings.landPhone')} value={clinic.landPhone} onChange={e => setClinic(p => ({ ...p, landPhone: e.target.value }))} placeholder="02-XXXXXXX" />
-                  <Input id="clinic-settings-whatsapp-phone" label={t('settings.whatsappPhone')} value={clinic.whatsappPhone} onChange={e => setClinic(p => ({ ...p, whatsappPhone: e.target.value }))} placeholder="+20XXXXXXXXXX" />
+                  <Input id="clinic-settings-land-phone" label={t('settings.landPhone')} value={clinic.landPhone} onChange={e => setClinic(p => ({ ...p, landPhone: e.target.value }))} placeholder="Local landline format" />
+                  <Input id="clinic-settings-whatsapp-phone" label={t('settings.whatsappPhone')} value={clinic.whatsappPhone} onChange={e => setClinic(p => ({ ...p, whatsappPhone: e.target.value }))} placeholder="+1234567890" />
                 </div>
               </div>
 

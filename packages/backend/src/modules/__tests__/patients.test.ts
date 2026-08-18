@@ -2,79 +2,23 @@ import { afterEach, describe, it, expect } from 'vitest';
 import { encryptField, decryptField, isEncrypted } from '@healthcare/shared/utils';
 
 describe('Patient Module', () => {
-  // ── Egyptian NID validation (#1) ──
-  describe('Egyptian National ID Validation', () => {
-    // Same validation logic as in createPatientSchema
-    function validateNid(id: string): boolean {
-      if (!/^\d{14}$/.test(id)) return false;
-      const century = parseInt(id.substring(0, 1), 10);
-      if (century < 2 || century > 3) return false;
-      const month = parseInt(id.substring(3, 5), 10);
-      if (month < 1 || month > 12) return false;
-      const day = parseInt(id.substring(5, 7), 10);
-      if (day < 1 || day > 31) return false;
-      return [
-        '01', '02', '03', '04', '11', '12', '13', '14', '15', '16', '17', '18', '19',
-        '21', '22', '23', '24', '25', '26', '27', '28', '29', '31', '32', '33', '34', '35', '88',
-      ].includes(id.substring(7, 9));
+  // ── Generic national identifier validation (#1) ──
+  describe('Generic National Identifier Validation', () => {
+    function validateNationalId(id: string): boolean {
+      const cleaned = id.trim().replace(/[\s\-]/g, '');
+      return /^[\p{L}\p{N}]{4,32}$/u.test(cleaned);
     }
 
-    it('rejects non-14-digit strings', () => {
-      expect(validateNid('123')).toBe(false);
-      expect(validateNid('123456789012345')).toBe(false);
-      expect(validateNid('abcdefghijklmn')).toBe(false);
+    it('accepts clinic-issued and national identifiers without assuming a country format', () => {
+      expect(validateNationalId('AB-1234')).toBe(true);
+      expect(validateNationalId('رقم-1234')).toBe(true);
+      expect(validateNationalId('29201010101234')).toBe(true);
     });
 
-    it('rejects invalid century indicator', () => {
-      // Starts with 1 (1800s) — invalid
-      expect(validateNid('12345678901234')).toBe(false);
-      // Starts with 4 — invalid
-      expect(validateNid('42345678901234')).toBe(false);
-    });
-
-    it('rejects invalid month', () => {
-      // Month 00
-      expect(validateNid('20000010012345')).toBe(false);
-      // Month 13
-      expect(validateNid('20130010012345')).toBe(false);
-    });
-
-    it('rejects invalid day', () => {
-      // Day 00
-      expect(validateNid('20010001012345')).toBe(false);
-      // Day 32
-      expect(validateNid('20013201012345')).toBe(false);
-    });
-
-    it('rejects invalid governorate code', () => {
-      // Governorate 00
-      expect(validateNid('20101010001234')).toBe(false);
-      // Governorate 05 (unassigned)
-      expect(validateNid('20101010501234')).toBe(false);
-      // Governorate 30 (unassigned)
-      expect(validateNid('20101013001234')).toBe(false);
-    });
-
-    it('accepts all real governorate codes', () => {
-      // Aswan (28), Luxor (29), Red Sea (31), foreign-born (88)
-      expect(validateNid('20101012801234')).toBe(true);
-      expect(validateNid('20101012901234')).toBe(true);
-      expect(validateNid('20101013101234')).toBe(true);
-      expect(validateNid('20101018801234')).toBe(true);
-    });
-
-    it('accepts any 14th digit (serial, no checksum)', () => {
-      // Same structure, different last digit: all should pass
-      expect(validateNid('26804071600170')).toBe(true);
-      expect(validateNid('26804071600173')).toBe(true);
-      expect(validateNid('26804071600179')).toBe(true);
-    });
-
-    it('accepts a real-world-style NID with valid structure', () => {
-      // Cairo male born 2001-05-15 (known-good example)
-      expect(validateNid('30105150101511')).toBe(true);
-      // Alexandria female born 1990-08-20
-      expect(validateNid('29008200201240')).toBe(true);
+    it('rejects identifiers that are too short, too long, or contain unsupported symbols', () => {
+      expect(validateNationalId('123')).toBe(false);
+      expect(validateNationalId('123456789012345678901234567890123')).toBe(false);
+      expect(validateNationalId('ID/1234')).toBe(false);
     });
   });
 

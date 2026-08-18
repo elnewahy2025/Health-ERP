@@ -43,8 +43,13 @@ export default function QueueDisplayPage() {
 
   const loadQueueData = useCallback(async () => {
     try {
-      const slug = new URLSearchParams(window.location.search).get('tenant') || 'demo';
-      const branchId = new URLSearchParams(window.location.search).get('branch') || '';
+      const params = new URLSearchParams(window.location.search);
+      const slug = params.get('tenant')?.trim();
+      const branchId = params.get('branch') || '';
+      if (!slug) {
+        if (mountedRef.current) setError(t('queue.organizationRequired'));
+        return;
+      }
       const url = `/api/v1/queue/display${branchId ? '/' + branchId : ''}?tenantSlug=${slug}`;
       const res = await fetch(url);
       const json = await res.json();
@@ -65,8 +70,18 @@ export default function QueueDisplayPage() {
     const timer = setInterval(() => setTime(new Date()), 1000);
 
     const params = new URLSearchParams(window.location.search);
-    const slug = params.get('tenant') || 'demo';
+    const slug = params.get('tenant')?.trim();
     const branchId = params.get('branch') || '';
+    if (!slug) {
+      setError(t('queue.organizationRequired'));
+      setLoading(false);
+      return () => {
+        mountedRef.current = false;
+        clearInterval(timer);
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        wsRef.current?.close();
+      };
+    }
     const token = params.get('token') || '';
 
     if (token) {

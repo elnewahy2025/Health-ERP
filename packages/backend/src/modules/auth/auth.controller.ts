@@ -10,6 +10,7 @@ import { generateSecret, verifyToken, generateQrCode } from '../../services/totp
 import { createAndSendOtp, verifyOtp, incrementOtpAttempt } from '../../services/otp.js';
 import { sendEmail } from '../../services/email.js';
 import { getEnv } from '@healthcare/shared/config';
+import { clinicConfigurationDefinition } from '@healthcare/shared/config/clinic-configuration';
 import { getDefaultMembershipForUser, loadUserPrincipal, loadUserPrincipalByMembership, uniquePermissionKeys, invalidateAuthorizationCache, type Principal } from '../../services/authorization.js';
 import { db } from '../../core/database.js';
 import * as svc from './auth.service.js';
@@ -21,6 +22,8 @@ import {
   mfaEnableSchema, mfaDisableSchema, otpSendSchema, otpVerifySchema,
 } from './auth.schema.js';
 const env = getEnv();
+const DEFAULT_CLINIC_CURRENCY = String(clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '');
+const DEFAULT_CLINIC_TIMEZONE = String(clinicConfigurationDefinition('clinic.timezone.default')?.defaultValue || 'UTC');
 
 function parseRoles(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String);
@@ -79,7 +82,7 @@ export async function registerTenant(request: FastifyRequest, reply: FastifyRepl
     name: body.name, slug: body.slug, locale: body.locale,
     settings: JSON.stringify({
       dateFormat: body.locale === 'ar' ? 'DD/MM/YYYY' : 'MM/DD/YYYY',
-      currency: 'SAR', timezone: 'Asia/Riyadh',
+      currency: DEFAULT_CLINIC_CURRENCY, timezone: DEFAULT_CLINIC_TIMEZONE,
       theme: { primaryColor: '#0ea5e9', brandName: body.name },
       language: body.locale, direction: body.locale === 'ar' ? 'rtl' : 'ltr',
       features: {},

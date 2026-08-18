@@ -10,6 +10,7 @@ import {
   type Column,
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
+import { getApiBaseUrl } from '../lib/api/client';
 import { formatDateTime } from '../lib/format';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
 
@@ -93,6 +94,7 @@ export default function DeveloperPortalPage() {
   const { t } = useTranslation();
   const [tab, setTab] = useState<DevTab>('keys');
   const [loading, setLoading] = useState(true);
+  const apiBaseUrl = getApiBaseUrl();
 
   /* ── API Keys ── */
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
@@ -416,7 +418,7 @@ export default function DeveloperPortalPage() {
                   <pre className="text-xs bg-gray-800 text-green-400 p-3 rounded-lg overflow-x-auto whitespace-pre-wrap">
 {`curl -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
-  https://api.visionhealthcare.com/api/v1/patients`}
+  ${apiBaseUrl}/patients`}
                   </pre>
                 </div>
               </CardBody>

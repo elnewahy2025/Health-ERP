@@ -1,6 +1,12 @@
+import { clinicConfigurationDefinition } from '../config/clinic-configuration.js';
+
+const DEFAULT_CLINIC_CURRENCY = String(
+  clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '',
+);
+
 export function formatCurrency(
   amount: number,
-  currency: string = 'SAR',
+  currency: string = DEFAULT_CLINIC_CURRENCY,
   locale: 'ar' | 'en' = 'en',
 ): string {
   return new Intl.NumberFormat(locale === 'ar' ? 'ar-SA' : 'en-US', {

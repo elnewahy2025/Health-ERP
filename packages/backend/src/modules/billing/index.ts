@@ -6,12 +6,14 @@ import { sendSuccess, sendPaginated } from '../../utils/response.js';
 import { createInvoiceSchema, paginationSchema } from '../../utils/validation.js';
 import { PatientNotFoundError, ForbiddenError } from '@healthcare/shared/errors';
 import { getEnv } from '@healthcare/shared/config';
+import { clinicConfigurationDefinition } from '@healthcare/shared/config/clinic-configuration';
 import { generateInvoiceNumber } from '@healthcare/shared/utils';
 import { authenticate } from '../auth-guard.js';
 import { authorize, hasPermission, assignedPatientIds, canAccessPatient, type Principal } from '../../services/authorization.js';
 import { applyScopePolicy } from '../../services/scope-policy.js';
 import type { PermissionScope } from '@healthcare/shared/authz';
 import { logAudit } from '../../services/audit.js';
+import { listEffectiveClinicConfiguration } from '../../services/clinic-configuration.js';
 import type { InvoiceRow } from '../types.js';
 
 export async function registerBillingModule(app: FastifyInstance) {
@@ -300,12 +302,16 @@ export async function registerBillingModule(app: FastifyInstance) {
     preHandler: [authenticate, authorize('billing.create')],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
-    const { invoiceId, amount, currency } = z.object({
-      invoiceId: z.string().uuid(), amount: z.number().positive(), currency: z.string().default('sar'),
+    const { invoiceId, amount, currency: requestedCurrency } = z.object({
+      invoiceId: z.string().uuid(), amount: z.number().positive(), currency: z.string().trim().min(3).max(3).optional(),
     }).parse(request.body);
+    const configuredCurrency = (await listEffectiveClinicConfiguration(tenantId))
+      .find((entry) => entry.key === 'clinic.finance.currency')?.value;
+    const defaultCurrency = String(clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '');
+    const currency = String(requestedCurrency || configuredCurrency || defaultCurrency).toUpperCase();
 
     const { createStripePayment } = await import('../../services/payment.js');
-    const result = await createStripePayment(invoiceId, amount, currency.toUpperCase(), tenantId);
+    const result = await createStripePayment(invoiceId, amount, currency, tenantId);
     if (!result.success) return reply.code(400).send({ error: result.error });
     const { userId } = getCtx(request);
     try { await logAudit({ tenantId, userId, action: 'payment.stripe_created', entityType: 'invoice', entityId: invoiceId,

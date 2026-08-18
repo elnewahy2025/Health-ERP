@@ -88,12 +88,12 @@ export default function LoginPage() {
             <Stethoscope className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">{t('app.name')}</h1>
-          <p className="text-sm text-gray-500 mt-1">Sign in to your healthcare platform</p>
+          <p className="text-sm text-gray-500 mt-1">{t('auth.loginSubtitle')}</p>
         </div>
         <form onSubmit={handleLogin} className="card p-6 space-y-4">
           <div>
-            <label className="label">Organization Code</label>
-            <input className="input" placeholder="vision" value={tenantSlug}
+            <label className="label">{t('auth.tenantSlug')}</label>
+            <input className="input" placeholder={t('auth.tenantSlugPlaceholder')} value={tenantSlug}
               onChange={e => setTenantSlug(e.target.value)} required />
           </div>
           <div>

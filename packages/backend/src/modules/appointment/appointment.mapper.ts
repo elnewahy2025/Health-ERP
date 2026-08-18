@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto';
+import { getEnv } from '@healthcare/shared/config';
 import type { AppointmentRow, AppointmentResponse } from './types.js';
 
 function formatDate(value: string | Date): string {
@@ -53,5 +54,6 @@ export function calculateEndTime(startTime: string, durationMinutes: number): st
 
 export function generateTelemedicineLink(): string {
   const id = randomBytes(8).toString('hex');
-  return `https://meet.visionhealthcare.com/${id}`;
+  const appUrl = getEnv().APP_URL.replace(/\/$/, '');
+  return `${appUrl}/telemedicine/room-${id}`;
 }

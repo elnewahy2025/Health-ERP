@@ -1,38 +1,13 @@
-// Egyptian phone number validation
-// Supports: 010/011/012/015 + 8 digits (10-11 digits total)
-// Also supports: +2010..., 002010...
-export function isValidEgyptianPhone(phone: string): boolean {
+// Generic clinic phone validation. Provider- or country-specific validation belongs in tenant policy configuration.
+export function isValidPhone(phone: string): boolean {
   const cleaned = phone.replace(/[\s\-()]/g, '');
-  // Local format: 01X XXX XXXX (10-11 digits)
-  if (/^01[0125]\d{8,9}$/.test(cleaned)) return true;
-  // International format: +201X...
-  if (/^\+201[0125]\d{8,9}$/.test(cleaned)) return true;
-  // International with 00: 00201X...
-  if (/^00201[0125]\d{8,9}$/.test(cleaned)) return true;
-  return false;
+  return /^(?:\+|00)?\d{7,15}$/.test(cleaned);
 }
 
-// Egyptian National ID validation
-// 14 digits: [century(1)][year(2)][month(2)][day(2)][governorate(2)][sequence(4)]
-// No checksum: the 14th digit is a sequential serial digit.
-export function isValidEgyptianNationalId(id: string): boolean {
-  const cleaned = id.replace(/\s/g, '');
-  if (!/^\d{14}$/.test(cleaned)) return false;
-
-  const century = parseInt(cleaned.substring(0, 1), 10);
-  if (century < 2 || century > 3) return false;
-
-  const month = parseInt(cleaned.substring(3, 5), 10);
-  if (month < 1 || month > 12) return false;
-
-  const day = parseInt(cleaned.substring(5, 7), 10);
-  if (day < 1 || day > 31) return false;
-
-  // Governorate codes: 01-04, 11-19, 21-29, 31-35, 88 (foreign-born)
-  return [
-    '01', '02', '03', '04', '11', '12', '13', '14', '15', '16', '17', '18', '19',
-    '21', '22', '23', '24', '25', '26', '27', '28', '29', '31', '32', '33', '34', '35', '88',
-  ].includes(cleaned.substring(7, 9));
+// Generic national identifier validation. Country-specific checksum rules must not be assumed by the clinic core.
+export function isValidNationalId(id: string): boolean {
+  const cleaned = id.trim().replace(/[\s\-]/g, '');
+  return /^[\p{L}\p{N}]{4,32}$/u.test(cleaned);
 }
 
 // Email validation

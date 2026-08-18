@@ -24,7 +24,6 @@ interface DrugInfo {
   name: string;
   category: string;
   form: string;
-  priceEgp: number;
 }
 
 interface Interaction {
@@ -76,7 +75,7 @@ interface PrescriptionItem {
   status: string;
 }
 
-/* ── Drug Interaction Database (Egypt market) ─────────────────────── */
+/* ── Drug Interaction Database ──────────────────────────────────────── */
 
 const DRUG_INTERACTIONS: Record<string, string[]> = {
   Warfarin: ['Aspirin', 'Ibuprofen', 'Diclofenac', 'Naproxen'],
@@ -95,25 +94,25 @@ const DRUG_INTERACTIONS: Record<string, string[]> = {
 };
 
 const COMMON_DRUGS: DrugInfo[] = [
-  { name: 'Amoxicillin', category: 'Antibiotic', form: 'Capsule 500mg', priceEgp: 45 },
-  { name: 'Azithromycin', category: 'Antibiotic', form: 'Tablet 250mg', priceEgp: 85 },
-  { name: 'Ciprofloxacin', category: 'Antibiotic', form: 'Tablet 500mg', priceEgp: 65 },
-  { name: 'Metformin', category: 'Antidiabetic', form: 'Tablet 500mg', priceEgp: 25 },
-  { name: 'Gliclazide', category: 'Antidiabetic', form: 'Tablet 80mg', priceEgp: 35 },
-  { name: 'Amlodipine', category: 'Antihypertensive', form: 'Tablet 5mg', priceEgp: 30 },
-  { name: 'Lisinopril', category: 'Antihypertensive', form: 'Tablet 10mg', priceEgp: 40 },
-  { name: 'Atorvastatin', category: 'Statin', form: 'Tablet 20mg', priceEgp: 55 },
-  { name: 'Omeprazole', category: 'PPI', form: 'Capsule 20mg', priceEgp: 35 },
-  { name: 'Pantoprazole', category: 'PPI', form: 'Tablet 40mg', priceEgp: 45 },
-  { name: 'Ibuprofen', category: 'NSAID', form: 'Tablet 400mg', priceEgp: 15 },
-  { name: 'Diclofenac', category: 'NSAID', form: 'Tablet 50mg', priceEgp: 20 },
-  { name: 'Aspirin', category: 'Antiplatelet', form: 'Tablet 81mg', priceEgp: 12 },
-  { name: 'Clopidogrel', category: 'Antiplatelet', form: 'Tablet 75mg', priceEgp: 95 },
-  { name: 'Warfarin', category: 'Anticoagulant', form: 'Tablet 5mg', priceEgp: 30 },
-  { name: 'Levothyroxine', category: 'Thyroid', form: 'Tablet 50mcg', priceEgp: 25 },
-  { name: 'Cetirizine', category: 'Antihistamine', form: 'Tablet 10mg', priceEgp: 18 },
-  { name: 'Salbutamol', category: 'Bronchodilator', form: 'Inhaler', priceEgp: 65 },
-  { name: 'Prednisolone', category: 'Corticosteroid', form: 'Tablet 5mg', priceEgp: 15 },
+  { name: 'Amoxicillin', category: 'Antibiotic', form: 'Capsule 500mg' },
+  { name: 'Azithromycin', category: 'Antibiotic', form: 'Tablet 250mg' },
+  { name: 'Ciprofloxacin', category: 'Antibiotic', form: 'Tablet 500mg' },
+  { name: 'Metformin', category: 'Antidiabetic', form: 'Tablet 500mg' },
+  { name: 'Gliclazide', category: 'Antidiabetic', form: 'Tablet 80mg' },
+  { name: 'Amlodipine', category: 'Antihypertensive', form: 'Tablet 5mg' },
+  { name: 'Lisinopril', category: 'Antihypertensive', form: 'Tablet 10mg' },
+  { name: 'Atorvastatin', category: 'Statin', form: 'Tablet 20mg' },
+  { name: 'Omeprazole', category: 'PPI', form: 'Capsule 20mg' },
+  { name: 'Pantoprazole', category: 'PPI', form: 'Tablet 40mg' },
+  { name: 'Ibuprofen', category: 'NSAID', form: 'Tablet 400mg' },
+  { name: 'Diclofenac', category: 'NSAID', form: 'Tablet 50mg' },
+  { name: 'Aspirin', category: 'Antiplatelet', form: 'Tablet 81mg' },
+  { name: 'Clopidogrel', category: 'Antiplatelet', form: 'Tablet 75mg' },
+  { name: 'Warfarin', category: 'Anticoagulant', form: 'Tablet 5mg' },
+  { name: 'Levothyroxine', category: 'Thyroid', form: 'Tablet 50mcg' },
+  { name: 'Cetirizine', category: 'Antihistamine', form: 'Tablet 10mg' },
+  { name: 'Salbutamol', category: 'Bronchodilator', form: 'Inhaler' },
+  { name: 'Prednisolone', category: 'Corticosteroid', form: 'Tablet 5mg' },
 ];
 
 /* ── Helpers ───────────────────────────────────────────────────────── */

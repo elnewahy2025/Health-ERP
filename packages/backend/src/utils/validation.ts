@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { clinicConfigurationDefinition } from '@healthcare/shared/config/clinic-configuration';
+
+const DEFAULT_CLINIC_TIMEZONE = String(clinicConfigurationDefinition('clinic.timezone.default')?.defaultValue || 'UTC');
 
 export const paginationSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -25,24 +28,9 @@ export const createPatientSchema = z.object({
     return dob <= now && dob >= minDate;
   }, 'Date of birth must be between 1900 and today'),
   gender: z.enum(['male', 'female']),
-  nationalId: z.string().length(14).regex(/^\d{14}$/).refine((id) => {
-    // Structure: [century][YY][MM][DD][governorate][SSSS][X]
-    // Century indicator: 2 = 1900s, 3 = 2000s
-    const century = parseInt(id.substring(0, 1), 10);
-    if (century < 2 || century > 3) return false;
-    // Month: 01-12
-    const month = parseInt(id.substring(3, 5), 10);
-    if (month < 1 || month > 12) return false;
-    // Day: 01-31
-    const day = parseInt(id.substring(5, 7), 10);
-    if (day < 1 || day > 31) return false;
-    // Governorate codes: 01-04, 11-19, 21-29, 31-35, 88 (foreign-born).
-    // No checksum: the 14th digit is a sequential serial digit.
-    return [
-      '01','02','03','04','11','12','13','14','15','16','17','18','19',
-      '21','22','23','24','25','26','27','28','29','31','32','33','34','35','88',
-    ].includes(id.substring(7, 9));
-  }, 'Invalid Egyptian National ID format'),
+  // The core does not assume a country-specific identifier format. Country-level
+  // checksum rules belong in a tenant policy or integration module.
+  nationalId: z.string().trim().min(4).max(32).regex(/^[\p{L}\p{N}][\p{L}\p{N}\s-]{3,31}$/u, 'Invalid national identifier format'),
   phone: z.string().min(7).max(20),
   email: z.string().email().or(z.literal('')).optional(),
   nationality: z.string().optional(),
@@ -76,7 +64,7 @@ export const createAppointmentSchema = z.object({
   notes: z.string().optional(),
   isWalkIn: z.boolean().default(false),
   isVirtual: z.boolean().default(false),
-  timezone: z.string().max(50).default('Africa/Cairo'),
+  timezone: z.string().max(50).default(DEFAULT_CLINIC_TIMEZONE),
 });
 
 export const updateAppointmentSchema = createAppointmentSchema.partial();

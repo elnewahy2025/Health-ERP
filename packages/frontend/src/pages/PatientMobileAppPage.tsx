@@ -66,7 +66,7 @@ export default function PatientMobileAppPage() {
 
   const [page, setPage] = useState<Page>('home');
   const [mobileNum, setMobileNum] = useState('');
-  const [countryCode, setCountryCode] = useState('+20');
+  const [countryCode, setCountryCode] = useState('');
   const [otp, setOtp] = useState('');
   const [otpToken, setOtpToken] = useState('');
   const [loggedIn, setLoggedIn] = useState(false);
@@ -89,7 +89,15 @@ export default function PatientMobileAppPage() {
     }
     setRequestingOtp(true);
     try {
-      const slug = localStorage.getItem('tenantSlug') || 'demo';
+      const slug = localStorage.getItem('tenantSlug')?.trim();
+      if (!slug) {
+        toast.error(t('patientApp.organizationRequired'));
+        return;
+      }
+      if (!countryCode) {
+        toast.error(t('patientApp.countryCodeRequired'));
+        return;
+      }
       const res = await api.post('/portal/otp/request', {
         countryCode,
         phone: sanitized,
@@ -179,6 +187,7 @@ export default function PatientMobileAppPage() {
                 value={countryCode}
                 onChange={(e) => setCountryCode(e.target.value)}
               >
+                <option value="">{t('patientApp.selectCountryCode')}</option>
                 {COUNTRY_CODES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
               </select>
               <input

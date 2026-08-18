@@ -101,6 +101,7 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
     return sendSuccess(reply, {
       displayName: value('clinic.profile.display_name', ''),
       logoUrl: value('clinic.profile.logo_url', ''),
+      email: value('clinic.contact.email', ''),
       timezone: value('clinic.timezone.default', 'UTC'),
       locale: value('clinic.locale.default', 'en'),
       currency: value('clinic.finance.currency', DEFAULT_CLINIC_CURRENCY),

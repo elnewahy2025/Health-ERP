@@ -1,4 +1,4 @@
-export const APP_NAME = 'Vision Healthcare';
+export const APP_NAME = 'Clinic Management System';
 export const APP_VERSION = '1.0.0';
 
 export const PAGINATION = {

@@ -3,6 +3,12 @@ import { VERSION_HEADER, API_VERSION } from "./versioning";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
+export function getApiBaseUrl(): string {
+  if (/^https?:\/\//i.test(API_BASE_URL)) return API_BASE_URL.replace(/\/$/, '');
+  if (typeof window === 'undefined') return API_BASE_URL.replace(/\/$/, '');
+  return new URL(API_BASE_URL, window.location.origin).toString().replace(/\/$/, '');
+}
+
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
   headers: {

@@ -21,7 +21,7 @@ export function initSentry(): boolean {
     Sentry.init({
       dsn: env.SENTRY_DSN,
       environment: env.NODE_ENV,
-      release: `vision-healthcare@${env.APP_VERSION || '1.0.0'}`,
+      release: `clinic-management-system@${env.APP_VERSION || '1.0.0'}`,
       tracesSampleRate: env.NODE_ENV === 'production' ? 0.3 : 0.0,
       maxBreadcrumbs: 50,
       attachStacktrace: true,

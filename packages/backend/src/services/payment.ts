@@ -1,7 +1,11 @@
 import crypto from "crypto";
 import { getEnv } from '@healthcare/shared/config';
+import { clinicConfigurationDefinition } from '@healthcare/shared/config/clinic-configuration';
+import { listEffectiveClinicConfiguration } from './clinic-configuration.js';
 import { db } from '../core/database.js';
 import { logAudit } from './audit.js';
+
+const DEFAULT_CURRENCY = String(clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '');
 
 const CURRENCIES: Record<string, { symbol: string; rate: number }> = {
   SAR: { symbol: 'ر.س', rate: 1 },
@@ -12,7 +16,7 @@ const CURRENCIES: Record<string, { symbol: string; rate: number }> = {
 };
 
 export function getCurrencyInfo(code: string) {
-  return CURRENCIES[code] || CURRENCIES.EGP; // Default to EGP for Egypt market
+  return CURRENCIES[code.toUpperCase()] || CURRENCIES[DEFAULT_CURRENCY] || { symbol: DEFAULT_CURRENCY, rate: 1 };
 }
 
 export function convertCurrency(amount: number, from: string, to: string): number {
@@ -101,13 +105,18 @@ export async function createStripePayment(invoiceId: string, amount: number, cur
     if (!invoice) return { success: false, error: 'Invoice not found' };
     const patient = await db('patients').where({ id: invoice.patient_id }).first();
     const tenant = await db('tenants').where({ id: tenantId }).first();
+    const clinicName = (await listEffectiveClinicConfiguration(tenantId))
+      .find((entry) => entry.key === 'clinic.profile.display_name')?.value;
+    const displayName = typeof clinicName === 'string' && clinicName.trim()
+      ? clinicName.trim()
+      : tenant?.name || 'Clinic';
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       customer_email: patient?.email || undefined,
       line_items: [{
         price_data: {
           currency: currency.toLowerCase(),
-          product_data: { name: `Invoice ${invoice.invoice_number} — ${tenant?.name || 'Healthcare'}` },
+          product_data: { name: `Invoice ${invoice.invoice_number} — ${displayName}` },
           unit_amount: Math.round(amount * 100),
         },
         quantity: 1,

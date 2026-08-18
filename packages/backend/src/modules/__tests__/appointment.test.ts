@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
-import { clinicWorkingHoursWindow } from '@healthcare/shared';
+import { clinicConfigurationDefinition, clinicWorkingHoursWindow } from '@healthcare/shared';
+import { generateTelemedicineLink } from '../appointment/appointment.mapper.js';
 
 // ── Helper functions extracted from controller/mapper ──
 // These are pure functions that can be tested without DB
@@ -39,11 +40,6 @@ function getCancellationPolicy(appointmentDate: string, startTime: string): { al
     return { allowed: true, requiresReason: true };
   }
   return { allowed: true, requiresReason: false };
-}
-
-function generateTelemedicineLink(): string {
-  const id = Math.random().toString(36).substring(2, 10);
-  return `https://meet.visionhealthcare.com/${id}`;
 }
 
 describe('Appointment Module', () => {
@@ -189,14 +185,14 @@ describe('Appointment Module', () => {
 
   // ── #9: Timezone handling ──
   describe('Timezone Handling', () => {
-    it('default timezone is Africa/Cairo', () => {
-      const defaultTz = 'Africa/Cairo';
-      expect(defaultTz).toBe('Africa/Cairo');
+    it('uses the clinic registry timezone default', () => {
+      const defaultTz = String(clinicConfigurationDefinition('clinic.timezone.default')?.defaultValue || 'UTC');
+      expect(defaultTz).toBe('UTC');
     });
 
-    it('timezone is stored with appointment data', () => {
-      const appointment = { timezone: 'Africa/Cairo' };
-      expect(appointment.timezone).toBeDefined();
+    it('stores the effective timezone with appointment data', () => {
+      const appointment = { timezone: String(clinicConfigurationDefinition('clinic.timezone.default')?.defaultValue || 'UTC') };
+      expect(appointment.timezone).toBe('UTC');
     });
   });
 
@@ -216,8 +212,8 @@ describe('Appointment Module', () => {
     it('generates unique telemedicine links', () => {
       const link1 = generateTelemedicineLink();
       const link2 = generateTelemedicineLink();
-      expect(link1).toMatch(/^https:\/\/meet\.visionhealthcare\.com\//);
-      expect(link2).toMatch(/^https:\/\/meet\.visionhealthcare\.com\//);
+      expect(link1).toMatch(/\/telemedicine\/room-[a-f0-9]+$/);
+      expect(link2).toMatch(/\/telemedicine\/room-[a-f0-9]+$/);
       expect(link1).not.toBe(link2);
     });
   });

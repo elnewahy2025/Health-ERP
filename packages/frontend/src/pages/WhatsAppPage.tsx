@@ -9,7 +9,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
-import { isValidEgyptianPhone } from '../lib/validators';
+import { isValidPhone } from '../lib/validators';
 import { formatDateTime } from '../lib/format';
 import { buildWhatsAppDeviceLink, confirmAndOpenDeviceLink } from '../lib/device-actions';
 
@@ -165,7 +165,7 @@ export default function WhatsAppPage() {
   const handleSend = useCallback(async (): Promise<void> => {
     const errors: Record<string, string> = {};
     if (!sendForm.to.trim()) errors.to = t('common.required');
-    else if (!isValidEgyptianPhone(sendForm.to)) errors.to = 'Invalid phone number';
+    else if (!isValidPhone(sendForm.to)) errors.to = 'Invalid phone number';
     if (sendForm.messageType === 'text' && !sendForm.message.trim()) errors.message = t('common.required');
     if (sendForm.messageType === 'template' && !sendForm.templateName.trim()) errors.templateName = t('common.required');
     setSendErrors(errors);

@@ -1,9 +1,12 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Stethoscope, LayoutDashboard, Users, CalendarPlus, LifeBuoy, ArrowRight, ArrowLeft } from 'lucide-react';
+import { useClinicConfiguration } from '../stores/clinicConfigurationStore';
 
 export default function NotFoundPage() {
   const { t, i18n } = useTranslation();
+  const { identity } = useClinicConfiguration();
+  const supportEmail = identity?.email?.trim();
   const rtl = i18n.language === 'ar';
   const Arrow = rtl ? ArrowLeft : ArrowRight;
 
@@ -44,8 +47,9 @@ export default function NotFoundPage() {
             </Link>
           ))}
           <a
-            href="mailto:support@visionhealthcare.com"
-            className="flex items-center gap-4 bg-white rounded-xl border border-gray-200 dark:bg-gray-900 dark:border-gray-800 p-4 text-left hover:border-primary-400 hover:shadow-sm transition"
+            href={supportEmail ? `mailto:${supportEmail}` : undefined}
+            aria-disabled={!supportEmail}
+            className={`flex items-center gap-4 bg-white rounded-xl border border-gray-200 dark:bg-gray-900 dark:border-gray-800 p-4 text-left transition ${supportEmail ? 'hover:border-primary-400 hover:shadow-sm' : 'opacity-70'}`}
           >
             <div className="w-10 h-10 bg-primary-50 rounded-lg flex items-center justify-center shrink-0">
               <LifeBuoy className="w-5 h-5 text-primary-600" />

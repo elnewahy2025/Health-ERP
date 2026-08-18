@@ -44,6 +44,7 @@ export interface ClinicModuleReadiness {
 export interface ClinicShellIdentity {
   displayName: string;
   logoUrl: string;
+  email: string;
   timezone: string;
   locale: string;
   currency: string;

@@ -11,7 +11,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { escapeHtml } from '../lib/sanitize';
-import { isValidEgyptianPhone } from '../lib/validators';
+import { isValidPhone } from '../lib/validators';
 import { formatDateTime } from '../lib/format';
 import { buildPhoneDeviceLink, confirmAndOpenDeviceLink } from '../lib/device-actions';
 
@@ -150,7 +150,7 @@ export default function VoiceCallsPage() {
   const handleCall = useCallback(async (): Promise<void> => {
     const errors: Record<string, string> = {};
     if (!callForm.toNumber.trim()) errors.toNumber = t('common.required');
-    else if (!isValidEgyptianPhone(callForm.toNumber)) errors.toNumber = 'Invalid phone number';
+    else if (!isValidPhone(callForm.toNumber)) errors.toNumber = 'Invalid phone number';
     setCallErrors(errors);
     if (Object.keys(errors).length > 0) return;
 

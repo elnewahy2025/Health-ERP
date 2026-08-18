@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { patientsApi, emrApi, billingApi } from '../lib/api';
 import { formatDate } from '../lib/format';
-import { isValidEgyptianPhone, isValidEgyptianNationalId, isValidEmail, isValidName } from '../lib/validators';
+import { isValidPhone, isValidNationalId, isValidEmail, isValidName } from '../lib/validators';
 import { Input, Select } from '../components/ui';
 import { ArrowLeft, Calendar, Eye, FileText, Loader2, Pencil, Receipt } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -91,14 +91,14 @@ interface InvoiceSummary { id: string; total: number; status: string; createdAt:
         return null;
       case 'phone':
         if (!value.trim()) return 'Phone number is required';
-        if (!isValidEgyptianPhone(value)) return 'Enter a valid Egyptian phone (e.g. 01012345678)';
+        if (!isValidPhone(value)) return 'Enter a valid phone number';
         return null;
       case 'email':
         if (value && !isValidEmail(value)) return 'Enter a valid email address';
         return null;
       case 'nationalId':
         if (!value.trim()) return 'National ID is required';
-        if (!isValidEgyptianNationalId(value)) return 'Enter a valid 14-digit National ID';
+        if (!isValidNationalId(value)) return 'Enter a valid national identifier';
         return null;
       default:
         return null;
@@ -252,7 +252,7 @@ interface InvoiceSummary { id: string; total: number; status: string; createdAt:
                     options={[{ value: 'male', label: t('patient.gender.male') }, { value: 'female', label: t('patient.gender.female') }]} />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input label={`${t('patient.phone')} *`} placeholder="01012345678" value={form.phone}
+                  <Input label={`${t('patient.phone')} *`} placeholder="e.g., +1234567890" value={form.phone}
                     onChange={e => handleFieldChange('phone', e.target.value)}
                     onBlur={() => handleFieldBlur('phone')}
                     error={getFieldError('phone')} required />
@@ -266,9 +266,9 @@ interface InvoiceSummary { id: string; total: number; status: string; createdAt:
                     onChange={e => handleFieldChange('bloodType', e.target.value)}
                     placeholder={t('common.filter')}
                     options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(v => ({ value: v, label: v }))} />
-                  <Input label={`${t('patient.nationalId')} *`} placeholder="14-digit National ID" maxLength={14}
+                  <Input label={`${t('patient.nationalId')} *`} placeholder="National ID or clinic identifier" maxLength={32}
                     value={form.nationalId}
-                    onChange={e => handleFieldChange('nationalId', e.target.value.replace(/\D/g, '').substring(0, 14))}
+                    onChange={e => handleFieldChange('nationalId', e.target.value.substring(0, 32))}
                     onBlur={() => handleFieldBlur('nationalId')}
                     error={getFieldError('nationalId')} required />
                 </div>
