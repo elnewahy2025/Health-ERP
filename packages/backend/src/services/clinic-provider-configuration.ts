@@ -198,7 +198,13 @@ function mapRegionalProfile(row: RegionalProfileRow): RegionalProfileView {
   };
 }
 
-function mapSecret(secret: ProviderSecretRow | undefined) {
+export function redactProviderSecretMetadata(secret: {
+  is_active?: boolean;
+  last_four?: string | null;
+  secret_version?: number | null;
+  rotated_at?: Date | string | null;
+  expires_at?: Date | string | null;
+} | undefined) {
   return {
     configured: Boolean(secret?.is_active),
     lastFour: secret?.last_four || null,
@@ -206,6 +212,10 @@ function mapSecret(secret: ProviderSecretRow | undefined) {
     rotatedAt: secret?.rotated_at || null,
     expiresAt: secret?.expires_at || null,
   };
+}
+
+function mapSecret(secret: ProviderSecretRow | undefined) {
+  return redactProviderSecretMetadata(secret);
 }
 
 function evaluateReadiness(
