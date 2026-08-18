@@ -78,7 +78,7 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
     return sendSuccess(reply, status, 'Clinic module activation updated');
   });
 
-  // Get clinic settings (includes Twilio credentials for WhatsApp/Voice)
+  // Legacy compatibility response. Provider secrets are intentionally excluded.
   app.get('/api/v1/clinic-settings', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const tenant = await db('tenants').where({ id: tenantId }).select('name', 'settings').first();
@@ -99,12 +99,10 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
       workingHours: settings.workingHours || 'Sun-Thu: 9AM-5PM',
       licenseNumber: settings.licenseNumber || '',
       taxNumber: settings.taxNumber || '',
-      // Twilio credentials (for real WhatsApp & Voice)
-      twilioAccountSid: settings.twilioAccountSid || '',
-      twilioAuthToken: settings.twilioAuthToken || '',
-      twilioWhatsAppNumber: settings.twilioWhatsAppNumber || '',
-      twilioVoiceNumber: settings.twilioVoiceNumber || '',
-      twilioMessagingServiceSid: settings.twilioMessagingServiceSid || '',
+      // Provider credentials are never returned through the normal settings API.
+      twilioConfigured: Boolean(
+        settings.twilioAccountSid || settings.twilioAuthToken || settings.twilioMessagingServiceSid,
+      ),
     });
   });
 
