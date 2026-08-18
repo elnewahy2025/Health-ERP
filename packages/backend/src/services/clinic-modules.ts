@@ -6,6 +6,7 @@ import {
   isClinicModuleKey,
 } from '@healthcare/shared';
 import type { ClinicModuleKey } from '@healthcare/shared';
+import { normalizeLegacyPermission } from '@healthcare/shared/authz';
 import { db } from '../core/database.js';
 import { logAudit } from './audit.js';
 import {
@@ -111,6 +112,51 @@ export function validateModuleConfiguration(
     .filter((definition) => isMissingConfigurationValue(entryByKey.get(definition.key)?.value))
     .map((definition) => definition.key);
   return { status: errors.length === 0 ? 'valid' : 'incomplete', errors };
+}
+
+const PERMISSION_MODULE_PREFIXES: ReadonlyArray<readonly [string, ClinicModuleKey]> = [
+  ['patients.', 'patients'],
+  ['appointments.', 'appointments'],
+  ['emr.', 'emr'],
+  ['documents.', 'documents'],
+  ['reports.', 'reports'],
+  ['notifications.', 'notifications'],
+  ['communications.', 'communications'],
+  ['settings.', 'settings'],
+  ['billing.', 'billing'],
+  ['pharmacy.', 'pharmacy'],
+  ['laboratory.', 'laboratory'],
+  ['radiology.', 'radiology'],
+  ['nursing.', 'nursing'],
+  ['inventory.', 'inventory'],
+  ['insurance.', 'insurance'],
+  ['insurance_claims.', 'insurance_claims'],
+  ['hr.', 'hr'],
+  ['crm.', 'crm'],
+  ['patient_portal.', 'patient_portal'],
+  ['online_booking.', 'online_booking'],
+  ['integrations.', 'integrations'],
+  ['advanced_reporting.', 'advanced_reporting'],
+  ['bi.', 'bi'],
+  ['automation.', 'automation'],
+];
+
+export function clinicModuleForPermission(permission: string): ClinicModuleKey | undefined {
+  const canonicalPermission = normalizeLegacyPermission(permission);
+  return PERMISSION_MODULE_PREFIXES.find(([prefix]) => canonicalPermission.startsWith(prefix))?.[1];
+}
+
+export async function enforceClinicModuleForPermission(tenantId: string, permission: string): Promise<void> {
+  const moduleKey = clinicModuleForPermission(permission);
+  if (!moduleKey || (CLINIC_CORE_MODULES as readonly string[]).includes(moduleKey)) return;
+
+  const status = (await listTenantModules(tenantId)).find((module) => module.moduleKey === moduleKey);
+  if (!status || !status.entitled) {
+    throw new ForbiddenError(`Clinic module ${moduleKey} is not available for this tenant`);
+  }
+  if (status.activationStatus !== 'enabled') {
+    throw new ForbiddenError(`Clinic module ${moduleKey} is not active for this tenant`);
+  }
 }
 
 export async function listTenantModules(tenantId: string): Promise<TenantModuleStatus[]> {

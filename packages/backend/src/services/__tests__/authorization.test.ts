@@ -9,6 +9,7 @@ import {
   authorize,
 } from '../authorization.js';
 import { resolvePharmacyInventoryBranchId } from '../../modules/pharmacy/index.js';
+import { clinicModuleForPermission } from '../clinic-modules.js';
 import {
   allPermissionKeys,
   expandGrantKey,
@@ -47,6 +48,21 @@ describe('pharmacy inventory branch resolution', () => {
     const p = principal([{ permission: 'pharmacy.create', scope: 'branch' }]);
     p.branches = ['b1', 'b2'];
     expect(() => resolvePharmacyInventoryBranchId(p)).toThrow('active assigned branch');
+  });
+});
+
+describe('clinic module permission mapping', () => {
+  it('maps module permissions to canonical clinic modules', () => {
+    expect(clinicModuleForPermission('pharmacy.create')).toBe('pharmacy');
+    expect(clinicModuleForPermission('reports.view')).toBe('reports');
+    expect(clinicModuleForPermission('patient_portal.view')).toBe('patient_portal');
+  });
+
+  it('normalizes legacy permission aliases and leaves cross-cutting permissions unmapped', () => {
+    expect(clinicModuleForPermission('patient.read')).toBeUndefined();
+    expect(clinicModuleForPermission('patients:read')).toBe('patients');
+    expect(clinicModuleForPermission('module.manage')).toBeUndefined();
+    expect(clinicModuleForPermission('roles.manage')).toBeUndefined();
   });
 });
 

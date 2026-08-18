@@ -1,7 +1,7 @@
 # Centralized Clinic Configuration Design
 
-**Phase:** 3 — design checkpoint before implementation
-**Status:** Proposed; no application code or database migration has been added from this document
+**Phase:** 3 — implementation checkpoint
+**Status:** Partially implemented; the shared registry, additive tables, compatibility facade, module readiness, subscription entitlement fallback, and server-side activation guard are committed. Encrypted secret storage migration 052 is prepared for validation; secret rotation/read APIs remain a separate integration slice.
 **Product model:** One tenant represents one clinic organisation
 
 ## Design goals
@@ -110,14 +110,14 @@ Every mutation must use `logAudit()` with tenant, actor, scope, key/module, old/
 
 A new tenant may exist in `setup_required` state. The platform must allow the tenant administrator to complete settings without inserting fake clinic information. The application may show a setup checklist and allow access to settings, users, branches, departments, and module configuration.
 
-Operational modules must declare their required configuration. If a required value is missing, the module must show a clear setup-required state and reject only the affected operation with a deterministic configuration error. It must not silently use a dangerous value or break unrelated core modules.
+Operational modules must declare their required configuration. If a required value is missing, the module must show a clear setup-required state and reject only the affected operation with a deterministic configuration error. It must not silently use a dangerous value or break unrelated core modules. The backend authorization middleware now maps covered permission namespaces to canonical clinic modules and rejects optional-module requests unless the tenant is entitled and the module activation is enabled; core modules remain available independently of optional-module state.
 
 ## Compatibility and migration rules
 
 1. Do not remove or rename `tenants.settings` in the first migration.
 2. Backfill known legacy clinic fields only when the destination key is absent.
-3. Preserve the original JSONB values until a later deprecation phase has reconciliation evidence.
-4. Do not backfill Twilio or other secrets into frontend-readable configuration responses.
+3. Preserve non-secret legacy JSONB values until a later deprecation phase has reconciliation evidence.
+4. Migration 052 may replace legacy provider-secret values in `tenants.settings` with ciphertext after copying them to `clinic_integration_secrets`; neither the normal configuration response nor frontend state may expose the ciphertext or original value.
 5. Do not rewrite custom roles, tenant data, or existing module records.
 6. Add migration checks for empty databases, representative existing tenants, duplicate legacy values, and partially configured tenants.
 7. Add a feature flag for the new resolver so compatibility behavior can be compared before cutover.

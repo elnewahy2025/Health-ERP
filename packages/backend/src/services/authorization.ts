@@ -6,6 +6,7 @@ import type { Grant, PermissionEffect, PermissionScope } from '@healthcare/share
 import { db } from '../core/database.js';
 import { CACHE_TTL, getOrSet } from '../core/redis.js';
 import { redis } from '../core/redis.js';
+import { enforceClinicModuleForPermission } from './clinic-modules.js';
 
 /**
  * Centralized authorization service — the only place permission/scope decisions
@@ -280,6 +281,7 @@ export function authorize(
         `Missing permission: ${options.permission}${requestedScope ? ` (scope: ${requestedScope})` : ''}`,
       );
     }
+    await enforceClinicModuleForPermission(principal.tenantId, options.permission);
     if (req.ctx) {
       req.ctx.authorizationScope = requestedScope || matchingGrantScopes(principal, options.permission)[0];
     }
