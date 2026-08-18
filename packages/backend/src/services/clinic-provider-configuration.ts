@@ -2,6 +2,7 @@ import { encryptField, hashString } from '@healthcare/shared/utils';
 import { db } from '../core/database.js';
 import { ConflictError, NotFoundError, ValidationError } from '@healthcare/shared/errors';
 import { logAudit } from './audit.js';
+import { validateClinicProviderAdapter } from './clinic-provider-adapters.js';
 
 export type ProviderEnvironment = 'sandbox' | 'production';
 export type ProviderConnectionStatus = 'setup_required' | 'configured' | 'disabled' | 'invalid';
@@ -14,6 +15,8 @@ interface ProviderDefinition {
   jurisdictionCode?: string;
   configKeys: readonly string[];
   secretKeys: readonly string[];
+  requiredSecretKeys?: readonly string[];
+  secretGroups?: readonly (readonly string[])[];
   moduleConfigurationKey?: string;
 }
 
@@ -25,6 +28,7 @@ export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     jurisdictionCode: 'EG',
     configKeys: ['taxRegistrationNumber', 'invoiceSeries', 'activityCode'],
     secretKeys: ['clientId', 'clientSecret', 'signingKey'],
+    requiredSecretKeys: ['clientId', 'clientSecret', 'signingKey'],
     moduleConfigurationKey: 'eta',
   },
   {
@@ -34,6 +38,7 @@ export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     jurisdictionCode: 'EG',
     configKeys: ['merchantCode', 'merchantReferencePrefix', 'currencyCode'],
     secretKeys: ['secureKey', 'hashKey'],
+    requiredSecretKeys: ['secureKey'],
   },
   {
     providerKey: 'stripe',
@@ -41,6 +46,7 @@ export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     displayName: 'Stripe',
     configKeys: ['currency'],
     secretKeys: ['secretKey', 'publishableKey', 'webhookSecret'],
+    requiredSecretKeys: ['secretKey'],
   },
   {
     providerKey: 'twilio',
@@ -48,6 +54,8 @@ export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     displayName: 'Twilio',
     configKeys: [],
     secretKeys: ['account_sid', 'auth_token', 'messaging_service_sid', 'whatsapp_number', 'voice_number'],
+    requiredSecretKeys: ['account_sid', 'auth_token'],
+    secretGroups: [['messaging_service_sid', 'whatsapp_number', 'voice_number']],
   },
 ] as const;
 
@@ -277,7 +285,13 @@ function evaluateReadiness(
   const missing = definition.configKeys
     .filter((key) => config[key] === undefined || config[key] === null || config[key] === '')
     .map((key) => `config:${key}`);
-  missing.push(...definition.secretKeys.filter((key) => !secrets.get(key)?.is_active).map((key) => `secret:${key}`));
+  const requiredSecretKeys = definition.requiredSecretKeys || definition.secretKeys;
+  missing.push(...requiredSecretKeys.filter((key) => !secrets.get(key)?.is_active).map((key) => `secret:${key}`));
+  for (const group of definition.secretGroups || []) {
+    if (!group.some((key) => secrets.get(key)?.is_active)) {
+      missing.push(`secret:any_of:${group.join('|')}`);
+    }
+  }
 
   const errors: string[] = [];
   if (definition.jurisdictionCode && regionalProfile.countryCode && regionalProfile.countryCode !== definition.jurisdictionCode) {
@@ -615,6 +629,7 @@ export async function validateProviderConfiguration(input: ConfigurationMutation
   let result = (await listProviderConfigurations(input.tenantId)).find((item) => item.providerKey === definition.providerKey);
   if (!result) throw new NotFoundError('Provider configuration could not be loaded');
 
+  const adapterResult = await validateClinicProviderAdapter(input.tenantId, definition.providerKey);
   if (result.connection && result.connection.status !== 'disabled') {
     await db('tenant_provider_connections').where({ id: result.connection.id }).update({
       last_test_status: 'not_tested',
@@ -625,14 +640,16 @@ export async function validateProviderConfiguration(input: ConfigurationMutation
     });
     const fresh = (await listProviderConfigurations(input.tenantId)).find((item) => item.providerKey === definition.providerKey);
     if (fresh) result = fresh;
-    const passed = result.readiness.status === 'ready';
+    const passed = result.readiness.status === 'ready' && adapterResult.status === 'ready';
     const connectionId = result.connection?.id;
     if (connectionId) {
       await db('tenant_provider_connections').where({ id: connectionId }).update({
         last_test_status: passed ? 'passed' : 'failed',
         last_tested_at: db.fn.now(),
-        last_error_code: passed ? null : 'configuration_incomplete',
-        last_error_message: passed ? null : [...result.readiness.missing, ...result.readiness.errors].join(', ').slice(0, 500),
+        last_error_code: passed ? null : adapterResult.code,
+        last_error_message: passed
+          ? null
+          : [adapterResult.message, ...adapterResult.missing, ...result.readiness.missing, ...result.readiness.errors].join(', ').slice(0, 500),
         updated_at: db.fn.now(),
       });
     }
@@ -646,10 +663,16 @@ export async function validateProviderConfiguration(input: ConfigurationMutation
     action: 'provider_configuration.validated',
     entityType: 'tenant_provider_connection',
     entityId: result.connection?.id,
-    metadata: { providerKey: definition.providerKey, readiness: result.readiness },
+    metadata: {
+      providerKey: definition.providerKey,
+      readiness: result.readiness,
+      adapterStatus: adapterResult.status,
+      adapterCode: adapterResult.code,
+      testMode: adapterResult.testMode,
+    },
     ipAddress: input.ipAddress,
     userAgent: input.userAgent,
-    result: result.readiness.status === 'ready' ? 'success' : 'failed',
+    result: result.readiness.status === 'ready' && adapterResult.status === 'ready' ? 'success' : 'failed',
   });
   return result;
 }
