@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { dashboardApi, appointmentsApi } from '../lib/api';
+import { dashboardApi, appointmentsApi, commonApi } from '../lib/api';
 import { Spinner } from '../components/ui';
 import { Can } from '../components/auth/Authorization';
 import { useAuth } from '../stores/authStore';
 import {
   CalendarCheck, Receipt, Users, DollarSign,
-  Stethoscope, TrendingUp, ArrowUp,
-  Clock, CheckCircle, XCircle, UserCheck,
+  Stethoscope, TrendingUp, Activity as ActivityIcon,
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -20,12 +19,30 @@ interface DashboardStats {
   activeDoctors: number;
 }
 
+interface ActivityItem {
+  id: string;
+  action: string;
+  entity?: string | null;
+  entityId?: string | null;
+  timestamp: string;
+}
+
+function formatActivityTime(timestamp: string, locale: string): string {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return timestamp;
+  return date.toLocaleString(locale === 'ar' ? 'ar-EG' : 'en-EG', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+}
+
 export default function DashboardPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { can } = useAuth();
   const canViewAnalytics = can('analytics_dashboard.view');
   const canViewAppointments = can('appointments.view');
+  const canViewActivity = can('audit.view');
   const [stats, setStats] = useState<DashboardStats>({
     totalPatients: 0, totalAppointments: 0, todayAppointments: 0,
     pendingBills: 0, revenueToday: 0, activeDoctors: 0,
@@ -33,24 +50,27 @@ export default function DashboardPage() {
   interface TodayData { counts: { scheduled: number; checkedIn: number; completed: number; inProgress: number; cancelled: number; noShow: number; }; appointments: TodayAppointment[]; }
 interface TodayAppointment { id: string; patientName: string; doctorName: string; startTime: string; endTime: string; status: string; }
   const [todayData, setTodayData] = useState<TodayData | null>(null);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       canViewAnalytics ? dashboardApi.stats().catch(() => null) : Promise.resolve(null),
       canViewAppointments ? appointmentsApi.today().catch(() => null) : Promise.resolve(null),
-    ]).then(([stats, today]) => {
+      canViewActivity ? commonApi.activity().catch(() => []) : Promise.resolve([]),
+    ]).then(([stats, today, recentActivity]) => {
       if (stats) setStats(stats);
       if (today) setTodayData(today);
+      if (recentActivity) setActivity(recentActivity as ActivityItem[]);
     }).finally(() => setLoading(false));
-  }, [canViewAnalytics, canViewAppointments]);
+  }, [canViewAnalytics, canViewAppointments, canViewActivity]);
 
   const statCards = [
-    { label: t('dashboard.todayAppointments'), value: stats.todayAppointments, icon: CalendarCheck, color: 'bg-blue-500', change: '+12%' },
-    { label: t('dashboard.totalPatients'), value: stats.totalPatients, icon: Users, color: 'bg-green-500', change: '+5%' },
-    { label: t('dashboard.pendingBills'), value: stats.pendingBills, icon: Receipt, color: 'bg-yellow-500', change: '-3%' },
-    { label: t('dashboard.revenueToday'), value: `${(stats.revenueToday || 0).toLocaleString()} EGP`, icon: DollarSign, color: 'bg-purple-500', change: '+8%' },
-    { label: t('dashboard.activeDoctors'), value: stats.activeDoctors, icon: Stethoscope, color: 'bg-teal-500', change: '0%' },
+    { label: t('dashboard.todayAppointments'), value: stats.todayAppointments, icon: CalendarCheck, color: 'bg-blue-500' },
+    { label: t('dashboard.totalPatients'), value: stats.totalPatients, icon: Users, color: 'bg-green-500' },
+    { label: t('dashboard.pendingBills'), value: stats.pendingBills, icon: Receipt, color: 'bg-yellow-500' },
+    { label: t('dashboard.revenueToday'), value: `${(stats.revenueToday || 0).toLocaleString()} EGP`, icon: DollarSign, color: 'bg-purple-500' },
+    { label: t('dashboard.activeDoctors'), value: stats.activeDoctors, icon: Stethoscope, color: 'bg-teal-500' },
   ];
 
   if (loading) {
@@ -86,10 +106,6 @@ interface TodayAppointment { id: string; patientName: string; doctorName: string
               <div className={`w-10 h-10 ${card.color} rounded-lg flex items-center justify-center`}>
                 <card.icon className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xs text-[var(--success)] font-medium flex items-center gap-1">
-                <ArrowUp className="w-3 h-3" />
-                {card.change}
-              </span>
             </div>
             <p className="stat-label mt-3">{card.label}</p>
             <p className="stat-value">{card.value}</p>
@@ -169,23 +185,22 @@ interface TodayAppointment { id: string; patientName: string; doctorName: string
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('dashboard.recentActivity')}</h2>
           </div>
           <div className="card-body">
-            <div className="space-y-3">
-              {[
-                { icon: UserCheck, iconClass: 'bg-[var(--success-soft)] text-[var(--success)]', text: 'New patient registered', sub: 'Ahmed Mohamed', time: '2m ago' },
-                { icon: Clock, iconClass: 'bg-[var(--info-soft)] text-[var(--info)]', text: 'Appointment checked in', sub: 'Fatma Hassan - Check-up', time: '15m ago' },
-                { icon: CheckCircle, iconClass: 'bg-[var(--info-soft)] text-[var(--info)]', text: 'Invoice paid', sub: 'INV-001 - 1,250 EGP', time: '1h ago' },
-                { icon: XCircle, iconClass: 'bg-[var(--error-soft)] text-[var(--error)]', text: 'Appointment cancelled', sub: 'Omar Ali - Follow-up', time: '2h ago' },
-              ].map((item, i) => (
-                <div key={i} className="flex items-center gap-3 p-3 bg-[var(--surface-secondary)] rounded-lg">
-                  <item.icon className={`w-8 h-8 ${item.iconClass} p-1.5 rounded-lg`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[var(--text-primary)]">{item.text}</p>
-                    <p className="text-xs text-[var(--text-muted)] truncate">{item.sub}</p>
+            {canViewActivity && activity.length > 0 ? (
+              <div className="space-y-3">
+                {activity.slice(0, 5).map((item) => (
+                  <div key={item.id} className="flex items-center gap-3 p-3 bg-[var(--surface-secondary)] rounded-lg">
+                    <ActivityIcon className="w-8 h-8 bg-[var(--info-soft)] text-[var(--info)] p-1.5 rounded-lg" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[var(--text-primary)]">{item.action.replace(/[._]/g, ' ')}</p>
+                      <p className="text-xs text-[var(--text-muted)] truncate">{[item.entity, item.entityId].filter(Boolean).join(' · ') || t('common.noData')}</p>
+                    </div>
+                    <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">{formatActivityTime(item.timestamp, i18n.language)}</span>
                   </div>
-                  <span className="text-xs text-[var(--text-muted)] whitespace-nowrap">{item.time}</span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-txt text-sm">{t('common.noData')}</p>
+            )}
           </div>
         </div>
       </div>

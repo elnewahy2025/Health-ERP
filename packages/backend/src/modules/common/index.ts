@@ -109,8 +109,16 @@ export async function registerCommonModule(app: FastifyInstance) {
 
     const activities = await db('audit_logs')
       .where({ tenant_id: tenantId })
-      .orderBy('timestamp', 'desc')
-      .limit(20);
+      .orderByRaw('COALESCE(created_at, timestamp) DESC')
+      .limit(20)
+      .select(
+        'id',
+        'action',
+        'entity_id',
+        'user_id',
+        db.raw('COALESCE(entity_type, entity) as entity'),
+        db.raw('COALESCE(created_at, timestamp) as timestamp'),
+      );
 
     return sendSuccess(reply, activities.map((a: Record<string, unknown>) => ({
       id: a.id,
