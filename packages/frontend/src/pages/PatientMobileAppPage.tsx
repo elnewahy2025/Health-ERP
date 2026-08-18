@@ -18,6 +18,7 @@ import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
 import { isValidPortalPhone } from '@healthcare/shared/utils/portal';
 import { COUNTRY_CODES } from '../lib/countryCodes';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 type Page = 'home' | 'appointments' | 'records' | 'surveys' | 'notifications' | 'bills' | 'documents' | 'messages';
 
@@ -60,6 +61,7 @@ interface NotificationEntry {
 
 export default function PatientMobileAppPage() {
   const { t } = useTranslation();
+  const formatMoney = useClinicMoney();
 
   const [page, setPage] = useState<Page>('home');
   const [mobileNum, setMobileNum] = useState('');
@@ -340,7 +342,7 @@ export default function PatientMobileAppPage() {
                       <p className="font-medium text-sm">{sanitizeString(bill.description)}</p>
                       <p className="text-xs text-gray-500">{bill.date}</p>
                     </div>
-                    <span className="font-bold text-sm">{bill.amount} EGP</span>
+                    <span className="font-bold text-sm">{formatMoney(bill.amount)}</span>
                   </div>
                 ))
               ) : (

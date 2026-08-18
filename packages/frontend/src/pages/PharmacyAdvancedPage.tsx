@@ -14,6 +14,7 @@ import { Can } from '../components/auth/Authorization';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
 import { formatDateTime } from '../lib/format';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -140,6 +141,7 @@ function getSeverityVariant(severity: string): 'danger' | 'warning' | 'info' {
 /* ── Component ─────────────────────────────────────────────────────── */
 
 export default function PharmacyAdvancedPage() {
+  const formatMoney = useClinicMoney();
   const { t } = useTranslation();
   const [tab, setTab] = useState<PharmTab>('interactions');
   const [loading, setLoading] = useState(true);
@@ -309,7 +311,7 @@ export default function PharmacyAdvancedPage() {
     {
       key: 'unitPrice',
       header: t('pharmAdv.price'),
-      render: (item) => <span>{item.unitPrice?.toLocaleString('ar-EG')} EGP</span>,
+      render: (item) => <span>{formatMoney(item.unitPrice)}</span>,
     },
     {
       key: 'status',

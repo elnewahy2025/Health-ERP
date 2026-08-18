@@ -6,6 +6,7 @@ import { Plus, UsersRound, CalendarCheck, Banknote } from 'lucide-react';
 import { sanitizeString } from '../lib/sanitize';
 import toast from 'react-hot-toast';
 import { Can } from '../components/auth/Authorization';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 type TabType = 'employees' | 'leave' | 'payroll';
 
@@ -72,12 +73,9 @@ function validateLeaveForm(form: LeaveForm, t: (key: string) => string): LeaveFo
   return errors;
 }
 
-function formatEgp(amount: number): string {
-  return `${Number(amount).toLocaleString('en-EG')} EGP`;
-}
-
 export default function HrPage() {
   const { t } = useTranslation();
+  const formatMoney = useClinicMoney();
 
   const [tab, setTab] = useState<TabType>('employees');
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -364,8 +362,8 @@ export default function HrPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{pr.periodName}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{pr.periodStart}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{pr.periodEnd}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatEgp(pr.totalGross)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">{formatEgp(pr.totalNet)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatMoney(pr.totalGross)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">{formatMoney(pr.totalNet)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{pr.employeeCount}</td>
                       <td className="px-6 py-4 whitespace-nowrap"><Badge>{pr.status}</Badge></td>
                     </tr>

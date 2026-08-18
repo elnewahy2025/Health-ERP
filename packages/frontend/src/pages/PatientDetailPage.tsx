@@ -7,6 +7,7 @@ import { isValidEgyptianPhone, isValidEgyptianNationalId, isValidEmail, isValidN
 import { Input, Select } from '../components/ui';
 import { ArrowLeft, Calendar, Eye, FileText, Loader2, Pencil, Receipt } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 interface PatientFormData {
   firstName: string;
@@ -23,6 +24,7 @@ interface PatientFormData {
 export default function PatientDetailPage() {
   const { id } = useParams();
   const { t, i18n } = useTranslation();
+  const formatMoney = useClinicMoney();
   interface PatientDetail { id: string; firstName: string; lastName: string; email?: string; phone: string; gender: string; dateOfBirth: string; bloodType: string; nationality: string; status: string; medicalRecordNumber: string; nationalId?: string; createdAt?: string; updatedAt?: string; recentAppointments: AppointmentSummary[]; recentEmrRecords: EmrSummary[]; recentInvoices: InvoiceSummary[]; }
 interface AppointmentSummary { id: string; appointmentDate: string; appointment_date?: string; start_time?: string; status: string; type: string; doctorName?: string; }
 interface EmrSummary { id: string; encounter_date?: string; encounterDate?: string; encounter_type?: string; status: string; chief_complaint?: string; }
@@ -347,7 +349,7 @@ interface InvoiceSummary { id: string; total: number; status: string; createdAt:
                     <Receipt className="w-8 h-8 text-purple-500 bg-purple-50 p-1.5 rounded-lg" />
                     <div className="flex-1">
                       <p className="text-sm font-medium">{inv.invoice_number}</p>
-                      <p className="text-xs text-gray-500">{inv.total} EGP</p>
+                      <p className="text-xs text-gray-500">{formatMoney(inv.total)}</p>
                     </div>
                     <span className={`badge ${
                       inv.status === 'paid' ? 'badge-success' :

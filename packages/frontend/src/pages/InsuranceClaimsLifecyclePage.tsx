@@ -13,6 +13,7 @@ import {
 import { apiClient as api } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
 import { formatDateTime } from '../lib/format';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -94,6 +95,7 @@ function getStatusIcon(status: string): React.ComponentType<{ className?: string
 /* ── Component ─────────────────────────────────────────────────────── */
 
 export default function InsuranceClaimsLifecyclePage() {
+  const formatMoney = useClinicMoney();
   const { t } = useTranslation();
   const [tab, setTab] = useState<ClaimsTab>('claims');
   const [loading, setLoading] = useState(true);
@@ -276,12 +278,12 @@ export default function InsuranceClaimsLifecyclePage() {
     {
       key: 'claimedAmount',
       header: t('insClaims.claimedAmount'),
-      render: (item) => <span>{item.claimedAmount?.toLocaleString('ar-EG')} EGP</span>,
+      render: (item) => <span>{formatMoney(item.claimedAmount)}</span>,
     },
     {
       key: 'approvedAmount',
       header: t('insClaims.approvedAmount'),
-      render: (item) => <span>{item.approvedAmount?.toLocaleString('ar-EG') || '-'} EGP</span>,
+      render: (item) => <span>{item.approvedAmount != null ? formatMoney(item.approvedAmount) : '-'}</span>,
     },
     {
       key: 'status',
@@ -349,7 +351,7 @@ export default function InsuranceClaimsLifecyclePage() {
           { label: t('insClaims.approvedClaims'), value: stats.approved, color: 'text-green-600' },
           { label: t('insClaims.deniedClaims'), value: stats.denied, color: 'text-red-600' },
           { label: t('insClaims.paidClaims'), value: stats.paid, color: 'text-blue-600' },
-          { label: t('insClaims.totalClaimed'), value: `${stats.totalClaimed.toLocaleString('ar-EG')} EGP`, color: 'text-purple-600' },
+          { label: t('insClaims.totalClaimed'), value: formatMoney(stats.totalClaimed), color: 'text-purple-600' },
         ].map((stat) => (
           <Card key={stat.label}>
             <CardBody className="p-4 text-center">
@@ -522,7 +524,7 @@ export default function InsuranceClaimsLifecyclePage() {
                             <Badge variant={getStatusVariant(c.status)}>
                               {t(`insClaims.${c.status.replace(/ /g, '')}`) || c.status}
                             </Badge>
-                            <p className="text-xs text-gray-500 mt-1">{c.claimedAmount?.toLocaleString('ar-EG')} EGP</p>
+                            <p className="text-xs text-gray-500 mt-1">{formatMoney(c.claimedAmount)}</p>
                           </div>
                         </div>
                       );
@@ -638,15 +640,15 @@ export default function InsuranceClaimsLifecyclePage() {
               </div>
               <div>
                 <span className="text-gray-500">{t('insClaims.claimedAmount')}</span>
-                <p className="font-medium">{showDetail.claimedAmount?.toLocaleString('ar-EG')} EGP</p>
+                <p className="font-medium">{formatMoney(showDetail.claimedAmount)}</p>
               </div>
               <div>
                 <span className="text-gray-500">{t('insClaims.approvedAmount')}</span>
-                <p className="font-medium">{showDetail.approvedAmount?.toLocaleString('ar-EG') || '-'} EGP</p>
+                <p className="font-medium">{showDetail.approvedAmount != null ? formatMoney(showDetail.approvedAmount) : '-'}</p>
               </div>
               <div>
                 <span className="text-gray-500">{t('insClaims.paidBy')}</span>
-                <p className="font-medium">{showDetail.paidAmount?.toLocaleString('ar-EG') || '-'} EGP</p>
+                <p className="font-medium">{showDetail.paidAmount != null ? formatMoney(showDetail.paidAmount) : '-'}</p>
               </div>
               <div>
                 <span className="text-gray-500">{t('insClaims.status')}</span>

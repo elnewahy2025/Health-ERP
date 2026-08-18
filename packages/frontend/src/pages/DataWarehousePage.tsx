@@ -8,6 +8,7 @@ import {
   PageLoader, Card, CardBody, Button, Badge,
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 type DwTab = 'overview' | 'appointments' | 'revenue' | 'patients';
 
@@ -134,12 +135,7 @@ export default function DataWarehousePage() {
     }
   }, [days, loadStats, t]);
 
-  const formatCurrency = useCallback((val: number) => {
-    return new Intl.NumberFormat('en-EG', {
-      style: 'currency', currency: 'EGP',
-      minimumFractionDigits: 0, maximumFractionDigits: 0,
-    }).format(val || 0);
-  }, []);
+  const formatCurrency = useClinicMoney();
 
   if (loading) return <PageLoader message={t('common.loading')} />;
 

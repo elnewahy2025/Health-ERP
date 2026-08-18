@@ -6,6 +6,7 @@ import { Plus, Package, Warehouse as WarehouseIcon } from 'lucide-react';
 import { sanitizeNumber, sanitizeString } from '../lib/sanitize';
 import toast from 'react-hot-toast';
 import { Can } from '../components/auth/Authorization';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 type TabType = 'items' | 'warehouses' | 'pos';
 
@@ -103,10 +104,6 @@ function validatePoForm(form: PoForm, items: PoLineItem[], t: (key: string) => s
   return errors;
 }
 
-function formatEgp(amount: number): string {
-  return `${Number(amount).toLocaleString('en-EG')} EGP`;
-}
-
 function getStockColor(quantity: number, reorderPoint: number): string {
   if (quantity <= 0) return 'text-red-600';
   if (quantity <= reorderPoint) return 'text-yellow-600';
@@ -115,6 +112,7 @@ function getStockColor(quantity: number, reorderPoint: number): string {
 
 export default function InventoryPage() {
   const { t } = useTranslation();
+  const formatMoney = useClinicMoney();
 
   const [tab, setTab] = useState<TabType>('items');
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -399,7 +397,7 @@ export default function InventoryPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.reorderPoint}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{formatEgp(item.unitPrice)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{formatMoney(item.unitPrice)}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <Badge>{item.status}</Badge>
                       </td>
@@ -467,7 +465,7 @@ export default function InventoryPage() {
                     <tr key={po.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-700">{po.poNumber}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{po.supplier}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{formatEgp(po.totalAmount)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{formatMoney(po.totalAmount)}</td>
                       <td className="px-6 py-4 whitespace-nowrap"><Badge>{po.status}</Badge></td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{po.orderDate}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{po.items.length}</td>

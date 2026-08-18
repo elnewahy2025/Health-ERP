@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { clinicalApi } from '../lib/api';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 import { Calendar, Clock, FileText, Activity, AlertTriangle, DollarSign, Loader2, ArrowLeft, Stethoscope, Pill, AlertCircle } from 'lucide-react';
 
 const iconMap: Record<string, typeof Stethoscope> = { emr: Stethoscope, appointment: Calendar, invoice: DollarSign, document: FileText, allergy: AlertTriangle };
@@ -9,6 +10,7 @@ const typeColor: Record<string, string> = { emr: 'bg-blue-100 text-blue-600', ap
 
 export default function PatientTimelinePage() {
   const { patientId } = useParams();
+  const formatMoney = useClinicMoney();
   interface TimelineEvent { id: string; type: string; date: string; description: string; title?: string; total?: number; status?: string; severity?: string; diagnosis?: string; }
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,7 +53,7 @@ export default function PatientTimelinePage() {
                       </div>
                       <span className="badge badge-gray text-xs capitalize">{event.type}</span>
                     </div>
-                    {event.type === 'invoice' && <p className="text-sm mt-2"><strong>{Number(event.total || 0).toLocaleString()} EGP</strong> — <span className={event.status === 'paid' ? 'text-green-600' : 'text-yellow-600'}>{event.status}</span></p>}
+                    {event.type === 'invoice' && <p className="text-sm mt-2"><strong>{formatMoney(event.total || 0)}</strong> — <span className={event.status === 'paid' ? 'text-green-600' : 'text-yellow-600'}>{event.status}</span></p>}
                     {event.type === 'allergy' && <p className="text-sm mt-2"><span className={`font-medium ${event.severity === 'severe' || event.severity === 'anaphylaxis' ? 'text-red-600' : 'text-yellow-600'}`}>{event.severity}</span> — {event.title}</p>}
                     {event.diagnosis && <p className="text-xs text-gray-500 mt-1 truncate">Dx: {typeof event.diagnosis === 'string' ? event.diagnosis : JSON.stringify(event.diagnosis)}</p>}
                   </div>

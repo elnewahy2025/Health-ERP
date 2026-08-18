@@ -8,6 +8,7 @@ import {
   type SaasUsageData,
 } from '../lib/api';
 import { escapeHtml } from '../lib/sanitize';
+import { formatClinicMoney } from '../stores/clinicConfigurationStore';
 import { formatDate, formatDateTime } from '../lib/format';
 import {
   Button,
@@ -167,7 +168,7 @@ export default function SaasBillingPage() {
               <div className="bg-white rounded-lg border p-4 dark:bg-gray-900 dark:border-gray-800">
                 <p className="text-sm text-gray-500">{t('saas.amount')}</p>
                 <p className="text-xl font-bold">
-                  {Number(subscription.amount).toFixed(2)} EGP
+                  {formatClinicMoney(subscription.amount, subscription.currency, 'en')}
                 </p>
                 <p className="text-xs text-gray-400">
                   {escapeHtml(subscription.billingCycle)}
@@ -242,14 +243,14 @@ export default function SaasBillingPage() {
                   <Badge>{escapeHtml(p.category)}</Badge>
                 </div>
                 <p className="text-3xl font-bold mb-1">
-                  {p.priceMonthly}{' '}
+                  {formatClinicMoney(p.priceMonthly, p.currency, 'en')}{' '}
                   <span className="text-sm font-normal text-gray-500">
-                    EGP{t('saas.monthly')}
+                    {t('saas.monthly')}
                   </span>
                 </p>
                 {p.priceYearly > 0 && (
                   <p className="text-sm text-gray-500 mb-4">
-                    {p.priceYearly} EGP{t('saas.yearly')} ({t('saas.save')}{' '}
+                    {formatClinicMoney(p.priceYearly, p.currency, 'en')} {t('saas.yearly')} ({t('saas.save')}{' '}
                     {yearlySaving(p)}%)
                   </p>
                 )}
@@ -319,10 +320,10 @@ export default function SaasBillingPage() {
                     <td className="p-3 text-xs">
                       {escapeHtml(i.periodStart)} → {escapeHtml(i.periodEnd)}
                     </td>
-                    <td className="p-3">{Number(i.amount).toFixed(2)}</td>
-                    <td className="p-3">{Number(i.tax).toFixed(2)}</td>
+                    <td className="p-3">{formatClinicMoney(i.amount, i.currency, 'en')}</td>
+                    <td className="p-3">{formatClinicMoney(i.tax, i.currency, 'en')}</td>
                     <td className="p-3 font-medium">
-                      {Number(i.total).toFixed(2)} EGP
+                      {formatClinicMoney(i.total, i.currency, 'en')}
                     </td>
                     <td className="p-3">
                       <Badge variant={STATUS_VARIANT[i.status] ?? 'gray'}>

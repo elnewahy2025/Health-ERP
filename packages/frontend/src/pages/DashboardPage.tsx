@@ -5,7 +5,7 @@ import { dashboardApi, appointmentsApi, commonApi } from '../lib/api';
 import { Spinner } from '../components/ui';
 import { Can } from '../components/auth/Authorization';
 import { useAuth } from '../stores/authStore';
-import { formatClinicDate, useClinicConfiguration } from '../stores/clinicConfigurationStore';
+import { formatClinicDate, useClinicConfiguration, useClinicMoney } from '../stores/clinicConfigurationStore';
 import {
   CalendarCheck, Receipt, Users, DollarSign,
   Stethoscope, TrendingUp, Activity as ActivityIcon,
@@ -40,6 +40,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { can } = useAuth();
   const { identity } = useClinicConfiguration();
+  const formatMoney = useClinicMoney();
   const canViewAnalytics = can('analytics_dashboard.view');
   const canViewAppointments = can('appointments.view');
   const canViewActivity = can('audit.view');
@@ -69,7 +70,7 @@ interface TodayAppointment { id: string; patientName: string; doctorName: string
     { label: t('dashboard.todayAppointments'), value: stats.todayAppointments, icon: CalendarCheck, color: 'bg-blue-500' },
     { label: t('dashboard.totalPatients'), value: stats.totalPatients, icon: Users, color: 'bg-green-500' },
     { label: t('dashboard.pendingBills'), value: stats.pendingBills, icon: Receipt, color: 'bg-yellow-500' },
-    { label: t('dashboard.revenueToday'), value: `${(stats.revenueToday || 0).toLocaleString()} EGP`, icon: DollarSign, color: 'bg-purple-500' },
+    { label: t('dashboard.revenueToday'), value: formatMoney(stats.revenueToday || 0), icon: DollarSign, color: 'bg-purple-500' },
     { label: t('dashboard.activeDoctors'), value: stats.activeDoctors, icon: Stethoscope, color: 'bg-teal-500' },
   ];
 

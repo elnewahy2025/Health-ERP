@@ -7,6 +7,7 @@ import { Plus, Package, ListChecks, Search, Loader2, Trash2 } from 'lucide-react
 import toast from 'react-hot-toast';
 import { formatDateTime } from '../lib/format';
 import { Can } from '../components/auth/Authorization';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 interface DrugItem {
   drugName: string;
@@ -45,6 +46,7 @@ const FREQUENCY_OPTIONS = [
 ];
 
 export default function PharmacyPage() {
+  const formatMoney = useClinicMoney();
   const { t } = useTranslation();
   const [tab, setTab] = useState<'inventory' | 'prescriptions'>('inventory');
   interface PharmacyDrug {
@@ -201,7 +203,7 @@ interface Prescription {
                   <td className="text-xs text-gray-500">{d.genericName || '-'}</td>
                   <td><span className={`font-medium ${d.stockQuantity < d.reorderLevel ? 'text-red-600' : 'text-green-600'}`}>{d.stockQuantity}</span></td>
                   <td className="text-xs">{d.reorderLevel}</td>
-                  <td>{d.unitPrice ? d.unitPrice.toFixed(2) + ' EGP' : '-'}</td>
+                  <td>{d.unitPrice ? formatMoney(d.unitPrice) : '-'}</td>
                   <td className="text-xs">{d.expiryDate || '-'}</td>
                   <td><span className={`badge ${d.status === 'active' ? 'badge-success' : 'badge-gray'}`}>{d.status || 'active'}</span></td>
                 </tr>
@@ -253,7 +255,7 @@ interface Prescription {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input label={`${t('pharmacy.stock')} *`} type="number" min="0" value={drugForm.stockQuantity} onChange={e => setDrugForm(prev => ({ ...prev, stockQuantity: Number(e.target.value) }))} error={drugErrors.stockQuantity} required />
             <Input label={t('pharmacy.reorderLevel')} type="number" min="0" value={drugForm.reorderLevel} onChange={e => setDrugForm(prev => ({ ...prev, reorderLevel: Number(e.target.value) }))} />
-            <Input label={`${t('pharmacy.price')} (EGP)`} type="number" min="0" step="0.01" value={drugForm.unitPrice} onChange={e => setDrugForm(prev => ({ ...prev, unitPrice: Number(e.target.value) }))} />
+            <Input label={t('pharmacy.price')} type="number" min="0" step="0.01" value={drugForm.unitPrice} onChange={e => setDrugForm(prev => ({ ...prev, unitPrice: Number(e.target.value) }))} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input label={t('pharmacy.batchNumber')} value={drugForm.batchNumber} onChange={e => setDrugForm(prev => ({ ...prev, batchNumber: e.target.value }))} />

@@ -8,6 +8,7 @@ import {
   type PlReport,
 } from '../lib/api';
 import { PageLoader } from '../components/ui';
+import { formatClinicMoney, useClinicConfiguration } from '../stores/clinicConfigurationStore';
 import {
   BarChart3,
   TrendingUp,
@@ -29,6 +30,12 @@ const PERIOD_OPTIONS: { value: PeriodKey; labelKey: string }[] = [
 
 export default function FinancialReportsPage() {
   const { t } = useTranslation();
+  const { identity } = useClinicConfiguration();
+  const formatMoney = (amount: number | string | null | undefined) => formatClinicMoney(
+    amount,
+    identity?.currency,
+    identity?.locale,
+  );
 
   const [tab, setTab] = useState<TabType>('overview');
   const [period, setPeriod] = useState<PeriodKey>('month');
@@ -152,7 +159,7 @@ export default function FinancialReportsPage() {
                 <div>
                   <p className="text-sm text-gray-500">{t('finRep.totalRevenue')}</p>
                   <p className="text-xl font-bold text-green-600">
-                    {(revenue?.totalRevenue ?? 0).toLocaleString()} EGP
+                    {formatMoney(revenue?.totalRevenue ?? 0)}
                   </p>
                 </div>
               </div>
@@ -165,7 +172,7 @@ export default function FinancialReportsPage() {
                 <div>
                   <p className="text-sm text-gray-500">{t('finRep.collected')}</p>
                   <p className="text-xl font-bold text-blue-600">
-                    {(revenue?.totalCollected ?? 0).toLocaleString()} EGP
+                    {formatMoney(revenue?.totalCollected ?? 0)}
                   </p>
                 </div>
               </div>
@@ -178,7 +185,7 @@ export default function FinancialReportsPage() {
                 <div>
                   <p className="text-sm text-gray-500">{t('finRep.outstanding')}</p>
                   <p className="text-xl font-bold text-yellow-600">
-                    {(revenue?.totalOutstanding ?? 0).toLocaleString()} EGP
+                    {formatMoney(revenue?.totalOutstanding ?? 0)}
                   </p>
                 </div>
               </div>
@@ -206,7 +213,7 @@ export default function FinancialReportsPage() {
                 {revenue!.revenueByCategory.map((cat) => (
                   <div key={cat.category} className="flex justify-between items-center p-2 bg-gray-50 rounded">
                     <span className="text-sm font-medium">{cat.category}</span>
-                    <span className="text-sm font-semibold">{Number(cat.total).toLocaleString()} EGP</span>
+                    <span className="text-sm font-semibold">{formatMoney(cat.total)}</span>
                   </div>
                 ))}
               </div>
@@ -225,7 +232,7 @@ export default function FinancialReportsPage() {
                     <span className="font-medium">{bucket.range}</span>
                     <div className="flex gap-4">
                       <span className="text-gray-500">{bucket.count} {t('finRep.count').toLowerCase()}</span>
-                      <span className="font-semibold">{Number(bucket.total).toLocaleString()} EGP</span>
+                      <span className="font-semibold">{formatMoney(bucket.total)}</span>
                     </div>
                   </div>
                 ))}
@@ -248,7 +255,7 @@ export default function FinancialReportsPage() {
                     </div>
                     <div className="flex gap-4 text-xs text-gray-500">
                       <span>{p.invoiceCount} {t('finRep.invoiceCount').toLowerCase()}</span>
-                      <span className="font-semibold text-green-600">{Number(p.total).toLocaleString()} EGP</span>
+                      <span className="font-semibold text-green-600">{formatMoney(p.total)}</span>
                     </div>
                   </div>
                 ))}
@@ -272,15 +279,15 @@ export default function FinancialReportsPage() {
             <div className="space-y-2">
               <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
                 <span className="font-medium">{t('finRep.totalRevenueInv')}</span>
-                <span className="font-bold text-green-700">{plReport.revenue.total.toLocaleString()} EGP</span>
+                <span className="font-bold text-green-700">{formatMoney(plReport.revenue.total)}</span>
               </div>
               <div className="flex justify-between items-center p-2">
                 <span className="text-sm text-gray-600 ml-4">{t('finRep.collected')}</span>
-                <span className="font-medium">{plReport.revenue.collected.toLocaleString()} EGP</span>
+                <span className="font-medium">{formatMoney(plReport.revenue.collected)}</span>
               </div>
               <div className="flex justify-between items-center p-2">
                 <span className="text-sm text-gray-600 ml-4">{t('finRep.outstanding')}</span>
-                <span className="font-medium text-yellow-600">{plReport.revenue.outstanding.toLocaleString()} EGP</span>
+                <span className="font-medium text-yellow-600">{formatMoney(plReport.revenue.outstanding)}</span>
               </div>
             </div>
           </div>
@@ -292,12 +299,12 @@ export default function FinancialReportsPage() {
             <div className="space-y-2">
               <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
                 <span className="font-medium">{t('finRep.totalExpenses')}</span>
-                <span className="font-bold text-orange-700">{plReport.expenses.total.toLocaleString()} EGP</span>
+                <span className="font-bold text-orange-700">{formatMoney(plReport.expenses.total)}</span>
               </div>
               {plReport.expenses.byCategory?.map((cat) => (
                 <div key={cat.category} className="flex justify-between items-center p-2">
                   <span className="text-sm text-gray-600 ml-4">{cat.category}</span>
-                  <span className="font-medium">{Number(cat.total).toLocaleString()} EGP</span>
+                  <span className="font-medium">{formatMoney(cat.total)}</span>
                 </div>
               ))}
             </div>
@@ -308,7 +315,7 @@ export default function FinancialReportsPage() {
               <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
                 <span className="text-lg font-bold">{t('finRep.grossProfit')}</span>
                 <span className={`text-lg font-bold ${plReport.grossProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {plReport.grossProfit.toLocaleString()} EGP
+                  {formatMoney(plReport.grossProfit)}
                 </span>
               </div>
               <div className="flex justify-between items-center p-3">
@@ -333,11 +340,11 @@ export default function FinancialReportsPage() {
                     <div key={m.month} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                       <span className="text-sm font-medium w-20">{m.month}</span>
                       <div className="flex-1 flex gap-4 text-xs">
-                        <span className="text-green-600">Rev: {rev.toLocaleString()}</span>
-                        <span className="text-orange-600">Exp: {exp.toLocaleString()}</span>
+                        <span className="text-green-600">Rev: {formatMoney(rev)}</span>
+                        <span className="text-orange-600">Exp: {formatMoney(exp)}</span>
                       </div>
                       <span className={`text-sm font-semibold w-28 text-right ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {profit >= 0 ? '+' : ''}{profit.toLocaleString()} EGP
+                        {profit >= 0 ? '+' : ''}{formatMoney(profit)}
                       </span>
                     </div>
                   );

@@ -27,13 +27,13 @@ export async function registerSaasBillingModule(app: FastifyInstance) {
       .select('tenant_subscriptions.*', 'subscription_plans.name as plan_name', 'subscription_plans.slug as plan_slug',
         'subscription_plans.price_monthly', 'subscription_plans.price_yearly', 'subscription_plans.modules as plan_modules',
         'subscription_plans.features as plan_features', 'subscription_plans.max_users', 'subscription_plans.max_branches',
-        'subscription_plans.max_storage_gb', 'subscription_plans.category as plan_category')
+        'subscription_plans.max_storage_gb', 'subscription_plans.category as plan_category', 'subscription_plans.currency as currency')
       .first();
     if (!sub) return sendSuccess(reply, null);
     return sendSuccess(reply, {
       id: sub.id, planId: sub.plan_id, planName: sub.plan_name, planSlug: sub.plan_slug,
       planCategory: sub.plan_category, planModules: sub.plan_modules, planFeatures: sub.plan_features,
-      priceMonthly: Number(sub.price_monthly), priceYearly: Number(sub.price_yearly),
+      priceMonthly: Number(sub.price_monthly), priceYearly: Number(sub.price_yearly), currency: sub.currency,
       maxUsers: sub.max_users, maxBranches: sub.max_branches, maxStorageGb: sub.max_storage_gb,
       status: sub.status, billingCycle: sub.billing_cycle, amount: Number(sub.amount),
       currentPeriodStart: sub.current_period_start, currentPeriodEnd: sub.current_period_end,
@@ -99,10 +99,16 @@ export async function registerSaasBillingModule(app: FastifyInstance) {
   // ── Subscription Invoices ──
   app.get('/api/v1/saas/invoices', { preHandler: [authenticate, authorize('saas_billing.view')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
-    const invoices = await db('subscription_invoices').where({ tenant_id: tenantId }).orderBy('created_at', 'desc').limit(50);
+    const invoices = await db('subscription_invoices')
+      .leftJoin('tenant_subscriptions', 'subscription_invoices.subscription_id', 'tenant_subscriptions.id')
+      .leftJoin('subscription_plans', 'tenant_subscriptions.plan_id', 'subscription_plans.id')
+      .where('subscription_invoices.tenant_id', tenantId)
+      .orderBy('subscription_invoices.created_at', 'desc')
+      .limit(50)
+      .select('subscription_invoices.*', 'subscription_plans.currency as currency');
     return sendSuccess(reply, invoices.map((i: Record<string, unknown>) => ({
       id: i.id, invoiceNumber: i.invoice_number, amount: Number(i.amount),
-      tax: Number(i.tax), total: Number(i.total), status: i.status,
+      tax: Number(i.tax), total: Number(i.total), currency: i.currency, status: i.status,
       paymentMethod: i.payment_method, paidAt: i.paid_at,
       periodStart: i.period_start, periodEnd: i.period_end, createdAt: i.created_at
     })));

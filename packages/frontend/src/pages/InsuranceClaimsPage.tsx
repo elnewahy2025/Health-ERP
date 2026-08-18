@@ -23,6 +23,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Status' },
@@ -55,6 +56,7 @@ const STATUS_VARIANT: Record<string, 'success' | 'danger' | 'warning' | 'info' |
 
 export default function InsuranceClaimsPage() {
   const { t } = useTranslation();
+  const formatMoney = useClinicMoney();
 
   const [claims, setClaims] = useState<InsuranceClaimListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -204,11 +206,11 @@ export default function InsuranceClaimsPage() {
           </div>
           <div className="bg-white rounded-lg border p-3 col-span-2 sm:col-span-3 lg:col-span-5">
             <p className="text-sm">
-              {t('insClaims.claimed')}: <strong>{Number(summary.totalClaimed).toLocaleString()} EGP</strong>
+              {t('insClaims.claimed')}: <strong>{formatMoney(summary.totalClaimed)}</strong>
               {' | '}
-              {t('insClaims.approved')}: <strong>{Number(summary.totalApproved).toLocaleString()} EGP</strong>
+              {t('insClaims.approved')}: <strong>{formatMoney(summary.totalApproved)}</strong>
               {' | '}
-              {t('insClaims.totalPaid')}: <strong className="text-green-600">{Number(summary.totalPaid).toLocaleString()} EGP</strong>
+              {t('insClaims.totalPaid')}: <strong className="text-green-600">{formatMoney(summary.totalPaid)}</strong>
             </p>
           </div>
         </div>
@@ -270,8 +272,8 @@ export default function InsuranceClaimsPage() {
                   </td>
                   <td className="p-3 text-sm">{c.companyName ? escapeHtml(c.companyName) : '-'}</td>
                   <td className="p-3 font-mono text-xs">{c.invoiceNumber ? escapeHtml(c.invoiceNumber) : '-'}</td>
-                  <td className="p-3 font-semibold">{Number(c.claimedAmount).toLocaleString()} EGP</td>
-                  <td className="p-3">{Number(c.approvedAmount).toLocaleString()} EGP</td>
+                  <td className="p-3 font-semibold">{formatMoney(c.claimedAmount)}</td>
+                  <td className="p-3">{formatMoney(c.approvedAmount)}</td>
                   <td className="p-3">
                     <Badge variant={STATUS_VARIANT[c.status] ?? 'gray'}>
                       {escapeHtml(c.status)}

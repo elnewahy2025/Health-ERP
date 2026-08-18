@@ -46,6 +46,7 @@ export interface ClinicShellIdentity {
   logoUrl: string;
   timezone: string;
   locale: string;
+  currency: string;
 }
 
 export interface ClinicModuleVisibility {

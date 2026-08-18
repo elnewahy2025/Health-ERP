@@ -4,10 +4,12 @@ import { Card, CardBody, Button, Spinner, Badge } from '../components/ui';
 import { Building2, ArrowLeft, Users, Calendar, DollarSign, MapPin, Phone, Mail, Edit } from 'lucide-react';
 import { apiClient as api } from '../lib/api';
 import toast from 'react-hot-toast';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 export default function BranchDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const formatMoney = useClinicMoney();
   interface Branch { id: string; name: string; code: string; type: string; address?: string; city?: string; governorate?: string; phone?: string; email?: string; manager_name?: string; capacity?: number; is_active: boolean; stats?: { patients: number; appointments: number; revenue: number; total_revenue?: number; staff: number; }; patients?: BranchPatient[]; [key: string]: unknown; }
 interface StaffMember { id: string; name: string; role: string; specialization?: string; is_active: boolean; }
 interface BranchPatient { id: string; first_name: string; last_name: string; mrn: string; phone: string; is_active: boolean; }
@@ -62,8 +64,8 @@ interface BranchPatient { id: string; first_name: string; last_name: string; mrn
         </CardBody></Card>
         <Card><CardBody className="p-4 text-center">
           <DollarSign className="w-6 h-6 text-yellow-500 mx-auto mb-1" />
-          <p className="text-2xl font-bold">{(branch.stats?.total_revenue || 0).toLocaleString()}</p>
-          <p className="text-xs text-gray-500">Revenue (EGP)</p>
+          <p className="text-2xl font-bold">{formatMoney(branch.stats?.total_revenue || 0)}</p>
+          <p className="text-xs text-gray-500">Revenue</p>
         </CardBody></Card>
         <Card><CardBody className="p-4 text-center">
           <Users className="w-6 h-6 text-purple-500 mx-auto mb-1" />

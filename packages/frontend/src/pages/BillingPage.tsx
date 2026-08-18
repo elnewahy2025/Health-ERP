@@ -7,6 +7,7 @@ import { Plus, Trash2, DollarSign, FileText, TrendingUp, AlertTriangle, ChevronU
 import { sanitizeNumber } from '../lib/sanitize';
 import toast from 'react-hot-toast';
 import { Can } from '../components/auth/Authorization';
+import { formatClinicMoney, useClinicConfiguration } from '../stores/clinicConfigurationStore';
 
 interface InvoiceItemForm {
   description: string;
@@ -126,10 +127,6 @@ function validateForm(form: InvoiceForm, t: (key: string) => string): FormErrors
   return errors;
 }
 
-function formatEgp(amount: number): string {
-  return `${Number(amount).toLocaleString('en-EG')} EGP`;
-}
-
 function getStatusVariant(status: InvoiceStatus): 'success' | 'warning' | 'danger' | 'info' | 'gray' {
   const map: Record<InvoiceStatus, 'success' | 'warning' | 'danger' | 'info' | 'gray'> = {
     paid: 'success',
@@ -165,6 +162,12 @@ function SortIndicator({ active, direction }: { active: boolean; direction: 'asc
 
 export default function BillingPage() {
   const { t } = useTranslation();
+  const { identity } = useClinicConfiguration();
+  const formatMoney = (amount: number | string | null | undefined) => formatClinicMoney(
+    amount,
+    identity?.currency,
+    identity?.locale,
+  );
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -366,7 +369,7 @@ export default function BillingPage() {
               </div>
               <div>
                 <p className="text-xs text-muted-txt">{t('billing.totalRevenue')}</p>
-                <p className="text-lg font-bold text-[var(--text-primary)]">{formatEgp(revenue.total_revenue)}</p>
+                <p className="text-lg font-bold text-[var(--text-primary)]">{formatMoney(revenue.total_revenue)}</p>
               </div>
             </div>
           </div>
@@ -378,7 +381,7 @@ export default function BillingPage() {
               </div>
               <div>
                 <p className="text-xs text-muted-txt">{t('billing.collected')}</p>
-                <p className="text-lg font-bold text-[var(--success)]">{formatEgp(revenue.total_collected)}</p>
+                <p className="text-lg font-bold text-[var(--success)]">{formatMoney(revenue.total_collected)}</p>
               </div>
             </div>
           </div>
@@ -390,7 +393,7 @@ export default function BillingPage() {
               </div>
               <div>
                 <p className="text-xs text-muted-txt">{t('billing.outstanding')}</p>
-                <p className="text-lg font-bold text-[var(--warning)]">{formatEgp(revenue.total_pending)}</p>
+                <p className="text-lg font-bold text-[var(--warning)]">{formatMoney(revenue.total_pending)}</p>
               </div>
             </div>
           </div>
@@ -497,13 +500,13 @@ export default function BillingPage() {
                       {invoice.patientName || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--text-primary)] font-medium">
-                      {formatEgp(invoice.total)}
+                      {formatMoney(invoice.total)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--success)]">
-                      {formatEgp(invoice.paid)}
+                      {formatMoney(invoice.paid)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--error)] font-medium">
-                      {formatEgp(invoice.due)}
+                      {formatMoney(invoice.due)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Badge variant={getStatusVariant(invoice.status)}>
@@ -650,7 +653,7 @@ export default function BillingPage() {
                     />
                   </div>
                   <div className="w-20 text-sm font-medium pt-2 text-right text-secondary-txt">
-                    {formatEgp(calcItemTotal(item))}
+                    {formatMoney(calcItemTotal(item))}
                   </div>
                   {newInvoice.items.length > 1 && (
                     <Button
@@ -700,7 +703,7 @@ export default function BillingPage() {
           </div>
 
           <div className="text-right text-lg font-bold text-[var(--text-primary)]">
-            {t('billing.totalEgp', { amount: calcInvoiceTotal(newInvoice.items, newInvoice.discount, newInvoice.tax).toLocaleString('en-EG') })}
+            {t('billing.totalAmount', { amount: formatMoney(calcInvoiceTotal(newInvoice.items, newInvoice.discount, newInvoice.tax)) })}
           </div>
 
           <Input
@@ -724,7 +727,7 @@ export default function BillingPage() {
             </Button>
             <Can permission="billing.approve">
               <Button loading={saving} onClick={handleRecordPayment}>
-                {t('billing.pay')} {selectedInvoice ? formatEgp(selectedInvoice.due) : ''}
+                {t('billing.pay')} {selectedInvoice ? formatMoney(selectedInvoice.due) : ''}
               </Button>
             </Can>
           </>
@@ -740,7 +743,7 @@ export default function BillingPage() {
                 {t('billing.patient')}: {selectedInvoice.patientName}
               </p>
               <p className="text-lg font-bold mt-2 text-[var(--text-primary)]">
-                {t('billing.amountDue')}: {formatEgp(selectedInvoice.due)}
+                {t('billing.amountDue')}: {formatMoney(selectedInvoice.due)}
               </p>
             </div>
 

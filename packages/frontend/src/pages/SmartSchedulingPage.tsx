@@ -20,6 +20,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 interface Slot {
   start: string;
@@ -43,6 +44,7 @@ interface ScheduleResult {
 
 export default function SmartSchedulingPage() {
   const { t } = useTranslation();
+  const formatMoney = useClinicMoney();
 
   const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(false);
@@ -150,7 +152,7 @@ export default function SmartSchedulingPage() {
                   <div>
                     <p className="text-sm text-gray-500">{t('smart.expectedRevenue')}</p>
                     <p className="text-xl font-bold">
-                      {result.expectedRevenue.toLocaleString()} EGP
+                      {formatMoney(result.expectedRevenue)}
                     </p>
                   </div>
                 </div>

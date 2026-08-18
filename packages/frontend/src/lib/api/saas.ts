@@ -33,6 +33,7 @@ export interface TenantSubscription {
   status: string;
   billingCycle: string;
   amount: number;
+  currency: string;
   currentPeriodStart: string;
   currentPeriodEnd: string;
   trialEndsAt?: string;
@@ -47,6 +48,7 @@ export interface SaasInvoice {
   amount: number;
   tax: number;
   total: number;
+  currency: string;
   status: string;
   paymentMethod?: string;
   paidAt?: string;

@@ -7,6 +7,7 @@ import { sanitizeNumber, sanitizeString } from '../lib/sanitize';
 import { formatDateTime } from '../lib/format';
 import toast from 'react-hot-toast';
 import { Can } from '../components/auth/Authorization';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 type TabType = 'campaigns' | 'feedback';
 
@@ -36,16 +37,13 @@ function validateCampaignForm(form: CampaignForm, t: (key: string) => string): C
   return errors;
 }
 
-function formatEgp(amount: number): string {
-  return `${Number(amount).toLocaleString('en-EG')} EGP`;
-}
-
 function renderStars(rating: number): string {
   return '★'.repeat(rating) + '☆'.repeat(5 - rating);
 }
 
 export default function CrmPage() {
   const { t } = useTranslation();
+  const formatMoney = useClinicMoney();
 
   const [tab, setTab] = useState<TabType>('campaigns');
   const [campaigns, setCampaigns] = useState<CrmCampaign[]>([]);
@@ -192,7 +190,7 @@ export default function CrmPage() {
                     <tr key={camp.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{camp.name}</td>
                       <td className="px-6 py-4 whitespace-nowrap"><Badge>{t(`crm.${camp.type}`)}</Badge></td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatEgp(camp.budget)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatMoney(camp.budget)}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{camp.targetCount}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{camp.reachedCount}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{camp.conversionCount}</td>

@@ -6,6 +6,7 @@ import { Card, CardBody, Input, Button } from '../components/ui';
 import { apiClient as api, clinicConfigurationApi, type ClinicModuleReadiness, type ClinicModuleStatus } from '../lib/api';
 import { Can } from '../components/auth/Authorization';
 import toast from 'react-hot-toast';
+import { clinicConfigurationDefinition } from '@healthcare/shared';
 
 interface ClinicSettings {
   clinicName: string;
@@ -28,10 +29,14 @@ interface ClinicSettings {
 
 type SettingsTab = 'clinic' | 'modules' | 'navigation';
 
+const DEFAULT_CLINIC_CURRENCY = String(
+  clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '',
+);
+
 const INITIAL_CLINIC: ClinicSettings = {
   clinicName: '', branch: '', landPhone: '', whatsappPhone: '', logoUrl: '',
   address: '', city: '', country: '', googleMapsLocation: '', email: '',
-  website: '', workingHours: 'Sun-Thu: 9AM-5PM', licenseNumber: '', taxNumber: '', currency: 'EGP',
+  website: '', workingHours: 'Sun-Thu: 9AM-5PM', licenseNumber: '', taxNumber: '', currency: DEFAULT_CLINIC_CURRENCY,
 };
 
 function moduleLabel(moduleKey: string): string {
@@ -214,7 +219,7 @@ export default function SettingsPage() {
                   <Input id="clinic-settings-working-hours" label={t('settings.workingHours')} value={clinic.workingHours} onChange={e => setClinic(p => ({ ...p, workingHours: e.target.value }))} />
                   <Input id="clinic-settings-license-number" label={t('settings.licenseNumber')} value={clinic.licenseNumber} onChange={e => setClinic(p => ({ ...p, licenseNumber: e.target.value }))} />
                   <Input id="clinic-settings-tax-number" label={t('settings.taxNumber')} value={clinic.taxNumber} onChange={e => setClinic(p => ({ ...p, taxNumber: e.target.value }))} />
-                  <Input id="clinic-settings-currency" label={t('settings.currency')} value={clinic.currency} maxLength={3} onChange={e => setClinic(p => ({ ...p, currency: e.target.value.toUpperCase() }))} placeholder="EGP" />
+                  <Input id="clinic-settings-currency" label={t('settings.currency')} value={clinic.currency} maxLength={3} onChange={e => setClinic(p => ({ ...p, currency: e.target.value.toUpperCase() }))} placeholder={DEFAULT_CLINIC_CURRENCY} />
                 </div>
               </div>
 

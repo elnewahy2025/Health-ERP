@@ -9,6 +9,7 @@ import {
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
 import { Can } from '../components/auth/Authorization';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 interface Branch {
   id: string;
@@ -196,12 +197,7 @@ export default function MultiBranchPage() {
     setShowModal(true);
   }, []);
 
-  const formatCurrency = useCallback((val: number) => {
-    return new Intl.NumberFormat('en-EG', {
-      style: 'currency', currency: 'EGP',
-      minimumFractionDigits: 0, maximumFractionDigits: 0,
-    }).format(val || 0);
-  }, []);
+  const formatCurrency = useClinicMoney();
 
   if (loading) return <PageLoader message={t('common.loading')} />;
 

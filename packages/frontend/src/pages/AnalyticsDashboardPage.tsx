@@ -13,6 +13,7 @@ import {
   PageLoader, Card, CardBody, Button,
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
 
@@ -211,12 +212,7 @@ export default function AnalyticsDashboardPage() {
     setRefreshing(false);
   }, [fetchAnalytics]);
 
-  const formatCurrency = useCallback((val: number) => {
-    return new Intl.NumberFormat('en-EG', {
-      style: 'currency', currency: 'EGP',
-      minimumFractionDigits: 0, maximumFractionDigits: 0,
-    }).format(val || 0);
-  }, []);
+  const formatCurrency = useClinicMoney();
 
   if (loading) return <PageLoader message={t('common.loading')} />;
 
@@ -350,7 +346,7 @@ export default function AnalyticsDashboardPage() {
             <Tooltip />
             <Legend />
             <Bar dataKey="count" name={t('analytics.appointments')} fill="#3B82F6" radius={[0, 4, 4, 0]} />
-            <Bar dataKey="revenue" name={t('analytics.revenueEGP')} fill="#10B981" radius={[0, 4, 4, 0]} />
+            <Bar dataKey="revenue" name={t('analytics.revenue')} fill="#10B981" radius={[0, 4, 4, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </CardBody></Card>

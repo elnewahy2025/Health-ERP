@@ -5,6 +5,7 @@ import { Modal, Input, Select, PatientSearchField, Button, Badge, EmptyState, Pa
 import { Plus, ShieldCheck } from 'lucide-react';
 import { sanitizeNumber, sanitizeString } from '../lib/sanitize';
 import toast from 'react-hot-toast';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 interface CompanyForm {
   name: string;
@@ -69,14 +70,11 @@ function validateClaimForm(form: ClaimForm, t: (key: string) => string): ClaimFo
   return errors;
 }
 
-function formatEgp(amount: number): string {
-  return `${Number(amount).toLocaleString('en-EG')} EGP`;
-}
-
 type TabType = 'companies' | 'claims';
 
 export default function InsurancePage() {
   const { t } = useTranslation();
+  const formatMoney = useClinicMoney();
 
   const [tab, setTab] = useState<TabType>('companies');
   const [companies, setCompanies] = useState<InsuranceCompany[]>([]);
@@ -349,7 +347,7 @@ export default function InsurancePage() {
                       {claim.insuranceName || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                      {formatEgp(claim.claimedAmount)}
+                      {formatMoney(claim.claimedAmount)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Badge>{claimStatusLabel(claim.status)}</Badge>

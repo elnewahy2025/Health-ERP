@@ -4,6 +4,11 @@ import {
   type ClinicModuleVisibility,
   type ClinicShellIdentity,
 } from '../lib/api';
+import { clinicConfigurationDefinition } from '@healthcare/shared';
+
+const DEFAULT_CLINIC_CURRENCY = String(
+  clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '',
+);
 
 interface ClinicConfigurationContextValue {
   identity: ClinicShellIdentity | null;
@@ -53,6 +58,32 @@ export function ClinicConfigurationProvider({ children }: { children: React.Reac
 
 export function useClinicConfiguration(): ClinicConfigurationContextValue {
   return useContext(ClinicConfigurationContext);
+}
+
+export function formatClinicMoney(
+  value: number | string | null | undefined,
+  currency?: string,
+  locale?: string,
+): string {
+  const safeCurrency = /^[A-Z]{3}$/.test((currency || '').toUpperCase())
+    ? (currency || '').toUpperCase()
+    : DEFAULT_CLINIC_CURRENCY;
+  const safeLocale = locale?.toLowerCase().startsWith('ar') ? 'ar-EG' : 'en-EG';
+  return new Intl.NumberFormat(safeLocale, {
+    style: 'currency',
+    currency: safeCurrency,
+    currencyDisplay: 'code',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value || 0));
+}
+
+export function useClinicMoney(): (value: number | string | null | undefined) => string {
+  const { identity } = useClinicConfiguration();
+  return useCallback(
+    (value) => formatClinicMoney(value, identity?.currency, identity?.locale),
+    [identity?.currency, identity?.locale],
+  );
 }
 
 export function formatClinicDate(

@@ -14,6 +14,7 @@ import { apiClient as api } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
 import { formatDateTime } from '../lib/format';
 import { isValidDate, isFutureDate } from '../lib/validators';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 const PHONE_REGEX = /^\+?[0-9]{10,15}$/;
 
@@ -81,7 +82,6 @@ const APPOINTMENT_TYPES = [
 ] as const;
 
 const PAGE_SIZE = 10;
-const CURRENCY = 'EGP';
 
 /* ── Helpers ───────────────────────────────────────────────────────── */
 
@@ -107,6 +107,7 @@ function getStatusBadgeVariant(
 /* ── Component ─────────────────────────────────────────────────────── */
 
 export default function PatientSelfServicePage() {
+  const formatMoney = useClinicMoney();
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<SelfServiceTab>('book');
   const [loading, setLoading] = useState(true);
@@ -489,7 +490,7 @@ export default function PatientSelfServicePage() {
       key: 'total',
       header: t('selfService.amount'),
       render: (item) => (
-        <span>{item.total?.toLocaleString('ar-EG')} {CURRENCY}</span>
+        <span>{formatMoney(item.total)}</span>
       ),
     },
     {

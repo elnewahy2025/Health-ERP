@@ -14,6 +14,11 @@ import {
   setTenantModuleActivation,
   setTenantModuleEntitlement,
 } from '../../services/clinic-modules.js';
+import { clinicConfigurationDefinition } from '@healthcare/shared';
+
+const DEFAULT_CLINIC_CURRENCY = String(
+  clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '',
+);
 
 const LEGACY_FIELD_MAP = {
   clinicName: 'clinic.profile.display_name',
@@ -91,6 +96,7 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
       logoUrl: value('clinic.profile.logo_url', ''),
       timezone: value('clinic.timezone.default', 'UTC'),
       locale: value('clinic.locale.default', 'en'),
+      currency: value('clinic.finance.currency', DEFAULT_CLINIC_CURRENCY),
     });
   });
 

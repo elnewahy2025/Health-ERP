@@ -9,6 +9,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString, escapeHtml } from '../lib/sanitize';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -62,6 +63,7 @@ const PAYMENT_METHODS = [
 
 export default function ExpenseTrackingPage() {
   const { t } = useTranslation();
+  const formatMoney = useClinicMoney();
   const [tab, setTab] = useState<ExpenseTab>('list');
   const [loading, setLoading] = useState(true);
 
@@ -195,7 +197,7 @@ export default function ExpenseTrackingPage() {
     {
       key: 'amount',
       header: t('expense.amount'),
-      render: (item) => <span className="font-semibold">{item.amount?.toLocaleString('ar-EG')} EGP</span>,
+      render: (item) => <span className="font-semibold">{formatMoney(item.amount)}</span>,
     },
     {
       key: 'expense_date',
@@ -402,7 +404,7 @@ export default function ExpenseTrackingPage() {
                   <CardBody className="p-5 text-center">
                     <p className="text-sm text-gray-500">{t('expense.totalExpenses')}</p>
                     <p className="text-3xl font-bold text-orange-600">
-                      {stats.totalExpenses?.toLocaleString('ar-EG')} EGP
+                      {formatMoney(stats.totalExpenses)}
                     </p>
                   </CardBody>
                 </Card>

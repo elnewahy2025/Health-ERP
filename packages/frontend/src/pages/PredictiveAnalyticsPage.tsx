@@ -20,6 +20,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 
 interface NoShowPrediction {
   appointmentId: string;
@@ -63,6 +64,7 @@ const riskBadgeVariant = (level: string): 'success' | 'warning' | 'danger' | 'in
 
 export default function PredictiveAnalyticsPage() {
   const { t } = useTranslation();
+  const formatMoney = useClinicMoney();
 
   const [tab, setTab] = useState<TabKey>('overview');
   const [noShows, setNoShows] = useState<NoShowPrediction[]>([]);
@@ -324,7 +326,7 @@ export default function PredictiveAnalyticsPage() {
                       >
                         <span className="text-sm font-medium">{h.month}</span>
                         <span className="text-sm font-semibold">
-                          {h.revenue.toLocaleString()} EGP
+                          {formatMoney(h.revenue)}
                         </span>
                       </div>
                     ))}
@@ -340,12 +342,12 @@ export default function PredictiveAnalyticsPage() {
                         <div className="flex justify-between items-center">
                           <span className="text-sm font-medium">{f.month}</span>
                           <span className="text-sm font-semibold text-purple-700">
-                            {f.predicted.toLocaleString()} EGP
+                            {formatMoney(f.predicted)}
                           </span>
                         </div>
                         <div className="flex justify-between text-xs text-gray-500 mt-1">
                           <span>
-                            {t('pred.range')}: {f.low.toLocaleString()} – {f.high.toLocaleString()}
+                            {t('pred.range')}: {formatMoney(f.low)} – {formatMoney(f.high)}
                           </span>
                           <span>
                             {t('pred.confidence')}: {f.confidence ? (f.confidence * 100).toFixed(0) : t('pred.na')}%

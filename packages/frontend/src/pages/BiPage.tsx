@@ -20,6 +20,7 @@ import {
   PageLoader,
 } from '../components/ui';
 import { confirmDialog } from '../components/ui';
+import { useClinicMoney } from '../stores/clinicConfigurationStore';
 import {
   BarChart3,
   Plus,
@@ -53,6 +54,7 @@ const REFRESH_OPTIONS = [
 
 export default function BiPage() {
   const { t } = useTranslation();
+  const formatMoney = useClinicMoney();
 
   const [tab, setTab] = useState<TabType>('dashboards');
   const [dashboards, setDashboards] = useState<BiDashboard[]>([]);
@@ -441,12 +443,12 @@ export default function BiPage() {
                 <div>
                   <p className="text-xs text-gray-500">{t('bi.revenue')}</p>
                   <p className="text-xl font-bold">
-                    {(kpiRevenue?.total ?? 0).toLocaleString()} EGP
+                    {formatMoney(kpiRevenue?.total ?? 0)}
                   </p>
                 </div>
               </div>
               <p className="text-xs text-gray-400 mt-2">
-                {(kpiRevenue?.recent ?? 0).toLocaleString()} EGP ({t('bi.last30Days')})
+                {formatMoney(kpiRevenue?.recent ?? 0)} ({t('bi.last30Days')})
               </p>
             </div>
 
