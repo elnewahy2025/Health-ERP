@@ -9,6 +9,7 @@ import {
 import { ForbiddenError, ValidationError } from '@healthcare/shared/errors';
 import { validateConfigurationShape, type EffectiveClinicConfigurationEntry } from '../clinic-configuration.js';
 import { setTenantModuleEntitlement, validateModuleConfiguration } from '../clinic-modules.js';
+import { isClinicIntegrationSecretKey } from '../clinic-integration-secrets.js';
 
 describe('clinic configuration registry', () => {
   it('contains unique allowlisted keys with valid scopes', () => {
@@ -37,6 +38,13 @@ describe('clinic configuration registry', () => {
     expect(CLINIC_MODULE_CATALOG).toContain('pharmacy');
     expect(isClinicModuleKey('appointments')).toBe(true);
     expect(isClinicModuleKey('not-a-clinic-module')).toBe(false);
+  });
+
+  it('keeps integration secret writes on the explicit provider catalog', () => {
+    expect(isClinicIntegrationSecretKey('twilio', 'account_sid')).toBe(true);
+    expect(isClinicIntegrationSecretKey('twilio', 'auth_token')).toBe(true);
+    expect(isClinicIntegrationSecretKey('twilio', 'unknown')).toBe(false);
+    expect(isClinicIntegrationSecretKey('unknown', 'auth_token')).toBe(false);
   });
 
   it('rejects non-object configuration payloads', () => {

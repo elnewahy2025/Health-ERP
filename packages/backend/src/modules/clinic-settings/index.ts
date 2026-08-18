@@ -14,6 +14,12 @@ import {
   setTenantModuleActivation,
   setTenantModuleEntitlement,
 } from '../../services/clinic-modules.js';
+import {
+  clearClinicIntegrationSecret,
+  isClinicIntegrationSecretKey,
+  listClinicIntegrationSecrets,
+  upsertClinicIntegrationSecret,
+} from '../../services/clinic-integration-secrets.js';
 
 const LEGACY_FIELD_MAP = {
   clinicName: 'clinic.profile.display_name',
@@ -90,6 +96,48 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
       timezone: value('clinic.timezone.default', 'UTC'),
       locale: value('clinic.locale.default', 'en'),
     });
+  });
+
+  app.get('/api/v1/clinic-integration-secrets', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const query = z.object({ provider: z.string().max(80).optional() }).parse(request.query);
+    return sendSuccess(reply, await listClinicIntegrationSecrets(ctx.tenantId, query.provider));
+  });
+
+  app.put('/api/v1/clinic-integration-secrets/:provider/:secretKey', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const params = z.object({ provider: z.string().min(1).max(80), secretKey: z.string().min(1).max(120) }).parse(request.params);
+    if (!isClinicIntegrationSecretKey(params.provider, params.secretKey)) {
+      return reply.code(400).send({ success: false, error: 'Unsupported clinic integration secret' });
+    }
+    const body = z.object({ value: z.string().min(1).max(4000) }).parse(request.body);
+    const result = await upsertClinicIntegrationSecret({
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      provider: params.provider,
+      secretKey: params.secretKey,
+      value: body.value,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] as string | undefined,
+    });
+    return sendSuccess(reply, result, 'Clinic integration secret updated');
+  });
+
+  app.delete('/api/v1/clinic-integration-secrets/:provider/:secretKey', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const params = z.object({ provider: z.string().min(1).max(80), secretKey: z.string().min(1).max(120) }).parse(request.params);
+    if (!isClinicIntegrationSecretKey(params.provider, params.secretKey)) {
+      return reply.code(400).send({ success: false, error: 'Unsupported clinic integration secret' });
+    }
+    const result = await clearClinicIntegrationSecret({
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      provider: params.provider,
+      secretKey: params.secretKey,
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'] as string | undefined,
+    });
+    return sendSuccess(reply, result, 'Clinic integration secret cleared');
   });
 
   app.get('/api/v1/clinic-configuration/readiness', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {

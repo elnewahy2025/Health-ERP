@@ -54,6 +54,14 @@ export interface ClinicModuleVisibility {
   active: boolean;
 }
 
+export interface ClinicIntegrationSecretSummary {
+  provider: string;
+  secretKey: string;
+  configured: boolean;
+  lastFour: string | null;
+  updatedAt: string | null;
+}
+
 export const clinicConfigurationApi = {
   identity: () => apiClient.get('/clinic-configuration/identity')
     .then((response) => response.data.data as ClinicShellIdentity),
@@ -72,6 +80,14 @@ export const clinicConfigurationApi = {
   modules: () => apiClient.get('/clinic-modules').then((response) => response.data.data as ClinicModuleStatus[]),
   readiness: () => apiClient.get('/clinic-configuration/readiness')
     .then((response) => response.data.data as { tenantId: string; modules: ClinicModuleReadiness[] }),
+  integrationSecrets: (provider?: string) => apiClient.get('/clinic-integration-secrets', { params: provider ? { provider } : undefined })
+    .then((response) => response.data.data as ClinicIntegrationSecretSummary[]),
+  setIntegrationSecret: (provider: string, secretKey: string, value: string) =>
+    apiClient.put(`/clinic-integration-secrets/${encodeURIComponent(provider)}/${encodeURIComponent(secretKey)}`, { value })
+      .then((response) => response.data.data as ClinicIntegrationSecretSummary),
+  clearIntegrationSecret: (provider: string, secretKey: string) =>
+    apiClient.delete(`/clinic-integration-secrets/${encodeURIComponent(provider)}/${encodeURIComponent(secretKey)}`)
+      .then((response) => response.data.data as ClinicIntegrationSecretSummary),
   setModuleEnabled: (moduleKey: string, enabled: boolean) =>
     apiClient.put(`/clinic-modules/${encodeURIComponent(moduleKey)}`, { enabled })
       .then((response) => response.data.data as ClinicModuleStatus),
