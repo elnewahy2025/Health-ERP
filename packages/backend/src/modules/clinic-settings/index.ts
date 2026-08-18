@@ -106,6 +106,15 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
     });
   });
 
+  app.get('/api/v1/clinic-configuration/scopes', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const [branches, departments] = await Promise.all([
+      db('branches').where({ tenant_id: ctx.tenantId }).select('id', 'name', 'code').orderBy('name'),
+      db('departments').where({ tenant_id: ctx.tenantId }).select('id', 'name', 'code').orderBy('name'),
+    ]);
+    return sendSuccess(reply, { branches, departments });
+  });
+
   app.get('/api/v1/clinic-configuration/readiness', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
     const ctx = getCtx(request);
     const modules = await listTenantModules(ctx.tenantId);

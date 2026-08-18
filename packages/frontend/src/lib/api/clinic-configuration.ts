@@ -60,6 +60,8 @@ export const clinicConfigurationApi = {
     .then((response) => response.data.data as ClinicShellIdentity),
   visibility: () => apiClient.get('/clinic-modules/visibility')
     .then((response) => response.data.data as ClinicModuleVisibility[]),
+  scopes: () => apiClient.get('/clinic-configuration/scopes')
+    .then((response) => response.data.data as { branches: Array<{ id: string; name: string; code?: string }>; departments: Array<{ id: string; name: string; code?: string }> }),
   get: (scopeType: ClinicConfigurationScope = 'tenant', scopeId?: string) =>
     apiClient.get('/clinic-configuration', { params: { scopeType, scopeId } })
       .then((response) => response.data.data as { scopeType: ClinicConfigurationScope; scopeId: string; entries: ClinicConfigurationEntry[] }),

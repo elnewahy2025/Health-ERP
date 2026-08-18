@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UserCog, Palette, Bell, Globe, Printer, Shield, Building2, Save, Loader2, Puzzle, CheckCircle2, AlertCircle } from 'lucide-react';
-import { Card, CardBody, Input, Button } from '../components/ui';
+import { Card, CardBody, Input, Button, Select } from '../components/ui';
 import { apiClient as api, clinicConfigurationApi, type ClinicModuleReadiness, type ClinicModuleStatus } from '../lib/api';
 import { Can } from '../components/auth/Authorization';
 import toast from 'react-hot-toast';
-import { clinicConfigurationDefinition } from '@healthcare/shared';
+import { CLINIC_CONFIGURATION_REGISTRY, clinicConfigurationDefinition } from '@healthcare/shared';
+import type { ClinicConfigurationEntry, ClinicConfigurationScope } from '../lib/api/clinic-configuration';
 
 interface ClinicSettings {
   clinicName: string;
@@ -31,6 +32,9 @@ interface ClinicSettings {
 }
 
 type SettingsTab = 'clinic' | 'modules' | 'navigation';
+type ScopedSettingsType = Exclude<ClinicConfigurationScope, 'tenant'>;
+interface ScopeOption { id: string; name: string; code?: string; }
+
 
 const DEFAULT_CLINIC_CURRENCY = String(
   clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '',
@@ -77,6 +81,19 @@ function validationKeys(module: ClinicModuleStatus, readiness?: ClinicModuleRead
     : [];
 }
 
+function serializeScopedValue(entry: ClinicConfigurationEntry): string {
+  if (entry.definition.valueType === 'json') return JSON.stringify(entry.value ?? [], null, 2);
+  return entry.value === undefined || entry.value === null ? '' : String(entry.value);
+}
+
+function scopeOptions(value: unknown): ScopeOption[] {
+  const data = (value as { rows?: unknown[] } | unknown[]) || [];
+  const rows = Array.isArray(data) ? data : data.rows || [];
+  return rows
+    .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object')
+    .map((row) => ({ id: String(row.id), name: String(row.name || row.code || row.id), code: row.code ? String(row.code) : undefined }));
+}
+
 export default function SettingsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -90,6 +107,15 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [moduleError, setModuleError] = useState(false);
   const [moduleSaving, setModuleSaving] = useState<string | null>(null);
+  const [branches, setBranches] = useState<ScopeOption[]>([]);
+  const [departments, setDepartments] = useState<ScopeOption[]>([]);
+  const [scopeType, setScopeType] = useState<ScopedSettingsType>('branch');
+  const [scopeId, setScopeId] = useState('');
+  const [scopedEntries, setScopedEntries] = useState<ClinicConfigurationEntry[]>([]);
+  const [scopedDraft, setScopedDraft] = useState<Record<string, unknown>>({});
+  const [scopedOriginal, setScopedOriginal] = useState<Record<string, unknown>>({});
+  const [scopedLoading, setScopedLoading] = useState(false);
+  const [scopedSaving, setScopedSaving] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -119,6 +145,76 @@ export default function SettingsPage() {
     };
     void load();
   }, [t]);
+
+  useEffect(() => {
+    let cancelled = false;
+    clinicConfigurationApi.scopes().then((response) => {
+      if (cancelled) return;
+      setBranches(scopeOptions(response.branches));
+      setDepartments(scopeOptions(response.departments));
+    }).catch(() => {
+      if (!cancelled) toast.error(t('settings.scopedLoadError'));
+    });
+    return () => { cancelled = true; };
+  }, [t]);
+
+  useEffect(() => {
+    if (!scopeId) {
+      setScopedEntries([]);
+      setScopedDraft({});
+      setScopedOriginal({});
+      return;
+    }
+    let cancelled = false;
+    setScopedLoading(true);
+    clinicConfigurationApi.get(scopeType, scopeId).then((response) => {
+      if (cancelled) return;
+      const entries = response.entries.filter((entry) => entry.definition.allowedScopes.includes(scopeType));
+      const values = Object.fromEntries(entries.map((entry) => [entry.key, serializeScopedValue(entry)]));
+      setScopedEntries(entries);
+      setScopedDraft(values);
+      setScopedOriginal(values);
+    }).catch(() => {
+      if (!cancelled) toast.error(t('settings.scopedLoadError'));
+    }).finally(() => {
+      if (!cancelled) setScopedLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [scopeId, scopeType, t]);
+
+  const handleSaveScoped = async () => {
+    if (!scopeId) return;
+    setScopedSaving(true);
+    try {
+      for (const entry of scopedEntries) {
+        const nextRaw = String(scopedDraft[entry.key] ?? '');
+        const previousRaw = String(scopedOriginal[entry.key] ?? '');
+        if (nextRaw === previousRaw) continue;
+        let value: unknown = nextRaw;
+        if (entry.definition.valueType === 'json') {
+          value = JSON.parse(nextRaw || '[]');
+        }
+        await clinicConfigurationApi.update({
+          scopeType,
+          scopeId,
+          key: entry.key,
+          value,
+          expectedVersion: entry.scopeType === scopeType && entry.scopeId === scopeId ? entry.version || undefined : undefined,
+        });
+      }
+      toast.success(t('settings.scopedSaved'));
+      const response = await clinicConfigurationApi.get(scopeType, scopeId);
+      const entries = response.entries.filter((entry) => entry.definition.allowedScopes.includes(scopeType));
+      const values = Object.fromEntries(entries.map((entry) => [entry.key, serializeScopedValue(entry)]));
+      setScopedEntries(entries);
+      setScopedDraft(values);
+      setScopedOriginal(values);
+    } catch {
+      toast.error(t('settings.scopedSaveError'));
+    } finally {
+      setScopedSaving(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -246,6 +342,84 @@ export default function SettingsPage() {
                   </Button>
                 </Can>
               </div>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {activeTab === 'clinic' && (
+        <Card>
+          <CardBody className="p-6">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-[var(--text-primary)]">{t('settings.scopedOverrides')}</h3>
+                <p className="mt-1 text-sm text-[var(--text-muted)]">{t('settings.scopedOverridesDescription')}</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Select
+                  id="clinic-settings-scope-type"
+                  label={t('settings.scopeType')}
+                  value={scopeType}
+                  options={[
+                    { value: 'branch', label: t('settings.branchScope') },
+                    { value: 'department', label: t('settings.departmentScope') },
+                  ]}
+                  onChange={(event) => {
+                    setScopeType(event.target.value as ScopedSettingsType);
+                    setScopeId('');
+                  }}
+                />
+                <Select
+                  id="clinic-settings-scope-id"
+                  label={t('settings.scopeTarget')}
+                  value={scopeId}
+                  placeholder={t('settings.selectScopeTarget')}
+                  options={(scopeType === 'branch' ? branches : departments).map((option) => ({
+                    value: option.id,
+                    label: option.code ? `${option.name} (${option.code})` : option.name,
+                  }))}
+                  onChange={(event) => setScopeId(event.target.value)}
+                />
+              </div>
+              {scopeId && scopedLoading && <div className="text-sm text-[var(--text-muted)]">{t('settings.loadingScopedSettings')}</div>}
+              {scopeId && !scopedLoading && scopedEntries.length === 0 && (
+                <div className="text-sm text-[var(--text-muted)]">{t('settings.noScopedSettings')}</div>
+              )}
+              {scopeId && !scopedLoading && scopedEntries.length > 0 && (
+                <div className="space-y-4 border-t border-[var(--border)] pt-4">
+                  {scopedEntries.map((entry) => {
+                    const value = String(scopedDraft[entry.key] ?? '');
+                    const label = t(`onboarding.fields.${entry.key}`);
+                    return entry.definition.valueType === 'json' ? (
+                      <div key={entry.key} className="space-y-1">
+                        <label htmlFor={`scoped-${entry.key}`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+                        <textarea
+                          id={`scoped-${entry.key}`}
+                          className="input min-h-28 font-mono text-xs"
+                          value={value}
+                          onChange={(event) => setScopedDraft((current) => ({ ...current, [entry.key]: event.target.value }))}
+                        />
+                        <p className="text-xs text-[var(--text-muted)]">{entry.definition.description}</p>
+                      </div>
+                    ) : (
+                      <Input
+                        key={entry.key}
+                        id={`scoped-${entry.key}`}
+                        label={label}
+                        value={value}
+                        onChange={(event) => setScopedDraft((current) => ({ ...current, [entry.key]: event.target.value }))}
+                      />
+                    );
+                  })}
+                  <div className="flex justify-end pt-2">
+                    <Can permission="settings.manage">
+                      <Button onClick={handleSaveScoped} loading={scopedSaving} icon={<Save className="w-4 h-4" />}>
+                        {t('settings.saveScopedSettings')}
+                      </Button>
+                    </Can>
+                  </div>
+                </div>
+              )}
             </div>
           </CardBody>
         </Card>
