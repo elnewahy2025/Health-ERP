@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { UserCog, Palette, Bell, Globe, Printer, Shield, Building2, Save, Loader2, Puzzle, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Card, CardBody, Input, Button } from '../components/ui';
-import { apiClient as api, clinicConfigurationApi, type ClinicIntegrationSecretSummary, type ClinicModuleReadiness, type ClinicModuleStatus } from '../lib/api';
+import { apiClient as api, clinicConfigurationApi, type ClinicModuleReadiness, type ClinicModuleStatus } from '../lib/api';
 import { Can } from '../components/auth/Authorization';
 import toast from 'react-hot-toast';
 
@@ -25,7 +25,7 @@ interface ClinicSettings {
   twilioConfigured?: boolean;
 }
 
-type SettingsTab = 'clinic' | 'modules' | 'integrations' | 'navigation';
+type SettingsTab = 'clinic' | 'modules' | 'navigation';
 
 const INITIAL_CLINIC: ClinicSettings = {
   clinicName: '', branch: '', landPhone: '', whatsappPhone: '', logoUrl: '',
@@ -57,18 +57,6 @@ const CONFIGURATION_FIELD_IDS: Record<string, string> = {
   'clinic.legal.tax_number': 'clinic-settings-tax-number',
 };
 
-const INTEGRATION_SECRET_FIELDS = [
-  { provider: 'twilio', secretKey: 'account_sid' },
-  { provider: 'twilio', secretKey: 'auth_token' },
-  { provider: 'twilio', secretKey: 'messaging_service_sid' },
-  { provider: 'twilio', secretKey: 'whatsapp_number' },
-  { provider: 'twilio', secretKey: 'voice_number' },
-] as const;
-
-function integrationSecretLabel(provider: string, secretKey: string): string {
-  return `${provider.toUpperCase()} ${secretKey.replace(/_/g, ' ')}`;
-}
-
 function validationKeys(module: ClinicModuleStatus, readiness?: ClinicModuleReadiness): string[] {
   if (readiness) return readiness.missingRequiredKeys;
   return Array.isArray(module.validationErrors)
@@ -88,10 +76,6 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [moduleError, setModuleError] = useState(false);
   const [moduleSaving, setModuleSaving] = useState<string | null>(null);
-  const [integrationSecrets, setIntegrationSecrets] = useState<ClinicIntegrationSecretSummary[]>([]);
-  const [integrationValues, setIntegrationValues] = useState<Record<string, string>>({});
-  const [integrationLoading, setIntegrationLoading] = useState(true);
-  const [integrationSaving, setIntegrationSaving] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -118,14 +102,6 @@ export default function SettingsPage() {
       } finally {
         setModulesLoading(false);
       }
-
-      try {
-        setIntegrationSecrets(await clinicConfigurationApi.integrationSecrets('twilio'));
-      } catch {
-        toast.error(t('settings.integrationLoadError'));
-      } finally {
-        setIntegrationLoading(false);
-      }
     };
     void load();
   }, [t]);
@@ -149,43 +125,6 @@ export default function SettingsPage() {
       target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       if (target instanceof HTMLInputElement) target.focus();
     }, 0);
-  };
-
-  const handleIntegrationSecretSave = async (provider: string, secretKey: string) => {
-    const value = integrationValues[`${provider}.${secretKey}`]?.trim();
-    if (!value) return;
-    const id = `${provider}.${secretKey}`;
-    setIntegrationSaving(id);
-    try {
-      const updated = await clinicConfigurationApi.setIntegrationSecret(provider, secretKey, value);
-      setIntegrationSecrets((current) => [
-        ...current.filter((item) => `${item.provider}.${item.secretKey}` !== id),
-        updated,
-      ]);
-      setIntegrationValues((current) => ({ ...current, [id]: '' }));
-      toast.success(t('settings.integrationSaved'));
-    } catch {
-      toast.error(t('settings.integrationSaveError'));
-    } finally {
-      setIntegrationSaving(null);
-    }
-  };
-
-  const handleIntegrationSecretClear = async (provider: string, secretKey: string) => {
-    const id = `${provider}.${secretKey}`;
-    setIntegrationSaving(id);
-    try {
-      const cleared = await clinicConfigurationApi.clearIntegrationSecret(provider, secretKey);
-      setIntegrationSecrets((current) => [
-        ...current.filter((item) => `${item.provider}.${item.secretKey}` !== id),
-        cleared,
-      ]);
-      toast.success(t('settings.integrationCleared'));
-    } catch {
-      toast.error(t('settings.integrationSaveError'));
-    } finally {
-      setIntegrationSaving(null);
-    }
   };
 
   const handleModuleToggle = async (module: ClinicModuleStatus) => {
@@ -224,9 +163,6 @@ export default function SettingsPage() {
         </button>
         <button onClick={() => setActiveTab('modules')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${activeTab === 'modules' ? 'bg-[var(--primary-soft)] text-[var(--primary)] border-b-2 border-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'}`}>
           <Puzzle className="w-4 h-4 inline mr-2" />{t('settings.modules')}
-        </button>
-        <button onClick={() => setActiveTab('integrations')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${activeTab === 'integrations' ? 'bg-[var(--primary-soft)] text-[var(--primary)] border-b-2 border-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'}`}>
-          <Puzzle className="w-4 h-4 inline mr-2" />{t('settings.integrations')}
         </button>
         <button onClick={() => setActiveTab('navigation')} className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${activeTab === 'navigation' ? 'bg-[var(--primary-soft)] text-[var(--primary)] border-b-2 border-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'}`}>
           <UserCog className="w-4 h-4 inline mr-2" />{t('settings.quickNavigation')}
@@ -367,65 +303,6 @@ export default function SettingsPage() {
                             </Button>
                           </Can>
                         )}
-                      </div>
-                    </CardBody>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === 'integrations' && (
-        <div className="space-y-4">
-          <Card>
-            <CardBody className="p-6">
-              <div className="flex items-start gap-3">
-                <Puzzle className="w-5 h-5 text-[var(--primary)] mt-0.5" />
-                <div>
-                  <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('settings.integrations')}</h2>
-                  <p className="text-sm text-[var(--text-muted)] mt-1">{t('settings.integrationSecretsDescription')}</p>
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-          {integrationLoading ? (
-            <div className="flex items-center justify-center h-32"><Loader2 className="w-6 h-6 animate-spin text-primary-600" /></div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {INTEGRATION_SECRET_FIELDS.map(({ provider, secretKey }) => {
-                const id = `${provider}.${secretKey}`;
-                const status = integrationSecrets.find((item) => `${item.provider}.${item.secretKey}` === id);
-                const value = integrationValues[id] || '';
-                return (
-                  <Card key={id}>
-                    <CardBody className="p-5 space-y-4">
-                      <div>
-                        <h3 className="font-semibold text-[var(--text-primary)]">{integrationSecretLabel(provider, secretKey)}</h3>
-                        <p className="text-xs text-[var(--text-muted)] mt-1">
-                          {status?.configured ? `${t('settings.configured')} · ${t('settings.lastFour')}: ${status.lastFour || '••••'}` : t('settings.notConfigured')}
-                        </p>
-                      </div>
-                      <Input
-                        type="password"
-                        label={t('settings.replaceSecret')}
-                        value={value}
-                        placeholder={status?.configured ? '••••••••' : ''}
-                        autoComplete="new-password"
-                        onChange={(event) => setIntegrationValues((current) => ({ ...current, [id]: event.target.value }))}
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <Can permission="settings.manage">
-                          <Button size="sm" onClick={() => void handleIntegrationSecretSave(provider, secretKey)} loading={integrationSaving === id} disabled={!value || integrationSaving !== null}>
-                            {t('settings.saveSecret')}
-                          </Button>
-                          {status?.configured && (
-                            <Button size="sm" variant="secondary" onClick={() => void handleIntegrationSecretClear(provider, secretKey)} loading={integrationSaving === id} disabled={integrationSaving !== null}>
-                              {t('settings.clearSecret')}
-                            </Button>
-                          )}
-                        </Can>
                       </div>
                     </CardBody>
                   </Card>

@@ -107,9 +107,6 @@ The current compatibility endpoints remain in place while the new service is int
 | `PUT /api/v1/clinic-modules/:moduleKey` | `settings.manage` | Tenant admin enables/disables only an entitled module; backend checks readiness policy and records audit. |
 | `GET /api/v1/system/clinic-module-entitlements` | `saas_billing.manage` at `system` scope | Read effective module boundary for a selected tenant. |
 | `PUT /api/v1/system/clinic-module-entitlements/:tenantId/:moduleKey` | `saas_billing.manage` at `system` scope | Manage explicit vendor/system availability; never exposed to ordinary tenant administrators. |
-| `GET /api/v1/clinic-integration-secrets` | `settings.view` | Returns allowlisted provider/secret metadata only: configured status, last four characters, and update time. |
-| `PUT /api/v1/clinic-integration-secrets/:provider/:secretKey` | `settings.manage` | Encrypts a supported provider value, stores ciphertext in `clinic_integration_secrets`, and updates the legacy compatibility field with ciphertext. Plaintext is never returned. |
-| `DELETE /api/v1/clinic-integration-secrets/:provider/:secretKey` | `settings.manage` | Removes the supported provider secret and its legacy compatibility field, returning only an unconfigured status. |
 
 Every mutation must use `logAudit()` with tenant, actor, scope, key/module, old/new non-secret values or hashes, result, and reason where required. Secrets must be represented by metadata such as `configured: true`, not values.
 
@@ -124,7 +121,7 @@ Operational modules must declare their required configuration. If a required val
 1. Do not remove or rename `tenants.settings` in the first migration.
 2. Backfill known legacy clinic fields only when the destination key is absent.
 3. Preserve non-secret legacy JSONB values until a later deprecation phase has reconciliation evidence.
-4. Migration 052 may replace legacy provider-secret values in `tenants.settings` with ciphertext after copying them to `clinic_integration_secrets`; the secret endpoints accept only the explicit provider catalog, and neither the normal configuration response nor frontend state may expose ciphertext or original values.
+4. Migration 052 may replace legacy provider-secret values in `tenants.settings` with ciphertext after copying them to `clinic_integration_secrets`; neither the normal configuration response nor frontend state may expose the ciphertext or original value.
 5. Do not rewrite custom roles, tenant data, or existing module records.
 6. Add migration checks for empty databases, representative existing tenants, duplicate legacy values, and partially configured tenants.
 7. Add a feature flag for the new resolver so compatibility behavior can be compared before cutover.
