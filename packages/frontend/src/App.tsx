@@ -32,6 +32,7 @@ const TelemedicinePage = lazy(() => import('./pages/TelemedicinePage'));
 const InsurancePage = lazy(() => import('./pages/InsurancePage'));
 const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 const HrPage = lazy(() => import('./pages/HrPage'));
+const DepartmentsPage = lazy(() => import('./pages/DepartmentsPage'));
 const CrmPage = lazy(() => import('./pages/CrmPage'));
 const DmsPage = lazy(() => import('./pages/DmsPage'));
 const WorkflowPage = lazy(() => import('./pages/WorkflowPage'));
@@ -194,6 +195,7 @@ function AppContent() {
             <Route path="insurance" element={<InsurancePage />} />
             <Route path="inventory" element={<InventoryPage />} />
             <Route path="hr" element={<HrPage />} />
+            <Route path="departments" element={<DepartmentsPage />} />
             <Route path="crm" element={<CrmPage />} />
             <Route path="dms" element={<DmsPage />} />
             <Route path="workflow" element={<WorkflowPage />} />

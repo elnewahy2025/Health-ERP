@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { AuthorizationContext, canAnyUse, canUse, type PermissionScope, type UserGrant } from '../stores/authStore';
 import { Can } from '../components/auth/Authorization';
+import { routePermissions } from '../router';
+import { hospitalRoleTemplate } from '@healthcare/shared/authz';
 
 function renderGate(
   permissions: string[],
@@ -122,5 +124,22 @@ describe('scope-aware frontend action gates', () => {
     );
     expect(screen.getByText('create')).toBeInTheDocument();
     expect(screen.queryByText('edit')).not.toBeInTheDocument();
+  });
+});
+
+describe('role-to-page protection boundaries', () => {
+  it('protects previously unmapped operational pages', () => {
+    expect(routePermissions['/departments']).toBe('departments.view');
+    expect(routePermissions['/pharmacy-advanced']).toBe('pharmacy.view');
+    expect(routePermissions['/insurance-claims-lifecycle']).toBe('insurance_claims.view');
+    expect(routePermissions['/notification-logs']).toBe('notifications.manage');
+  });
+
+  it('keeps patient portal users out of staff portal administration', () => {
+    const patient = hospitalRoleTemplate('patient_portal_user');
+    const portalAdmin = hospitalRoleTemplate('patient_portal_administrator');
+    expect(patient?.grants['patient_portal.view']).toBeUndefined();
+    expect(patient?.grants['patient_self_service.view']).toBeDefined();
+    expect(portalAdmin?.grants['patient_portal.*']).toBeDefined();
   });
 });

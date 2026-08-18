@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { dashboardApi, appointmentsApi } from '../lib/api';
 import { Spinner } from '../components/ui';
+import { Can } from '../components/auth/Authorization';
 import {
   CalendarCheck, Receipt, Users, DollarSign,
   Stethoscope, TrendingUp, ArrowUp,
@@ -65,10 +66,12 @@ interface TodayAppointment { id: string; patientName: string; doctorName: string
             {new Date().toLocaleDateString(i18n.language === 'ar' ? 'ar-EG' : 'en-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
-        <button className="btn-primary" onClick={() => navigate("/analytics-dashboard")}>
-          <TrendingUp className="w-4 h-4" />
-          View Reports
-        </button>
+        <Can permission="analytics_dashboard.view">
+          <button className="btn-primary" onClick={() => navigate("/analytics-dashboard")}>
+            <TrendingUp className="w-4 h-4" />
+            View Reports
+          </button>
+        </Can>
       </div>
 
       {/* Stats Grid */}

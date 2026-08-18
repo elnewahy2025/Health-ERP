@@ -222,7 +222,7 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
   });
 
   // ══ STAFF — Portal access requests queue ══
-  app.get('/api/v1/portal/enrollments', { preHandler: [authenticate, authorize('patient_portal.view')] }, async (request, reply) => {
+  app.get('/api/v1/portal/enrollments', { preHandler: [authenticate, authorize('patient_portal.manage')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const { status } = z.object({ status: z.string().optional() }).parse(request.query);
     const query = db('portal_enrollment_requests').where({ tenant_id: tenantId });
@@ -252,7 +252,7 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
     }));
   });
 
-  app.post('/api/v1/portal/enrollments/:id/approve', { preHandler: [authenticate, authorize('patient_portal.view')] }, async (request, reply) => {
+  app.post('/api/v1/portal/enrollments/:id/approve', { preHandler: [authenticate, authorize('patient_portal.manage')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const enrollment = await db('portal_enrollment_requests').where({ id, tenant_id: tenantId }).first();
@@ -311,7 +311,7 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
     return sendSuccess(reply, { message: 'Access approved. The patient can now request an OTP.', patientId });
   });
 
-  app.post('/api/v1/portal/enrollments/:id/reject', { preHandler: [authenticate, authorize('patient_portal.view')] }, async (request, reply) => {
+  app.post('/api/v1/portal/enrollments/:id/reject', { preHandler: [authenticate, authorize('patient_portal.manage')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const { notes } = (request.body ?? {}) as Record<string, unknown>;
@@ -333,7 +333,7 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
   });
 
   // ══ STAFF — OTP delivery queue (patients waiting for the hospital to send OTP) ══
-  app.get('/api/v1/portal/otp-queue', { preHandler: [authenticate, authorize('patient_portal.view')] }, async (request, reply) => {
+  app.get('/api/v1/portal/otp-queue', { preHandler: [authenticate, authorize('patient_portal.manage')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const rows = await db('portal_sessions')
       .join('patients', 'portal_sessions.patient_id', 'patients.id')
@@ -373,7 +373,7 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
     }));
   });
 
-  app.post('/api/v1/portal/otp-queue/:id/sent', { preHandler: [authenticate, authorize('patient_portal.view')] }, async (request, reply) => {
+  app.post('/api/v1/portal/otp-queue/:id/sent', { preHandler: [authenticate, authorize('patient_portal.manage')] }, async (request, reply) => {
     const { tenantId, userId } = getCtx(request);
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const session = await db('portal_sessions').where({ id, tenant_id: tenantId }).first();

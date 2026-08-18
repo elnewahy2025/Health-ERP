@@ -584,11 +584,11 @@ The frontend route guard is UX-only; every backend operation remains authoritati
 
 ### Pages and links
 
-- /appointments (appointments)\n- /billing (billing)\n- /chat (chat)\n- /dms (documents)\n- /emr (emr)\n- /laboratory (laboratory)\n- /notifications (notifications)\n- /patient-portal (patient_portal)\n- /patients (patients)\n- /pharmacy (pharmacy)\n- /radiology (radiology)
+- /appointments (appointments)\n- /billing (billing)\n- /chat (chat)\n- /dms (documents)\n- /emr (emr)\n- /laboratory (laboratory)\n- /notifications (notifications)\n- /patient-self-service (patient_self_service)\n- /patients (patients)\n- /pharmacy (pharmacy)\n- /radiology (radiology)
 
 ### Backend functions and rights
 
-- `appointments.view` — view/read; scope: self\n- `billing.view` — view/read; scope: self\n- `chat.create` — create; scope: self\n- `chat.view` — view/read; scope: self\n- `documents.download` — download; scope: self\n- `documents.view` — view/read; scope: self\n- `emr.view` — view/read; scope: self\n- `laboratory.view` — view/read; scope: self\n- `notifications.view` — view/read; scope: self\n- `patient_portal.view` — view/read; scope: self\n- `patients.view` — view/read; scope: self\n- `pharmacy.view` — view/read; scope: self\n- `radiology.view` — view/read; scope: self
+- `appointments.view` — view/read; scope: self\n- `billing.view` — view/read; scope: self\n- `chat.create` — create; scope: self\n- `chat.view` — view/read; scope: self\n- `documents.download` — download; scope: self\n- `documents.view` — view/read; scope: self\n- `emr.view` — view/read; scope: self\n- `laboratory.view` — view/read; scope: self\n- `notifications.view` — view/read; scope: self\n- `patient_self_service.view` — view/read; scope: self\n- `patients.view` — view/read; scope: self\n- `pharmacy.view` — view/read; scope: self\n- `radiology.view` — view/read; scope: self
 
 ## Scope enforcement notes
 

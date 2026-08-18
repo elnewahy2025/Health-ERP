@@ -615,7 +615,7 @@ export const HOSPITAL_ROLE_GRANTS: Record<string, Record<string, readonly Permis
     'laboratory.view': ['self'], 'radiology.view': ['self'], 'pharmacy.view': ['self'],
     'billing.view': ['self'], 'documents.view': ['self'], 'documents.download': ['self'],
     'notifications.view': ['self'], 'chat.view': ['self'], 'chat.create': ['self'],
-    'patient_portal.view': ['self'],
+    'patient_self_service.view': ['self'],
   },
 };
 

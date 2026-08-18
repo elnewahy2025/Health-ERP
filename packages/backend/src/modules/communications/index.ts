@@ -83,7 +83,7 @@ export async function registerCommunicationsModule(app: FastifyInstance) {
   });
 
   // List notification logs
-  app.get('/api/v1/notification-logs', { preHandler: [authenticate, authorize('notifications.view')] }, async (request, reply) => {
+  app.get('/api/v1/notification-logs', { preHandler: [authenticate, authorize('notifications.manage')] }, async (request, reply) => {
     const { tenantId } = getCtx(request);
     const query = z.object({ page: z.coerce.number().optional().default(1), limit: z.coerce.number().optional().default(20) }).parse(request.query);
 

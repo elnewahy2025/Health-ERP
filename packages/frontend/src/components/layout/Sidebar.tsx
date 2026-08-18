@@ -84,6 +84,7 @@ const navGroups: NavGroup[] = [
     items: [
       { path: '/inventory', icon: Package, labelKey: 'nav.inventory', permission: 'inventory.view' },
       { path: '/hr', icon: UsersRound, labelKey: 'nav.hr', permission: 'hr.view' },
+      { path: '/departments', icon: Building2, labelKey: 'nav.departments', permission: 'departments.view' },
       { path: '/crm', icon: BarChart3, labelKey: 'nav.crm', permission: 'crm.view' },
       { path: '/dms', icon: FileText, labelKey: 'nav.dms', permission: 'documents.view' },
       { path: '/workflow', icon: GitBranch, labelKey: 'nav.workflow', permission: 'workflow.view' },
@@ -180,7 +181,7 @@ const secondaryItems: NavItem[] = [
   { path: '/audit-logs', icon: ClipboardList, labelKey: 'nav.auditLogs', permission: 'audit.view' },
   { path: '/audit-logs-advanced', icon: ClipboardList, labelKey: 'nav.auditLogsAdvanced', permission: 'audit.view' },
   { path: '/notification-templates', icon: MessageSquare, labelKey: 'nav.notificationTemplates', permission: 'communications.view' },
-  { path: '/notification-logs', icon: Send, labelKey: 'nav.notificationLogs', permission: 'notifications.view' },
+  { path: '/notification-logs', icon: Send, labelKey: 'nav.notificationLogs', permission: 'notifications.manage' },
   { path: '/sessions', icon: ShieldIcon, labelKey: 'nav.sessions', permission: 'sessions.view' },
   { path: '/system-monitor', icon: Monitor, labelKey: 'nav.systemMonitor', permission: 'system_monitor.view' },
   { path: '/print-templates', icon: Printer, labelKey: 'nav.printTemplates', permission: 'settings.view' },

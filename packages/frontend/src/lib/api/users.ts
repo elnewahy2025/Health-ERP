@@ -91,4 +91,7 @@ export const branchesApi = {
 
 export const departmentsApi = {
   list: () => apiClient.get('/departments').then((r) => r.data.data),
+  create: (payload: { name: string; code: string }) => apiClient.post('/departments', payload).then((r) => r.data.data),
+  update: (departmentId: string, payload: { name?: string; code?: string; isActive?: boolean }) => apiClient.put(`/departments/${departmentId}`, payload).then((r) => r.data.data),
+  remove: (departmentId: string) => apiClient.delete(`/departments/${departmentId}`).then((r) => r.data.data),
 };
