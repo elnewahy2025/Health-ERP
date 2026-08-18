@@ -21,6 +21,8 @@ export const navPathLabels: Record<string, string> = {
   '/eta-invoicing': 'nav.etaInvoicing',
   '/inventory': 'nav.inventory',
   '/hr': 'nav.hr',
+  '/departments': 'nav.departments',
+  '/emergency-access': 'nav.emergencyAccess',
   '/dms': 'nav.dms',
   '/workflow': 'nav.workflow',
   '/forms': 'nav.forms',

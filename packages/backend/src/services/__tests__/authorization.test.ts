@@ -207,6 +207,13 @@ describe('shared permission catalog', () => {
     expect(hospitalRoleTemplate('compliance_officer')?.grants['compliance.*']).toEqual(['tenant']);
     expect(hospitalRoleTemplate('insurance_claims_officer')?.grants['insurance_claims.approve']).toEqual(['branch']);
     expect(hospitalRoleTemplate('reporting_bi_analyst')?.grants['bi.*']).toEqual(['tenant']);
+    for (const slug of ['laboratory_manager', 'radiology_manager']) {
+      const grants = hospitalRoleTemplate(slug)?.grants;
+      expect(grants?.['departments.view']).toEqual(['department']);
+      expect(grants?.['departments.create']).toEqual(['department']);
+      expect(grants?.['departments.edit']).toEqual(['department']);
+      expect(grants?.['departments.delete']).toEqual(['department']);
+    }
   });
 });
 

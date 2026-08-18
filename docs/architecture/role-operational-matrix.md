@@ -243,7 +243,10 @@ The frontend route guard is UX-only; every backend operation remains authoritati
 
 ### Backend functions and rights
 
-- `audit.view` — view/read; scope: department\n- `departments.manage` — manage/configure; scope: department\n- `departments.view` — view/read; scope: department\n- `emr.view` — view/read; scope: department\n- `laboratory.*` — all actions; scope: department\n- `patients.view` — view/read; scope: department\n- `reports.export` — export; scope: department\n- `reports.view` — view/read; scope: department
+- `audit.view` — view/read; scope: department\n- `departments.create` — create; scope: department
+- `departments.delete` — delete; scope: department
+- `departments.edit` — edit/update; scope: department
+- `departments.manage` — manage/configure; scope: department\n- `departments.view` — view/read; scope: department\n- `emr.view` — view/read; scope: department\n- `laboratory.*` — all actions; scope: department\n- `patients.view` — view/read; scope: department\n- `reports.export` — export; scope: department\n- `reports.view` — view/read; scope: department
 
 
 ## 17. Laboratory Technician (`laboratory_technician`)
@@ -273,7 +276,10 @@ The frontend route guard is UX-only; every backend operation remains authoritati
 
 ### Backend functions and rights
 
-- `audit.view` — view/read; scope: department\n- `departments.manage` — manage/configure; scope: department\n- `departments.view` — view/read; scope: department\n- `emr.view` — view/read; scope: department\n- `patients.view` — view/read; scope: department\n- `radiology.*` — all actions; scope: department\n- `reports.export` — export; scope: department\n- `reports.view` — view/read; scope: department
+- `audit.view` — view/read; scope: department\n- `departments.create` — create; scope: department
+- `departments.delete` — delete; scope: department
+- `departments.edit` — edit/update; scope: department
+- `departments.manage` — manage/configure; scope: department\n- `departments.view` — view/read; scope: department\n- `emr.view` — view/read; scope: department\n- `patients.view` — view/read; scope: department\n- `radiology.*` — all actions; scope: department\n- `reports.export` — export; scope: department\n- `reports.view` — view/read; scope: department
 
 
 ## 19. Radiologist (`radiologist`)

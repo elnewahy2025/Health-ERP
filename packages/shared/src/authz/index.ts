@@ -492,7 +492,8 @@ export const HOSPITAL_ROLE_GRANTS: Record<string, Record<string, readonly Permis
   },
   laboratory_manager: {
     'laboratory.*': ['department'], 'patients.view': ['department'], 'emr.view': ['department'],
-    'departments.view': ['department'], 'departments.manage': ['department'],
+    'departments.view': ['department'], 'departments.create': ['department'],
+    'departments.edit': ['department'], 'departments.delete': ['department'], 'departments.manage': ['department'],
     'reports.view': ['department'], 'reports.export': ['department'], 'audit.view': ['department'],
   },
   laboratory_technician: {
@@ -502,7 +503,8 @@ export const HOSPITAL_ROLE_GRANTS: Record<string, Record<string, readonly Permis
   },
   radiology_manager: {
     'radiology.*': ['department'], 'patients.view': ['department'], 'emr.view': ['department'],
-    'departments.view': ['department'], 'departments.manage': ['department'],
+    'departments.view': ['department'], 'departments.create': ['department'],
+    'departments.edit': ['department'], 'departments.delete': ['department'], 'departments.manage': ['department'],
     'reports.view': ['department'], 'reports.export': ['department'], 'audit.view': ['department'],
   },
   radiologist: {

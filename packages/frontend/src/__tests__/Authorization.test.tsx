@@ -130,6 +130,7 @@ describe('scope-aware frontend action gates', () => {
 describe('role-to-page protection boundaries', () => {
   it('protects previously unmapped operational pages', () => {
     expect(routePermissions['/departments']).toBe('departments.view');
+    expect(routePermissions['/emergency-access']).toBe('emergency_access.manage');
     expect(routePermissions['/pharmacy-advanced']).toBe('pharmacy.view');
     expect(routePermissions['/insurance-claims-lifecycle']).toBe('insurance_claims.view');
     expect(routePermissions['/notification-logs']).toBe('notifications.manage');
@@ -141,5 +142,12 @@ describe('role-to-page protection boundaries', () => {
     expect(patient?.grants['patient_portal.view']).toBeUndefined();
     expect(patient?.grants['patient_self_service.view']).toBeDefined();
     expect(portalAdmin?.grants['patient_portal.*']).toBeDefined();
+  });
+
+  it('does not give emergency access to ordinary clinical roles by default', () => {
+    const physician = hospitalRoleTemplate('physician');
+    const tenantAdmin = hospitalRoleTemplate('tenant_administrator');
+    expect(physician?.grants['emergency_access.manage']).toBeUndefined();
+    expect(tenantAdmin?.grants['*']).toBeDefined();
   });
 });
