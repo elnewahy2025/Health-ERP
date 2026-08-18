@@ -150,19 +150,29 @@ $MINIO_ROOT_PASS    = Get-Existing 'MINIO_ROOT_PASSWORD' (New-Secret 24)
 
 # --- 4. Free host ports (avoid clashes with local services) -------------
 function Get-FreePort([int]$preferred) {
-    for ($p = $preferred; $p -lt ($preferred + 20); $p++) {
+    for ($p = $preferred; $p -lt ($preferred + 50); $p++) {
         $inUse = Get-NetTCPConnection -State Listen -LocalPort $p -ErrorAction SilentlyContinue
         if (-not $inUse) { return $p }
     }
-    return $preferred + 50
+    throw "Could not find a free host port near $preferred. Stop an unused service or pass a different port in .env."
 }
 
-$POSTGRES_PORT       = [int](Get-Existing 'POSTGRES_PORT' (Get-FreePort 5432))
-$REDIS_PORT          = [int](Get-Existing 'REDIS_PORT' (Get-FreePort 6379))
-$BACKEND_PORT        = [int](Get-Existing 'BACKEND_PORT' (Get-FreePort 3000))
-$FRONTEND_PORT       = [int](Get-Existing 'FRONTEND_PORT' (Get-FreePort 80))
-$MINIO_PORT          = [int](Get-Existing 'MINIO_PORT' (Get-FreePort 9000))
-$MINIO_CONSOLE_PORT  = [int](Get-Existing 'MINIO_CONSOLE_PORT' (Get-FreePort 9001))
+function Get-ConfiguredOrFreePort([string]$key, [int]$preferred) {
+    if ($existing.ContainsKey($key) -and $existing[$key]) {
+        $configured = [int]$existing[$key]
+        $inUse = Get-NetTCPConnection -State Listen -LocalPort $configured -ErrorAction SilentlyContinue
+        if (-not $inUse) { return $configured }
+        Write-Warn "Configured $key=$configured is already in use; selecting another free port."
+    }
+    return Get-FreePort $preferred
+}
+
+$POSTGRES_PORT       = Get-ConfiguredOrFreePort 'POSTGRES_PORT' 5432
+$REDIS_PORT          = Get-ConfiguredOrFreePort 'REDIS_PORT' 6379
+$BACKEND_PORT        = Get-ConfiguredOrFreePort 'BACKEND_PORT' 3000
+$FRONTEND_PORT       = Get-ConfiguredOrFreePort 'FRONTEND_PORT' 80
+$MINIO_PORT          = Get-ConfiguredOrFreePort 'MINIO_PORT' 9000
+$MINIO_CONSOLE_PORT  = Get-ConfiguredOrFreePort 'MINIO_CONSOLE_PORT' 9001
 
 $portSuffix = if ($FRONTEND_PORT -ne 80) { ':' + $FRONTEND_PORT } else { '' }
 $APP_URL = "http://${LAN_IP}${portSuffix}"
@@ -241,8 +251,7 @@ if ($ResetDb) {
 }
 
 # Older versions of this repository used fixed names such as vision-erp-minio.
-# Remove only those exact legacy containers; volumes and unrelated containers stay intact.
-Write-Step "Checking for legacy Health-ERP containers..."
+# Detect them for visibility, but never remove them: users may need both stacks.
 $legacyContainerNames = @(
     'vision-erp-postgres',
     'vision-erp-redis',
@@ -250,13 +259,13 @@ $legacyContainerNames = @(
     'vision-erp-backend',
     'vision-erp-frontend'
 )
-foreach ($legacyName in $legacyContainerNames) {
-    $legacyId = (& docker ps -aq --filter "name=^/$legacyName$" 2>$null | Select-Object -First 1)
-    if ($legacyId) {
-        Write-Warn "Removing stale legacy container $legacyName (Docker volumes are preserved)"
-        & docker rm -f $legacyName | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "Could not remove stale container $legacyName." }
-    }
+$legacyFound = @($legacyContainerNames | Where-Object {
+    $legacyId = (& docker ps -aq --filter "name=^/$_$" 2>$null | Select-Object -First 1)
+    [bool]$legacyId
+})
+if ($legacyFound.Count -gt 0) {
+    Write-Warn "Existing legacy containers detected and preserved: $($legacyFound -join ', ')"
+    Write-Warn "The new stack will use Compose-managed names and free host ports."
 }
 
 if ($SkipBuild) {
