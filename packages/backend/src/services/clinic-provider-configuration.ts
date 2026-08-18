@@ -3,6 +3,7 @@ import { db } from '../core/database.js';
 import { ConflictError, NotFoundError, ValidationError } from '@healthcare/shared/errors';
 import { logAudit } from './audit.js';
 import { validateClinicProviderAdapter } from './clinic-provider-adapters.js';
+import { getClinicProviderContract, type ClinicProviderContract } from './clinic-provider-contracts.js';
 
 export type ProviderEnvironment = 'sandbox' | 'production';
 export type ProviderConnectionStatus = 'setup_required' | 'configured' | 'disabled' | 'invalid';
@@ -179,6 +180,7 @@ export interface ProviderConfigurationView {
     expiresAt: Date | string | null;
   }>;
   readiness: ProviderReadiness;
+  contract: ClinicProviderContract | null;
 }
 
 interface ConfigurationMutationContext {
@@ -469,6 +471,7 @@ export async function listProviderConfigurations(tenantId: string): Promise<Prov
       } : null,
       secrets: Object.fromEntries(definition.secretKeys.map((key) => [key, mapSecret(secrets.get(key))])),
       readiness: evaluateReadiness(definition, connection, moduleConfiguration, secrets, regionalProfile),
+      contract: getClinicProviderContract(definition.providerKey),
     } satisfies ProviderConfigurationView;
   }));
 }

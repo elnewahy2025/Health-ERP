@@ -111,6 +111,13 @@ export interface ClinicProviderConfiguration {
     missing: string[];
     errors: string[];
   };
+  contract: {
+    providerKey: string;
+    contractVersion: number;
+    supportedTestModes: Array<'structural' | 'live'>;
+    capabilities: Record<string, { status: 'implemented' | 'not_implemented' | 'not_verified' | 'not_applicable'; operationKeys: string[] }>;
+    runtimeOperationKeys: string[];
+  } | null;
 }
 
 export const clinicConfigurationApi = {

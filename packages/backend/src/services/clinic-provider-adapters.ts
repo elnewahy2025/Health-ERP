@@ -1,5 +1,6 @@
 import { isIP } from 'node:net';
 import { getTenantProviderRuntime, type TenantProviderRuntime } from './clinic-provider-runtime.js';
+import { getClinicProviderContract, type ClinicProviderContract } from './clinic-provider-contracts.js';
 
 export type ProviderAdapterStatus = 'ready' | 'setup_required' | 'invalid' | 'disabled' | 'connection_failed' | 'unsupported';
 export type ProviderAdapterTestMode = 'structural' | 'live';
@@ -18,6 +19,7 @@ export interface ProviderAdapterContext extends TenantProviderRuntime {
 
 export interface ClinicProviderAdapter {
   providerKey: string;
+  contract: ClinicProviderContract;
   validate(context: ProviderAdapterContext): ProviderAdapterResult;
 }
 
@@ -61,6 +63,7 @@ function requiredValues(context: ProviderAdapterContext, configKeys: string[], s
 
 const etaAdapter: ClinicProviderAdapter = {
   providerKey: 'eta',
+  contract: getClinicProviderContract('eta')!,
   validate: (context) => {
     const missing = requiredValues(
       context,
@@ -73,6 +76,7 @@ const etaAdapter: ClinicProviderAdapter = {
 
 const fawryAdapter: ClinicProviderAdapter = {
   providerKey: 'fawry',
+  contract: getClinicProviderContract('fawry')!,
   validate: (context) => {
     const missing = requiredValues(context, ['merchantCode', 'merchantReferencePrefix', 'currencyCode'], ['secureKey']);
     if (missing.length > 0) return missingResult('fawry', missing);
@@ -84,6 +88,7 @@ const fawryAdapter: ClinicProviderAdapter = {
 
 const stripeAdapter: ClinicProviderAdapter = {
   providerKey: 'stripe',
+  contract: getClinicProviderContract('stripe')!,
   validate: (context) => {
     const missing = requiredValues(context, [], ['secretKey']);
     return missing.length > 0 ? missingResult('stripe', missing) : readyResult('stripe');
@@ -92,6 +97,7 @@ const stripeAdapter: ClinicProviderAdapter = {
 
 const twilioAdapter: ClinicProviderAdapter = {
   providerKey: 'twilio',
+  contract: getClinicProviderContract('twilio')!,
   validate: (context) => {
     const missing = requiredValues(context, [], ['account_sid', 'auth_token']);
     const hasSender = Boolean(
@@ -112,7 +118,9 @@ export const CLINIC_PROVIDER_ADAPTERS: Readonly<Record<string, ClinicProviderAda
 };
 
 export function getClinicProviderAdapter(providerKey: string): ClinicProviderAdapter | null {
-  return CLINIC_PROVIDER_ADAPTERS[providerKey] || null;
+  const adapter = CLINIC_PROVIDER_ADAPTERS[providerKey];
+  if (!adapter || !adapter.contract) return null;
+  return adapter;
 }
 
 function isBlockedHostname(hostname: string): boolean {
@@ -203,12 +211,13 @@ export async function probeProviderValidationEndpoint(context: ProviderAdapterCo
 }
 
 export async function validateClinicProviderAdapter(tenantId: string, providerKey: string): Promise<ProviderAdapterResult> {
+  const contract = getClinicProviderContract(providerKey);
   const adapter = getClinicProviderAdapter(providerKey);
-  if (!adapter) {
+  if (!contract || !adapter) {
     return {
       status: 'unsupported',
-      code: 'provider_adapter_unsupported',
-      message: `No adapter is registered for provider ${providerKey}`,
+      code: 'provider_contract_unsupported',
+      message: `No verified provider contract is registered for provider ${providerKey}`,
       missing: [],
       testMode: 'structural',
     };

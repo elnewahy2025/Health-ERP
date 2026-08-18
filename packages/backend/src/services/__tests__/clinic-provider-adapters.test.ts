@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getClinicProviderAdapter } from '../clinic-provider-adapters.js';
+import { CLINIC_PROVIDER_CONTRACTS, getClinicProviderCapability } from '../clinic-provider-contracts.js';
 
 describe('Clinic provider structural adapters', () => {
   it('requires all ETA configuration and signing credentials', () => {
@@ -58,6 +59,17 @@ describe('Clinic provider structural adapters', () => {
     expect(result.missing).toEqual([]);
     expect(JSON.stringify(result)).not.toContain('AC123');
     expect(JSON.stringify(result)).not.toContain('token');
+  });
+
+  it('exposes versioned capability states without claiming vendor authentication', () => {
+    for (const providerKey of ['eta', 'fawry', 'stripe', 'twilio']) {
+      const contract = CLINIC_PROVIDER_CONTRACTS[providerKey];
+      expect(contract.contractVersion).toBeGreaterThan(0);
+      expect(contract.supportedTestModes).toEqual(expect.arrayContaining(['structural', 'live']));
+      expect(getClinicProviderCapability(providerKey, 'structural_validation')?.status).toBe('implemented');
+      expect(getClinicProviderCapability(providerKey, 'endpoint_reachability')?.status).toBe('implemented');
+      expect(getClinicProviderCapability(providerKey, 'vendor_authentication')?.status).toBe('not_verified');
+    }
   });
 
   it('returns a safe unsupported result for an unregistered adapter key', async () => {

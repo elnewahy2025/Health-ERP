@@ -816,6 +816,33 @@ export default function SettingsPage() {
                           </span>
                         </div>
 
+                        {provider.contract && (
+                          <div className="rounded-lg border border-[var(--border)] p-3 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <h5 className="font-medium text-[var(--text-primary)]">{t('settings.providerCapabilities')}</h5>
+                              <span className="text-xs text-[var(--text-muted)]">{t('settings.contractVersion', { value: provider.contract.contractVersion })}</span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {Object.entries(provider.contract.capabilities).map(([capabilityKey, capability]) => {
+                                const statusLabel = capability.status === 'implemented'
+                                  ? t('settings.capabilityImplemented')
+                                  : capability.status === 'not_verified'
+                                    ? t('settings.capabilityNotVerified')
+                                    : capability.status === 'not_implemented'
+                                      ? t('settings.capabilityNotImplemented')
+                                      : t('settings.capabilityNotApplicable');
+                                const statusClass = capability.status === 'implemented' ? 'text-green-700' : 'text-amber-700';
+                                return (
+                                  <div key={capabilityKey} className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="text-[var(--text-secondary)]">{providerFieldLabel(capabilityKey)}</span>
+                                    <span className={statusClass}>{statusLabel}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <Select
                             label={t('settings.environment')}
