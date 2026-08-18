@@ -6,7 +6,7 @@ import { Card, CardBody, Input, Button, Select } from '../components/ui';
 import { apiClient as api, clinicConfigurationApi, type ClinicModuleReadiness, type ClinicModuleStatus } from '../lib/api';
 import { Can } from '../components/auth/Authorization';
 import toast from 'react-hot-toast';
-import { CLINIC_CONFIGURATION_REGISTRY, clinicConfigurationDefinition } from '@healthcare/shared';
+import { CLINIC_CONFIGURATION_REGISTRY, clinicConfigurationDefinition } from '@healthcare/shared/config/clinic-configuration';
 import type { ClinicConfigurationEntry, ClinicConfigurationScope } from '../lib/api/clinic-configuration';
 import { isSupportedClinicLocale, isValidClinicTimezone } from '../lib/clinic-settings-validation';
 

@@ -4,7 +4,7 @@ import {
   type ClinicModuleVisibility,
   type ClinicShellIdentity,
 } from '../lib/api';
-import { clinicConfigurationDefinition } from '@healthcare/shared';
+import { clinicConfigurationDefinition } from '@healthcare/shared/config/clinic-configuration';
 
 const DEFAULT_CLINIC_CURRENCY = String(
   clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '',

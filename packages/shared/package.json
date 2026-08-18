@@ -22,6 +22,10 @@
       "types": "./dist/config/index.d.ts",
       "import": "./dist/config/index.js"
     },
+    "./config/clinic-configuration": {
+      "types": "./dist/config/clinic-configuration.d.ts",
+      "import": "./dist/config/clinic-configuration.js"
+    },
     "./utils": {
       "types": "./dist/utils/index.d.ts",
       "import": "./dist/utils/index.js"

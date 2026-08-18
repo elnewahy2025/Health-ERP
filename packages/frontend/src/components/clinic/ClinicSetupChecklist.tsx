@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { AlertCircle, CheckCircle2, Circle, Loader2, Settings2 } from 'lucide-react';
 import { Card, CardBody } from '../ui';
 import { clinicConfigurationApi, type ClinicModuleReadiness } from '../../lib/api';
-import { CLINIC_CONFIGURATION_REGISTRY } from '@healthcare/shared';
+import { CLINIC_CONFIGURATION_REGISTRY } from '@healthcare/shared/config/clinic-configuration';
 
 const SETUP_FIELDS = CLINIC_CONFIGURATION_REGISTRY
   .filter((definition) => definition.requiredFor.length > 0)
