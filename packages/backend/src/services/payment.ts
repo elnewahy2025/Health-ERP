@@ -141,9 +141,15 @@ export async function createStripePayment(invoiceId: string, amount: number, cur
 // Confirm Stripe payment (webhook)
 export async function confirmStripePayment(sessionId: string): Promise<boolean> {
   const env = getEnv();
-  if (!env.STRIPE_SECRET_KEY) return false;
   try {
-    const stripe = require('stripe')(env.STRIPE_SECRET_KEY);
+    const payment = await db('payment_transactions').where({ reference: sessionId }).select('tenant_id').first() as { tenant_id?: string } | undefined;
+    const runtime = await providerRuntimeOrFallback(payment?.tenant_id, 'stripe', {
+      secrets: { secretKey: env.STRIPE_SECRET_KEY || '' },
+    });
+    if (runtime?.status === 'disabled') return false;
+    const stripeSecretKey = runtime?.secrets.secretKey;
+    if (!stripeSecretKey) return false;
+    const stripe = require('stripe')(stripeSecretKey);
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     if (session.payment_status !== 'paid') return false;
     const { invoiceId, tenantId } = session.metadata;

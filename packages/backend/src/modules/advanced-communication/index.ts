@@ -12,6 +12,7 @@ import {
   registerChatWsHandlers,
 } from '../../services/chat.js';
 import { getEnv } from '@healthcare/shared/config';
+import { providerRuntimeOrFallback } from '../../services/clinic-provider-runtime.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
 import type { ChatPrincipal } from '../../services/chat.js';
@@ -299,8 +300,20 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
     try {
       const twilioSignature = request.headers['x-twilio-signature'] as string | undefined;
       const twilioUrl = `${env.APP_URL || 'http://localhost:3000'}/api/v1/voice/status`;
+      const callbackBody = request.body as Record<string, unknown>;
+      const callSid = callbackBody.CallSid || callbackBody.callSid;
+      const storedCall = callSid
+        ? await db('voice_calls').where({ external_call_sid: String(callSid) }).select('tenant_id').first() as { tenant_id?: string } | undefined
+        : undefined;
+      const twilioRuntime = await providerRuntimeOrFallback(storedCall?.tenant_id, 'twilio', {
+        secrets: { auth_token: env.TWILIO_AUTH_TOKEN || '' },
+      });
+      const authToken = twilioRuntime?.secrets.auth_token;
 
-      if (env.TWILIO_AUTH_TOKEN && twilioSignature) {
+      if (twilioRuntime?.status !== 'environment_fallback' && !authToken) {
+        return reply.status(403).send({ error: 'Twilio is not configured for this clinic' });
+      }
+      if (authToken && twilioSignature) {
         const params = request.body as Record<string, string>;
         const sortedKeys = Object.keys(params).sort();
         let dataStr = twilioUrl;
@@ -308,7 +321,7 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
           dataStr += key + (params[key] ?? '');
         }
         const expectedSig = crypto
-          .createHmac('sha1', env.TWILIO_AUTH_TOKEN)
+          .createHmac('sha1', authToken)
           .update(Buffer.from(dataStr, 'utf-8'))
           .digest('base64');
 
@@ -317,8 +330,7 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
         }
       }
 
-      const body = request.body as Record<string, unknown>;
-      const callSid = body.CallSid || body.callSid;
+      const body = callbackBody;
       const status = body.CallStatus || body.status;
       const duration = parseInt(String(body.CallDuration || '0'), 10);
 

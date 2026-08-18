@@ -434,13 +434,19 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
 
   app.post('/api/v1/payments/fawry/callback', async (request, reply) => {
     const body = request.body as Record<string, unknown>;
-    // Verify Fawry signature
-    const fawrySecurityKey = env.FAWRY_SECURITY_KEY;
+    const fawryRef = body.fawryRef || body.referenceNumber || body.merchantRefNumber;
+    const storedPayment = fawryRef
+      ? await db('payment_transactions').where({ reference: String(fawryRef) }).select('tenant_id').first() as { tenant_id?: string } | undefined
+      : undefined;
+    const fawryRuntime = await providerRuntimeOrFallback(storedPayment?.tenant_id, 'fawry', {
+      secrets: { secureKey: env.FAWRY_SECURITY_KEY || '' },
+    });
+    // Verify Fawry signature presence using the tenant's configured secret when available.
+    const fawrySecurityKey = fawryRuntime?.secrets.secureKey || fawryRuntime?.secrets.hashKey;
     const receivedSignature = (request.headers['x-fawry-signature'] as string) || (body as Record<string, unknown>).signature;
     if (fawrySecurityKey && !receivedSignature) {
       return reply.status(401).send({ error: 'Missing signature' });
     }
-    const fawryRef = body.fawryRef || body.referenceNumber || body.merchantRefNumber;
     const status = body.status || body.paymentStatus;
 
     if (fawryRef && status === 'PAID') {
