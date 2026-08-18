@@ -62,6 +62,14 @@ export const CLINIC_CONFIGURATION_REGISTRY: readonly ClinicConfigurationDefiniti
     description: 'The clinic name shown in the application and generated documents.',
   },
   {
+    key: 'clinic.profile.branch_label',
+    valueType: 'string',
+    allowedScopes: TENANT_ONLY,
+    requiredFor: [],
+    defaultValue: '',
+    description: 'Legacy compatibility label for the clinic information form; branch records are authoritative for multi-branch configuration.',
+  },
+  {
     key: 'clinic.profile.legal_name',
     valueType: 'string',
     allowedScopes: TENANT_ONLY,

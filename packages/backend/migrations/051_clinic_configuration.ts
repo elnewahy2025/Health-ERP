@@ -3,6 +3,7 @@ import { CLINIC_CORE_MODULES } from '@healthcare/shared';
 
 const LEGACY_SETTING_KEYS: Record<string, string> = {
   clinicName: 'clinic.profile.display_name',
+  branch: 'clinic.profile.branch_label',
   logoUrl: 'clinic.profile.logo_url',
   landPhone: 'clinic.contact.land_phone',
   whatsappPhone: 'clinic.contact.whatsapp_phone',
