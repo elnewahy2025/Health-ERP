@@ -32,6 +32,15 @@ export interface ClinicModuleStatus {
   activatedAt: string | null;
 }
 
+export interface ClinicModuleReadiness {
+  moduleKey: string;
+  core: boolean;
+  entitled: boolean;
+  activationStatus: string;
+  validationStatus: string;
+  missingRequiredKeys: string[];
+}
+
 export const clinicConfigurationApi = {
   get: (scopeType: ClinicConfigurationScope = 'tenant', scopeId?: string) =>
     apiClient.get('/clinic-configuration', { params: { scopeType, scopeId } })
@@ -44,6 +53,8 @@ export const clinicConfigurationApi = {
     expectedVersion?: number;
   }) => apiClient.put('/clinic-configuration', payload).then((response) => response.data.data as ClinicConfigurationEntry),
   modules: () => apiClient.get('/clinic-modules').then((response) => response.data.data as ClinicModuleStatus[]),
+  readiness: () => apiClient.get('/clinic-configuration/readiness')
+    .then((response) => response.data.data as { tenantId: string; modules: ClinicModuleReadiness[] }),
   setModuleEnabled: (moduleKey: string, enabled: boolean) =>
     apiClient.put(`/clinic-modules/${encodeURIComponent(moduleKey)}`, { enabled })
       .then((response) => response.data.data as ClinicModuleStatus),

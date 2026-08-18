@@ -79,6 +79,24 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
     return sendSuccess(reply, { scopeType: query.scopeType, scopeId, entries });
   });
 
+  app.get('/api/v1/clinic-configuration/readiness', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const modules = await listTenantModules(ctx.tenantId);
+    return sendSuccess(reply, {
+      tenantId: ctx.tenantId,
+      modules: modules.map((module) => ({
+        moduleKey: module.moduleKey,
+        core: module.core,
+        entitled: module.entitled,
+        activationStatus: module.activationStatus,
+        validationStatus: module.validationStatus,
+        missingRequiredKeys: Array.isArray(module.validationErrors)
+          ? module.validationErrors.filter((key): key is string => typeof key === 'string')
+          : [],
+      })),
+    });
+  });
+
   app.put('/api/v1/clinic-configuration', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
     const ctx = getCtx(request);
     const body = z.object({

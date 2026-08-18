@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { UserCog, Palette, Bell, Globe, Printer, Shield, Building2, Save, Loader2, Puzzle, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Card, CardBody, Input, Button } from '../components/ui';
-import { apiClient as api, clinicConfigurationApi, type ClinicModuleStatus } from '../lib/api';
+import { apiClient as api, clinicConfigurationApi, type ClinicModuleReadiness, type ClinicModuleStatus } from '../lib/api';
 import { Can } from '../components/auth/Authorization';
 import toast from 'react-hot-toast';
 
@@ -40,12 +40,37 @@ function moduleLabel(moduleKey: string): string {
     .join(' ');
 }
 
+const CONFIGURATION_FIELD_IDS: Record<string, string> = {
+  'clinic.profile.display_name': 'clinic-settings-clinic-name',
+  'clinic.profile.branch_label': 'clinic-settings-branch',
+  'clinic.profile.logo_url': 'clinic-settings-logo-url',
+  'clinic.contact.email': 'clinic-settings-email',
+  'clinic.contact.land_phone': 'clinic-settings-land-phone',
+  'clinic.contact.whatsapp_phone': 'clinic-settings-whatsapp-phone',
+  'clinic.contact.website': 'clinic-settings-website',
+  'clinic.address.street': 'clinic-settings-address',
+  'clinic.address.city': 'clinic-settings-city',
+  'clinic.address.country': 'clinic-settings-country',
+  'clinic.address.maps_url': 'clinic-settings-maps-url',
+  'clinic.operations.working_hours': 'clinic-settings-working-hours',
+  'clinic.legal.license_number': 'clinic-settings-license-number',
+  'clinic.legal.tax_number': 'clinic-settings-tax-number',
+};
+
+function validationKeys(module: ClinicModuleStatus, readiness?: ClinicModuleReadiness): string[] {
+  if (readiness) return readiness.missingRequiredKeys;
+  return Array.isArray(module.validationErrors)
+    ? module.validationErrors.filter((key): key is string => typeof key === 'string')
+    : [];
+}
+
 export default function SettingsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<SettingsTab>('clinic');
   const [clinic, setClinic] = useState<ClinicSettings>(INITIAL_CLINIC);
   const [modules, setModules] = useState<ClinicModuleStatus[]>([]);
+  const [readinessByModule, setReadinessByModule] = useState<Record<string, ClinicModuleReadiness>>({});
   const [loading, setLoading] = useState(true);
   const [modulesLoading, setModulesLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -64,7 +89,14 @@ export default function SettingsPage() {
       }
 
       try {
-        setModules(await clinicConfigurationApi.modules());
+        const statuses = await clinicConfigurationApi.modules();
+        setModules(statuses);
+        try {
+          const readiness = await clinicConfigurationApi.readiness();
+          setReadinessByModule(Object.fromEntries(readiness.modules.map((item) => [item.moduleKey, item])));
+        } catch {
+          // The module status response remains a backwards-compatible fallback.
+        }
       } catch {
         setModuleError(true);
       } finally {
@@ -84,6 +116,15 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const focusConfigurationField = (key: string) => {
+    setActiveTab('clinic');
+    window.setTimeout(() => {
+      const target = document.getElementById(CONFIGURATION_FIELD_IDS[key] || 'clinic-settings-clinic-information');
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (target instanceof HTMLInputElement) target.focus();
+    }, 0);
   };
 
   const handleModuleToggle = async (module: ClinicModuleStatus) => {
@@ -129,48 +170,48 @@ export default function SettingsPage() {
       </div>
 
       {activeTab === 'clinic' && (
-        <Card>
+        <Card id="clinic-settings-clinic-information">
           <CardBody className="p-6">
             <div className="space-y-6">
               <div>
                 <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">{t('settings.basicInformation')}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input label={t('settings.clinicName')} value={clinic.clinicName} onChange={e => setClinic(p => ({ ...p, clinicName: e.target.value }))} />
-                  <Input label={t('settings.branch')} value={clinic.branch} onChange={e => setClinic(p => ({ ...p, branch: e.target.value }))} />
-                  <Input label={t('settings.email')} type="email" value={clinic.email} onChange={e => setClinic(p => ({ ...p, email: e.target.value }))} />
-                  <Input label={t('settings.website')} value={clinic.website} onChange={e => setClinic(p => ({ ...p, website: e.target.value }))} />
+                  <Input id="clinic-settings-clinic-name" label={t('settings.clinicName')} value={clinic.clinicName} onChange={e => setClinic(p => ({ ...p, clinicName: e.target.value }))} />
+                  <Input id="clinic-settings-branch" label={t('settings.branch')} value={clinic.branch} onChange={e => setClinic(p => ({ ...p, branch: e.target.value }))} />
+                  <Input id="clinic-settings-email" label={t('settings.email')} type="email" value={clinic.email} onChange={e => setClinic(p => ({ ...p, email: e.target.value }))} />
+                  <Input id="clinic-settings-website" label={t('settings.website')} value={clinic.website} onChange={e => setClinic(p => ({ ...p, website: e.target.value }))} />
                 </div>
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">{t('settings.contactInformation')}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input label={t('settings.landPhone')} value={clinic.landPhone} onChange={e => setClinic(p => ({ ...p, landPhone: e.target.value }))} placeholder="02-XXXXXXX" />
-                  <Input label={t('settings.whatsappPhone')} value={clinic.whatsappPhone} onChange={e => setClinic(p => ({ ...p, whatsappPhone: e.target.value }))} placeholder="+20XXXXXXXXXX" />
+                  <Input id="clinic-settings-land-phone" label={t('settings.landPhone')} value={clinic.landPhone} onChange={e => setClinic(p => ({ ...p, landPhone: e.target.value }))} placeholder="02-XXXXXXX" />
+                  <Input id="clinic-settings-whatsapp-phone" label={t('settings.whatsappPhone')} value={clinic.whatsappPhone} onChange={e => setClinic(p => ({ ...p, whatsappPhone: e.target.value }))} placeholder="+20XXXXXXXXXX" />
                 </div>
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">{t('settings.addressLocation')}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="sm:col-span-2"><Input label={t('settings.streetAddress')} value={clinic.address} onChange={e => setClinic(p => ({ ...p, address: e.target.value }))} /></div>
-                  <Input label={t('settings.city')} value={clinic.city} onChange={e => setClinic(p => ({ ...p, city: e.target.value }))} />
-                  <Input label={t('settings.country')} value={clinic.country} onChange={e => setClinic(p => ({ ...p, country: e.target.value }))} />
-                  <div className="sm:col-span-2"><Input label={t('settings.mapsUrl')} value={clinic.googleMapsLocation} onChange={e => setClinic(p => ({ ...p, googleMapsLocation: e.target.value }))} placeholder="https://maps.google.com/..." /></div>
+                  <div className="sm:col-span-2"><Input id="clinic-settings-address" label={t('settings.streetAddress')} value={clinic.address} onChange={e => setClinic(p => ({ ...p, address: e.target.value }))} /></div>
+                  <Input id="clinic-settings-city" label={t('settings.city')} value={clinic.city} onChange={e => setClinic(p => ({ ...p, city: e.target.value }))} />
+                  <Input id="clinic-settings-country" label={t('settings.country')} value={clinic.country} onChange={e => setClinic(p => ({ ...p, country: e.target.value }))} />
+                  <div className="sm:col-span-2"><Input id="clinic-settings-maps-url" label={t('settings.mapsUrl')} value={clinic.googleMapsLocation} onChange={e => setClinic(p => ({ ...p, googleMapsLocation: e.target.value }))} placeholder="https://maps.google.com/..." /></div>
                 </div>
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">{t('settings.branding')}</h3>
-                <Input label={t('settings.logoUrl')} value={clinic.logoUrl} onChange={e => setClinic(p => ({ ...p, logoUrl: e.target.value }))} placeholder="https://..." />
+                <Input id="clinic-settings-logo-url" label={t('settings.logoUrl')} value={clinic.logoUrl} onChange={e => setClinic(p => ({ ...p, logoUrl: e.target.value }))} placeholder="https://..." />
               </div>
 
               <div>
                 <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">{t('settings.workingHoursLegal')}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input label={t('settings.workingHours')} value={clinic.workingHours} onChange={e => setClinic(p => ({ ...p, workingHours: e.target.value }))} />
-                  <Input label={t('settings.licenseNumber')} value={clinic.licenseNumber} onChange={e => setClinic(p => ({ ...p, licenseNumber: e.target.value }))} />
-                  <Input label={t('settings.taxNumber')} value={clinic.taxNumber} onChange={e => setClinic(p => ({ ...p, taxNumber: e.target.value }))} />
+                  <Input id="clinic-settings-working-hours" label={t('settings.workingHours')} value={clinic.workingHours} onChange={e => setClinic(p => ({ ...p, workingHours: e.target.value }))} />
+                  <Input id="clinic-settings-license-number" label={t('settings.licenseNumber')} value={clinic.licenseNumber} onChange={e => setClinic(p => ({ ...p, licenseNumber: e.target.value }))} />
+                  <Input id="clinic-settings-tax-number" label={t('settings.taxNumber')} value={clinic.taxNumber} onChange={e => setClinic(p => ({ ...p, taxNumber: e.target.value }))} />
                 </div>
               </div>
 
@@ -214,6 +255,7 @@ export default function SettingsPage() {
               {modules.map((module) => {
                 const enabled = module.activationStatus === 'enabled';
                 const unavailable = !module.core && !module.entitled;
+                const missingKeys = validationKeys(module, readinessByModule[module.moduleKey]);
                 return (
                   <Card key={module.moduleKey}>
                     <CardBody className="p-5">
@@ -229,6 +271,26 @@ export default function SettingsPage() {
                           <CheckCircle2 className="w-4 h-4" />{enabled ? t('settings.enabled') : t('settings.disabled')}
                         </span>
                       </div>
+                      {missingKeys.length > 0 && (
+                        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                          <p className="text-xs font-medium text-amber-900">{t('settings.missingConfiguration')}</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {missingKeys.map((key) => {
+                              const field = t(`settings.configurationField.${key}`, { defaultValue: key });
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  onClick={() => focusConfigurationField(key)}
+                                  className="text-left text-xs font-medium text-amber-800 underline underline-offset-2 hover:text-amber-950"
+                                >
+                                  {t('settings.configureField', { field })}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                       <div className="mt-4">
                         {module.core ? (
                           <p className="text-xs text-gray-500">{t('settings.coreAlwaysEnabled')}</p>
