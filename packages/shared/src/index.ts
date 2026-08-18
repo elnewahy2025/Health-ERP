@@ -51,6 +51,21 @@ export {
   DATE_FORMATS, CURRENCIES, BLOOD_TYPES, GENDERS, APPOINTMENT_TYPES,
 } from './config/constants.js';
 
+export {
+  CLINIC_CORE_MODULES,
+  CLINIC_OPTIONAL_MODULES,
+  CLINIC_MODULE_CATALOG,
+  CLINIC_CONFIGURATION_REGISTRY,
+  clinicConfigurationDefinition,
+  isClinicModuleKey,
+} from './config/clinic-configuration.js';
+export type {
+  ClinicConfigurationScope,
+  ClinicConfigurationValueType,
+  ClinicConfigurationDefinition,
+  ClinicModuleKey,
+} from './config/clinic-configuration.js';
+
 export { getEnv } from './config/environment.js';
 export type { Environment } from './config/environment.js';
 
