@@ -43,7 +43,7 @@ A unique constraint must prevent two active entries for the same tenant, scope, 
 
 ### `tenant_module_entitlements`
 
-This table records the system/vendor availability boundary. A tenant administrator cannot activate a module that is not entitled or whose entitlement is expired/suspended.
+This table records the system/vendor availability boundary. A tenant administrator cannot activate a module that is not entitled or whose entitlement is expired/suspended. The existing active SaaS subscription plan is also an availability source: its `subscription_plans.modules` list is normalized through the existing singular/plural aliases, while an explicit row in this table overrides the plan. This preserves the current subscription architecture without creating a second plan system.
 
 | Column | Purpose |
 |---|---|

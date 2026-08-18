@@ -21,6 +21,14 @@ interface EntitlementRow {
   expires_at: Date | string | null;
 }
 
+interface SubscriptionPlanRow {
+  plan_slug: string | null;
+  plan_modules: unknown;
+  subscription_status: string | null;
+  current_period_start: Date | string | null;
+  current_period_end: Date | string | null;
+}
+
 interface ActivationRow {
   module_key: string;
   status: string;
@@ -55,6 +63,37 @@ function isActiveEntitlement(row: EntitlementRow | undefined, now = new Date()):
   return true;
 }
 
+function isActiveSubscription(row: SubscriptionPlanRow | undefined, now = new Date()): boolean {
+  if (!row || !['active', 'trial'].includes(row.subscription_status || '')) return false;
+  if (row.current_period_start && new Date(row.current_period_start) > now) return false;
+  if (row.current_period_end && new Date(row.current_period_end) <= now) return false;
+  return true;
+}
+
+function normalizePlanModules(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((module): module is string => typeof module === 'string');
+  if (typeof value === 'string') {
+    try {
+      return normalizePlanModules(JSON.parse(value));
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+const PLAN_MODULE_ALIASES: Record<string, string> = {
+  patient: 'patients',
+  appointment: 'appointments',
+  report: 'reports',
+};
+
+function planIncludesModule(plan: SubscriptionPlanRow | undefined, moduleKey: string): boolean {
+  if (!plan || !isActiveSubscription(plan)) return false;
+  const modules = normalizePlanModules(plan.plan_modules);
+  return modules.includes('*') || modules.some((module) => (PLAN_MODULE_ALIASES[module] || module) === moduleKey);
+}
+
 function isMissingConfigurationValue(value: unknown): boolean {
   return value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
 }
@@ -75,7 +114,7 @@ export function validateModuleConfiguration(
 }
 
 export async function listTenantModules(tenantId: string): Promise<TenantModuleStatus[]> {
-  const [entitlements, activations, configuration] = await Promise.all([
+  const [entitlements, activations, configuration, subscription] = await Promise.all([
     db('tenant_module_entitlements').where({ tenant_id: tenantId }).select(
       'module_key', 'status', 'source', 'starts_at', 'expires_at',
     ),
@@ -83,6 +122,17 @@ export async function listTenantModules(tenantId: string): Promise<TenantModuleS
       'module_key', 'status', 'config_version', 'last_validation_status', 'last_validation_errors', 'activated_at',
     ),
     listEffectiveClinicConfiguration(tenantId),
+    db('tenant_subscriptions')
+      .where({ 'tenant_subscriptions.tenant_id': tenantId })
+      .leftJoin('subscription_plans', 'tenant_subscriptions.plan_id', 'subscription_plans.id')
+      .select(
+        'subscription_plans.slug as plan_slug',
+        'subscription_plans.modules as plan_modules',
+        'tenant_subscriptions.status as subscription_status',
+        'tenant_subscriptions.current_period_start',
+        'tenant_subscriptions.current_period_end',
+      )
+      .first() as Promise<SubscriptionPlanRow | undefined>,
   ]);
   const entitlementByKey = new Map((entitlements as EntitlementRow[]).map((row) => [row.module_key, row]));
   const activationByKey = new Map((activations as ActivationRow[]).map((row) => [row.module_key, row]));
@@ -92,6 +142,9 @@ export async function listTenantModules(tenantId: string): Promise<TenantModuleS
     const entitlement = entitlementByKey.get(moduleKey);
     const activation = activationByKey.get(moduleKey);
     const validation = validateModuleConfiguration(moduleKey, configuration);
+    const explicitEntitled = isActiveEntitlement(entitlement);
+    const planEntitled = !entitlement && planIncludesModule(subscription, moduleKey);
+    const entitled = explicitEntitled || planEntitled;
     const activationStatus = activation?.status === 'disabled'
       ? 'disabled'
       : activation && validation.status === 'valid'
@@ -102,9 +155,9 @@ export async function listTenantModules(tenantId: string): Promise<TenantModuleS
     return {
       moduleKey,
       core: core.has(moduleKey),
-      entitled: isActiveEntitlement(entitlement),
-      entitlementStatus: entitlement?.status || null,
-      entitlementSource: entitlement?.source || null,
+      entitled,
+      entitlementStatus: entitlement?.status || (planEntitled ? 'available' : null),
+      entitlementSource: entitlement?.source || (planEntitled ? `subscription:${subscription?.plan_slug || 'active'}` : null),
       activationStatus,
       configVersion: activation?.config_version ?? null,
       validationStatus: validation.status,
@@ -136,7 +189,18 @@ export async function setTenantModuleActivation(input: {
   const entitlement = await db('tenant_module_entitlements')
     .where({ tenant_id: input.tenantId, module_key: input.moduleKey })
     .first() as EntitlementRow | undefined;
-  if (input.enabled && !isActiveEntitlement(entitlement)) {
+  const subscription = await db('tenant_subscriptions')
+    .where({ 'tenant_subscriptions.tenant_id': input.tenantId })
+    .leftJoin('subscription_plans', 'tenant_subscriptions.plan_id', 'subscription_plans.id')
+    .select(
+      'subscription_plans.slug as plan_slug',
+      'subscription_plans.modules as plan_modules',
+      'tenant_subscriptions.status as subscription_status',
+      'tenant_subscriptions.current_period_start',
+      'tenant_subscriptions.current_period_end',
+    )
+    .first() as SubscriptionPlanRow | undefined;
+  if (input.enabled && !isActiveEntitlement(entitlement) && !(entitlement === undefined && planIncludesModule(subscription, input.moduleKey))) {
     throw new ForbiddenError(`Clinic module ${input.moduleKey} is not available for this tenant`);
   }
 
