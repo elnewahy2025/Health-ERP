@@ -290,7 +290,7 @@ A staff member with the new `billing.verify` permission can reconcile or reject 
 
 The legacy `/api/v1/payments/instapay/callback` endpoint is retained only as a safe compatibility boundary and returns HTTP 409 without changing any transaction. Manual reconciliation history is separate from external-provider payment history, while tenant, branch, department, assigned-patient, RBAC, and audit controls remain mandatory at the backend. The Billing interface is bilingual and visibly distinguishes manual instructions, pending verification, reconciled, and rejected states from Stripe/Fawry provider actions and internal cash/card recording.
 
-Function 6 validation passed with **7 focused provider/manual unit tests**, **4 InstaPay PostgreSQL integration tests**, **41 backend test files with 283 tests passed**, **13 frontend test files with 49 tests passed**, backend/frontend type checks, shared build, existing billing provider-history tests, and `git diff --check`. The implementation commit is `911102a`.
+Function 6 validation passed with **15 focused provider-configuration/adapter contract tests**, **4 InstaPay PostgreSQL integration tests**, **41 backend test files with 283 tests passed**, **13 frontend test files with 49 tests passed**, backend/frontend type checks, shared build, existing billing provider-history tests, and `git diff --check`. The implementation commit is `911102a`.
 
 ## Next recommended implementation slice
 
