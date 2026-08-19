@@ -1,8 +1,8 @@
 import { apiClient } from './client';
 
 export const paymentApi = {
-  createStripeSession: (invoiceId: string, amount: number, currency: string) =>
-    apiClient.post('/payments/stripe/create', { invoiceId, amount, currency }).then(r => r.data.data),
+  createStripeSession: (invoiceId: string, amount: number, currency?: string) =>
+    apiClient.post('/payments/stripe/create', { invoiceId, amount, ...(currency ? { currency } : {}) }).then(r => r.data.data),
   paymentLink: (invoiceId: string, tenantSlug: string) =>
     apiClient.get(`/payments/link/${tenantSlug}/${invoiceId}`).then(r => r.data.data),
 };

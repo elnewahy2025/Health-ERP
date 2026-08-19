@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { billingApi } from '../lib/api';
+import { billingApi, paymentApi, egyptPaymentApi } from '../lib/api';
 import type { Invoice, InvoiceItem, InvoiceStatus, PaymentMethod } from '@healthcare/shared/types';
 import { Modal, Input, Select, PatientSearchField, Button, Badge, EmptyState, PageLoader } from '../components/ui';
 import { Plus, Trash2, DollarSign, FileText, TrendingUp, AlertTriangle, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
@@ -8,6 +8,7 @@ import { sanitizeNumber } from '../lib/sanitize';
 import toast from 'react-hot-toast';
 import { Can } from '../components/auth/Authorization';
 import { formatClinicMoney, useClinicConfiguration } from '../stores/clinicConfigurationStore';
+import { getProviderErrorInfo } from '../lib/provider-errors';
 
 interface InvoiceItemForm {
   description: string;
@@ -183,6 +184,10 @@ export default function BillingPage() {
   const [showPayModal, setShowPayModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [saving, setSaving] = useState(false);
+  const [providerAction, setProviderAction] = useState<'stripe' | 'fawry' | null>(null);
+  const [providerNotice, setProviderNotice] = useState<string | null>(null);
+  const [fawryPhone, setFawryPhone] = useState('');
+  const [fawryEmail, setFawryEmail] = useState('');
 
   const [newInvoice, setNewInvoice] = useState<InvoiceForm>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
@@ -279,9 +284,80 @@ export default function BillingPage() {
     }
   };
 
+  const handleStripePayment = async () => {
+    if (!selectedInvoice) return;
+    setProviderAction('stripe');
+    setProviderNotice(null);
+    try {
+      const result = await paymentApi.createStripeSession(selectedInvoice.id, selectedInvoice.due, identity?.currency);
+      if (!result?.redirectUrl) {
+        const message = t('billing.providerPaymentFailed');
+        setProviderNotice(message);
+        toast.error(message);
+        return;
+      }
+      window.location.assign(result.redirectUrl);
+    } catch (error: unknown) {
+      const providerError = getProviderErrorInfo(error);
+      const message = providerError?.kind === 'not_ready' || providerError?.kind === 'disabled'
+        ? t('billing.providerSetupRequired')
+        : providerError?.kind === 'unsupported_operation'
+          ? t('billing.providerUnsupported')
+          : t('billing.providerPaymentFailed');
+      setProviderNotice(message);
+      toast.error(message);
+    } finally {
+      setProviderAction(null);
+    }
+  };
+
+  const handleFawryPayment = async () => {
+    if (!selectedInvoice) return;
+    if (!selectedInvoice.patientName?.trim() || !fawryPhone.trim()) {
+      const message = t('billing.fawryContactRequired');
+      setProviderNotice(message);
+      toast.error(message);
+      return;
+    }
+    setProviderAction('fawry');
+    setProviderNotice(null);
+    try {
+      const result = await egyptPaymentApi.fawry(
+        selectedInvoice.id,
+        selectedInvoice.due,
+        fawryPhone.trim(),
+        selectedInvoice.patientName.trim(),
+        fawryEmail.trim() || undefined,
+      );
+      if (result?.referenceNumber) {
+        const message = t('billing.fawryPaymentInitiated', { reference: result.referenceNumber });
+        setProviderNotice(message);
+        toast.success(message);
+      } else {
+        const message = t('billing.providerPaymentFailed');
+        setProviderNotice(message);
+        toast.error(message);
+      }
+    } catch (error: unknown) {
+      const providerError = getProviderErrorInfo(error);
+      const message = providerError?.kind === 'not_ready' || providerError?.kind === 'disabled'
+        ? t('billing.providerSetupRequired')
+        : providerError?.kind === 'unsupported_operation'
+          ? t('billing.providerUnsupported')
+          : t('billing.providerPaymentFailed');
+      setProviderNotice(message);
+      toast.error(message);
+    } finally {
+      setProviderAction(null);
+    }
+  };
+
   const openPayModal = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
     setPaymentForm(INITIAL_PAYMENT);
+    setProviderNotice(null);
+    setFawryPhone(invoice.patientPhone || '');
+    setFawryEmail(invoice.patientEmail || '');
     setShowPayModal(true);
   };
 
@@ -295,6 +371,10 @@ export default function BillingPage() {
     setShowPayModal(false);
     setSelectedInvoice(null);
     setPaymentForm(INITIAL_PAYMENT);
+    setProviderAction(null);
+    setProviderNotice(null);
+    setFawryPhone('');
+    setFawryEmail('');
   };
 
   const addItem = () => {
@@ -745,6 +825,41 @@ export default function BillingPage() {
               <p className="text-lg font-bold mt-2 text-[var(--text-primary)]">
                 {t('billing.amountDue')}: {formatMoney(selectedInvoice.due)}
               </p>
+            </div>
+
+            {providerNotice && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="alert">
+                {providerNotice}
+              </div>
+            )}
+
+            <div className="rounded-lg border border-[var(--border)] p-3 space-y-3">
+              <div>
+                <p className="font-medium text-[var(--text-primary)]">{t('billing.externalPayment')}</p>
+                <p className="text-xs text-muted-txt">{t('billing.externalPaymentDescription')}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Can permission="billing.create">
+                  <Button variant="secondary" loading={providerAction === 'stripe'} disabled={providerAction !== null} onClick={() => void handleStripePayment()}>
+                    {t('billing.payWithStripe')}
+                  </Button>
+                  <Button variant="secondary" loading={providerAction === 'fawry'} disabled={providerAction !== null} onClick={() => void handleFawryPayment()}>
+                    {t('billing.payWithFawry')}
+                  </Button>
+                </Can>
+              </div>
+              <Input
+                label={t('billing.fawryPhone')}
+                value={fawryPhone}
+                onChange={(e) => setFawryPhone(e.target.value)}
+                placeholder={t('billing.fawryPhonePlaceholder')}
+              />
+              <Input
+                label={t('billing.fawryEmailOptional')}
+                value={fawryEmail}
+                onChange={(e) => setFawryEmail(e.target.value)}
+                placeholder={t('billing.fawryEmailPlaceholder')}
+              />
             </div>
 
             <Select

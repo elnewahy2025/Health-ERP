@@ -194,6 +194,8 @@ export interface Invoice {
   tenantId: string;
   patientId: string;
   patientName?: string;
+  patientPhone?: string;
+  patientEmail?: string;
   appointmentId?: string;
   invoiceNumber: string;
   items: InvoiceItem[];
