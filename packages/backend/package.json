@@ -15,6 +15,7 @@
     "test:lifecycle-integration": "tsx scripts/run-postgres-integration.ts lifecycle",
     "test:pharmacy-integration": "tsx scripts/run-postgres-integration.ts pharmacy",
     "test:backup-integration": "tsx scripts/run-postgres-integration.ts backup",
+    "test:export-integration": "tsx scripts/run-postgres-integration.ts export",
     "test:watch": "vitest",
     "migrate": "npx tsx src/core/migrate.ts",
     "migrate:make": "knex migrate:make --knexfile knexfile.ts",

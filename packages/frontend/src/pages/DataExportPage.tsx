@@ -27,6 +27,10 @@ interface ExportJob {
   status: string;
   trigger: string;
   startedAt: string;
+  fileName?: string;
+  checksum?: string;
+  downloadAvailable?: boolean;
+  artifactExpiresAt?: string;
 }
 
 interface ExportDefinition {
@@ -53,7 +57,7 @@ export default function DataExportPage() {
   const [jobs, setJobs] = useState<ExportJob[]>([]);
   const [definitions, setDefinitions] = useState<ExportDefinition[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedModule, setSelectedModule] = useState('patients');
+  const [selectedModule, setSelectedModule] = useState('');
   const [selectedFormat, setSelectedFormat] = useState('csv');
   const [running, setRunning] = useState(false);
 
@@ -73,6 +77,10 @@ export default function DataExportPage() {
       setLoading(false);
     }
   }, [t]);
+
+  useEffect(() => {
+    if (!selectedModule && modules.length > 0) setSelectedModule(modules[0].module);
+  }, [modules, selectedModule]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +104,22 @@ export default function DataExportPage() {
     };
     void load();
     return () => { cancelled = true; };
+  }, [t]);
+
+  const handleDownload = useCallback(async (job: ExportJob) => {
+    try {
+      const response = await api.get(`/export/download/${job.id}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(response.data as Blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = job.fileName || `export-${job.id}.${job.format === 'csv' ? 'csv' : 'json'}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error(t('dataExport.downloadError'));
+    }
   }, [t]);
 
   const handleExport = useCallback(async () => {
@@ -147,8 +171,9 @@ export default function DataExportPage() {
               <div className="space-y-4">
                 <Select
                   label={t('dataExport.module')}
-                  options={moduleOptions.length > 0 ? moduleOptions : [{ value: 'patients', label: 'Patients' }]}
+                  options={moduleOptions}
                   value={selectedModule}
+                  disabled={moduleOptions.length === 0}
                   onChange={(e) => setSelectedModule(e.target.value)}
                 />
                 <Select
@@ -158,7 +183,7 @@ export default function DataExportPage() {
                   onChange={(e) => setSelectedFormat(e.target.value)}
                 />
                 <Can permission="data_export.export">
-                  <Button className="w-full" loading={running} onClick={handleExport}>
+                  <Button className="w-full" loading={running} disabled={!selectedModule} onClick={handleExport}>
                     <Download className="w-4 h-4" /> {t('dataExport.exportButton', { module: selectedModule, format: selectedFormat.toUpperCase() })}
                   </Button>
                 </Can>
@@ -234,9 +259,9 @@ export default function DataExportPage() {
                     <td><Badge>{sanitizeString(j.trigger)}</Badge></td>
                     <td className="text-xs">{formatDateTime(j.startedAt)}</td>
                     <td>
-                      <Can permission="data_export.export">
-                        {j.status === 'completed' && (
-                          <Button variant="ghost" size="sm">
+                      <Can permission="data_export.download">
+                        {j.downloadAvailable && (
+                          <Button variant="ghost" size="sm" onClick={() => void handleDownload(j)}>
                             <Download className="w-3 h-3" />
                           </Button>
                         )}

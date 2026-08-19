@@ -30,6 +30,10 @@ const targets: Record<string, { env: string; testFile: string }> = {
     env: 'RUN_BACKUP_DB_TESTS',
     testFile: 'src/modules/__tests__/backup-restore.integration.test.ts',
   },
+  export: {
+    env: 'RUN_EXPORT_DB_TESTS',
+    testFile: 'src/modules/__tests__/data-export.integration.test.ts',
+  },
 };
 const selected = targets[target];
 if (!selected) throw new Error(`Unknown PostgreSQL integration target: ${target}`);

@@ -1427,6 +1427,7 @@
   "dataExport.exportSuccess": "Export started successfully",
   "dataExport.exportError": "Failed to start export",
   "dataExport.download": "Download",
+  "dataExport.downloadError": "Failed to download the export artifact",
   "monitor.title": "System Monitor",
   "monitor.refresh": "Refresh",
   "monitor.health": "Health",

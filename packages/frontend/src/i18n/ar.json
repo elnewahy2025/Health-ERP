@@ -1425,6 +1425,7 @@
   "dataExport.exportSuccess": "بدأ التصدير بنجاح",
   "dataExport.exportError": "فشل في بدء التصدير",
   "dataExport.download": "تحميل",
+  "dataExport.downloadError": "فشل في تحميل ملف التصدير",
   "monitor.title": "مراقبة النظام",
   "monitor.refresh": "تحديث",
   "monitor.health": "الصحة",

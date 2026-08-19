@@ -51,6 +51,7 @@ import { registerWhiteLabelModule } from './modules/white-label/index.js';
 import { registerComplianceReportsModule } from './modules/compliance-reports/index.js';
 import { registerDrBackupModule } from './modules/dr-backup/index.js';
 import { startBackupWorker, stopBackupWorker } from './services/backup-service.js';
+import { startExportWorker, stopExportWorker } from './services/export-service.js';
 import { registerRegionsModule } from './modules/regions/index.js';
 import { registerPatientPortalModule } from './modules/patient-portal/index.js';
 import { registerOnlineBookingModule } from './modules/online-booking/index.js';
@@ -377,12 +378,14 @@ async function start() {
     
     startReminderService();
     startBackupWorker();
+    startExportWorker();
 
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       console.log('\n✓ ' + signal + ' received. Shutting down gracefully...');
       try {
         stopBackupWorker();
+        stopExportWorker();
         await app.close();
         console.log('✓ Fastify server closed');
         await db.destroy();

@@ -125,7 +125,7 @@ export const PERMISSION_CATALOG: Record<string, readonly PermissionAction[]> = {
   data_warehouse: ['view', 'export', 'manage'],
   api_keys: ['view', 'create', 'edit', 'delete', 'manage'],
   developer_portal: ['view', 'export', 'manage'],
-  data_export: ['view', 'create', 'export', 'manage'],
+  data_export: ['view', 'create', 'export', 'download', 'manage'],
   bulk_import: ['view', 'create', 'manage'],
   documents: ['view', 'create', 'edit', 'delete', 'download', 'print', 'manage'],
   emergency_access: ['manage'],
@@ -566,7 +566,7 @@ export const HOSPITAL_ROLE_GRANTS: Record<string, Record<string, readonly Permis
   accountant: {
     'billing.view': ['tenant'], 'billing.export': ['tenant'], 'reports.view': ['tenant'],
     'reports.export': ['tenant'], 'financial_reports.*': ['tenant'], 'expenses.*': ['tenant'],
-    'eta_invoicing.*': ['tenant'], 'data_export.view': ['tenant'], 'data_export.export': ['tenant'],
+    'eta_invoicing.*': ['tenant'], 'data_export.view': ['tenant'], 'data_export.export': ['tenant'], 'data_export.download': ['tenant'],
   },
   insurance_manager: {
     'insurance.*': ['tenant'], 'insurance_claims.*': ['tenant'], 'billing.view': ['tenant'],
@@ -607,7 +607,7 @@ export const HOSPITAL_ROLE_GRANTS: Record<string, Record<string, readonly Permis
   reporting_bi_analyst: {
     'bi.*': ['tenant'], 'analytics_dashboard.*': ['tenant'], 'reports.*': ['tenant'],
     'financial_reports.view': ['tenant'], 'financial_reports.export': ['tenant'],
-    'advanced_reporting.*': ['tenant'], 'data_warehouse.*': ['tenant'], 'data_export.export': ['tenant'],
+    'advanced_reporting.*': ['tenant'], 'data_warehouse.*': ['tenant'], 'data_export.export': ['tenant'], 'data_export.download': ['tenant'],
   },
   it_system_administrator: {
     'users.*': ['tenant'], 'roles.*': ['tenant'], 'settings.*': ['tenant'],
