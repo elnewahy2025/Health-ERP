@@ -3,7 +3,7 @@
 **Project:** Health-ERP Clinic Management System  
 **Status date:** 19 August 2026  
 **Repository branch:** `main`  
-**Latest implementation commit:** `bb31789`
+**Latest implementation commit:** `fb4d3a8`
 
 ## Executive status
 
@@ -32,6 +32,7 @@ Administrators can now complete regional configuration progressively and manage 
 | `c8f4016` | Versioned provider contracts | Exposed contract version and capability states for ETA, Fawry, Stripe, and Twilio; distinguishes implemented checks from unverified authentication and unsupported business operations. |
 | `fb45fa6` | Provider-operation guards | Added formal guards for Fawry, Stripe, SMS, and Twilio operations, and replaced the simulated ETA submission approval with an explicit safe unsupported response. |
 | `bb31789` | Operational provider UX | Added a shared frontend provider-error classifier and actionable bilingual readiness messages for ETA submission and SMS test delivery. |
+| `fb4d3a8` | Billing provider actions | Added separate permission-gated Stripe checkout and Fawry payment-reference actions; kept internal payment recording separate and avoided frontend currency or payment URL defaults. |
 
 ## Database and security model
 
@@ -132,11 +133,11 @@ These guards do not replace RBAC. Existing route permissions remain mandatory: b
 
 The ETA invoicing page now distinguishes an unsupported ETA submission contract from ordinary submission failures and keeps the guidance visible after the toast disappears. The communications test-send page shows Twilio setup guidance when an SMS template cannot be delivered, while email templates retain their existing generic failure behavior. Both flows preserve their existing backend authorization and do not attempt to bypass provider capability guards.
 
-The billing page was intentionally not changed in this slice because its current payment modal records internal payments and does not invoke the Stripe or Fawry provider endpoints. The voice page currently opens device phone links rather than calling the backend voice endpoints, so it does not claim a provider readiness state it cannot observe.
+The billing page now exposes separate permission-gated Stripe checkout and Fawry payment-reference actions alongside the existing internal Record Payment action. Stripe receives the tenant-configured clinic currency only when available and otherwise lets the backend resolve it from clinic configuration. Fawry requires an entered patient phone number and reports the backend-created pending reference; the UI does not fabricate a redirect URL or payment link. Provider errors remain actionable through the shared frontend classifier. The voice page currently opens device phone links rather than calling the backend voice endpoints, so it does not claim a provider readiness state it cannot observe.
 
 ## Validation results
 
-The final validation completed successfully. Backend lint passed. Backend tests passed with **33 passed test files, 1 skipped integration file, 244 tests passed, and 3 skipped tests**. Frontend tests passed with **12 test files and 46 tests passed**. Backend and frontend production builds passed, and `git diff --check` passed. Validation was run against implementation commit `bb31789`; the documentation update is committed separately.
+The final validation completed successfully. Backend lint passed. Backend tests passed with **33 passed test files, 1 skipped integration file, 244 tests passed, and 3 skipped tests**. Frontend tests passed with **13 test files and 49 tests passed**. Backend and frontend production builds passed, and `git diff --check` passed. Validation was run against implementation commit `fb4d3a8`; the documentation update is committed separately.
 
 The backend test run still prints existing non-failing warnings about Redis connection attempts in the isolated test environment and the audit test’s intentionally swallowed database-write failure. These warnings did not fail the suite and were not introduced by the modular settings work.
 
