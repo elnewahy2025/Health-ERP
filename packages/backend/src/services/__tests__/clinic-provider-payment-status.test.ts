@@ -13,11 +13,15 @@ function read(relativePath: string): string {
 describe('provider payment status safety', () => {
   it('adds provider_key with forward-safe guards and preserves history on rollback', () => {
     const migration = read('migrations/055_payment_provider_status.ts');
+    const callbackMigration = read('migrations/056_payment_callback_hardening.ts');
     expect(migration).toContain("hasTable('payment_transactions')");
     expect(migration).toContain("hasColumn('payment_transactions', 'provider_key')");
     expect(migration).toContain("table.string('provider_key', 50).nullable()");
     expect(migration).toContain('Forward-safe: provider status history is retained');
     expect(migration).not.toContain('dropColumn');
+    expect(callbackMigration).toContain("hasColumn('payment_transactions', 'updated_at')");
+    expect(callbackMigration).toContain('payment_transactions_provider_reference_idx');
+    expect(callbackMigration).not.toContain('dropColumn');
   });
 
   it('marks Stripe and Fawry rows explicitly while leaving internal payments provider-neutral', () => {
@@ -38,9 +42,13 @@ describe('provider payment status safety', () => {
     const financialModule = read('src/modules/financial-deepening/index.ts');
     const billingModule = read('src/modules/billing/index.ts');
     expect(paymentService).toContain("where({ provider_key: 'stripe', reference: sessionId })");
-    expect(financialModule).toContain("where({ provider_key: 'fawry', reference: String(fawryRef) })");
+    expect(financialModule).toContain("where({ provider_key: 'fawry', reference: callback.merchantReference })");
+    expect(financialModule).toContain('verifyFawryV2Signature');
+    expect(financialModule).toContain("updated_at: new Date()");
     expect(billingModule).toContain("select('id', 'provider_key', 'status', 'amount', 'reference', 'created_at', 'updated_at')");
     expect(billingModule).not.toContain('encrypted_value');
     expect(billingModule).not.toContain("select('id', 'tenant_id', 'patient_id', 'branch_id')");
+    expect(billingModule).toContain("stripe.payment.callback.verify");
+    expect(paymentService).toContain('currentPaidCents + paidCents > totalCents');
   });
 });

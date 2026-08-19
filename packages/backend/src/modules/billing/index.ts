@@ -15,6 +15,10 @@ import type { PermissionScope } from '@healthcare/shared/authz';
 import { logAudit } from '../../services/audit.js';
 import { listEffectiveClinicConfiguration } from '../../services/clinic-configuration.js';
 import type { InvoiceRow } from '../types.js';
+import { assertClinicProviderOperation } from '../../services/clinic-provider-capabilities.js';
+import { providerRuntimeOrFallback } from '../../services/clinic-provider-runtime.js';
+import { verifyStripeSignature } from '../../services/payment-callbacks.js';
+import { confirmStripePayment } from '../../services/payment.js';
 
 export async function registerBillingModule(app: FastifyInstance) {
   /** Scope for invoice lists: tenant-wide, branch-wide, or assigned patients. */
@@ -379,6 +383,40 @@ export async function registerBillingModule(app: FastifyInstance) {
 
     return sendPaginated(reply, invoices.map(mapInvoice), Number(total?.count || 0), query.page, query.limit);
   });
+  // Stripe sends third-party callbacks without the clinic user's browser session.
+  // The raw-body signature is the only authentication mechanism for this route.
+  app.post('/api/v1/payments/stripe/webhook', async (request, reply) => {
+    assertClinicProviderOperation('stripe', 'stripe.payment.callback.verify');
+    const rawBody = String((request as FastifyRequest & { rawBody?: string }).rawBody || '');
+    const signatureHeader = typeof request.headers['stripe-signature'] === 'string' ? request.headers['stripe-signature'] : '';
+    const body = (request.body || {}) as Record<string, unknown>;
+    const data = body.data && typeof body.data === 'object' ? body.data as Record<string, unknown> : {};
+    const session = data.object && typeof data.object === 'object' ? data.object as Record<string, unknown> : {};
+    const sessionId = typeof session.id === 'string' ? session.id : '';
+    if (!sessionId) return reply.code(400).send({ error: 'Invalid Stripe event payload' });
+
+    const candidates = await db('payment_transactions')
+      .where({ provider_key: 'stripe', reference: sessionId })
+      .select('tenant_id');
+    if (candidates.length > 1) return reply.code(409).send({ error: 'Stripe payment reference is ambiguous' });
+    const tenantId = candidates.length === 1 ? String(candidates[0].tenant_id) : undefined;
+    const runtime = await providerRuntimeOrFallback(tenantId, 'stripe', {
+      secrets: { webhookSecret: getEnv().STRIPE_WEBHOOK_SECRET || '' },
+    });
+    const webhookSecret = runtime?.secrets.webhookSecret || '';
+    if (runtime?.status === 'disabled' || !verifyStripeSignature(rawBody, signatureHeader, webhookSecret)) {
+      return reply.code(401).send({ error: 'Invalid Stripe webhook signature' });
+    }
+    if (body.type !== 'checkout.session.completed' && body.type !== 'checkout.session.async_payment_succeeded') {
+      return reply.code(200).send({ received: true });
+    }
+    if (!tenantId) return reply.code(404).send({ error: 'Stripe payment transaction not found' });
+
+    const confirmed = await confirmStripePayment(sessionId);
+    if (!confirmed) return reply.code(409).send({ error: 'Stripe payment could not be reconciled' });
+    return reply.code(200).send({ received: true });
+  });
+
   // Create Stripe checkout session
   app.post('/api/v1/payments/stripe/create', {
     preHandler: [authenticate, authorize('billing.create')],

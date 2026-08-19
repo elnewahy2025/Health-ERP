@@ -6,6 +6,7 @@ import { db } from '../core/database.js';
 import { logAudit } from './audit.js';
 import { providerRuntimeOrFallback } from './clinic-provider-runtime.js';
 import { assertClinicProviderOperation } from './clinic-provider-capabilities.js';
+import { moneyToCents } from './payment-callbacks.js';
 
 const DEFAULT_CURRENCY = String(clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '');
 
@@ -107,9 +108,15 @@ export async function createStripePayment(invoiceId: string, amount: number, cur
     const stripeSecretKey = runtime?.secrets.secretKey;
     if (!stripeSecretKey) return { success: false, error: 'Stripe is not configured for this clinic.' };
     const stripe = require('stripe')(stripeSecretKey);
-    const invoice = await db('invoices').where({ id: invoiceId, tenant_id: tenantId }).first();
+    const invoice = await db('invoices').where({ id: invoiceId, tenant_id: tenantId }).whereNull('deleted_at').first();
     if (!invoice) return { success: false, error: 'Invoice not found' };
-    const patient = await db('patients').where({ id: invoice.patient_id }).first();
+    const amountCents = moneyToCents(amount);
+    const totalCents = moneyToCents(invoice.total);
+    const paidCents = moneyToCents(invoice.paid);
+    if (amountCents === null || totalCents === null || paidCents === null || paidCents + amountCents > totalCents) {
+      return { success: false, error: 'Payment amount exceeds the invoice amount due.' };
+    }
+    const patient = await db('patients').where({ id: invoice.patient_id, tenant_id: tenantId }).first();
     const tenant = await db('tenants').where({ id: tenantId }).first();
     const clinicName = (await listEffectiveClinicConfiguration(tenantId))
       .find((entry) => entry.key === 'clinic.profile.display_name')?.value;
@@ -132,7 +139,7 @@ export async function createStripePayment(invoiceId: string, amount: number, cur
       success_url: `${env.APP_URL}/billing?payment=success&invoice=${invoiceId}`,
       cancel_url: `${env.APP_URL}/billing?payment=cancelled&invoice=${invoiceId}`,
     });
-    await db('payment_transactions').insert({ tenant_id: tenantId, invoice_id: invoiceId, amount, method: 'online', provider_key: 'stripe', reference: session.id, notes: 'Stripe checkout', status: 'pending' });
+    await db('payment_transactions').insert({ tenant_id: tenantId, invoice_id: invoiceId, amount, method: 'online', provider_key: 'stripe', reference: session.id, notes: 'Stripe checkout', status: 'pending', updated_at: new Date() });
     await logAudit({ tenantId, action: 'payment.stripe.create', entityType: 'invoice', entityId: invoiceId, metadata: { amount, currency } });
     return { success: true, paymentId: session.id, redirectUrl: session.url };
   } catch (err: any) {
@@ -140,32 +147,79 @@ export async function createStripePayment(invoiceId: string, amount: number, cur
   }
 }
 
-// Confirm Stripe payment (webhook)
+// Confirm Stripe payment (webhook). This function is intentionally idempotent:
+// one provider transaction can finalize one invoice payment at most once.
 export async function confirmStripePayment(sessionId: string): Promise<boolean> {
   const env = getEnv();
   try {
-    const payment = await db('payment_transactions').where({ provider_key: 'stripe', reference: sessionId }).select('tenant_id').first() as { tenant_id?: string } | undefined;
+    const payment = await db('payment_transactions')
+      .where({ provider_key: 'stripe', reference: sessionId })
+      .select('id', 'tenant_id', 'invoice_id', 'amount', 'status')
+      .first() as {
+        id: string;
+        tenant_id: string;
+        invoice_id: string | null;
+        amount: number | string;
+        status: string;
+      } | undefined;
+    if (!payment?.tenant_id || !payment.invoice_id) return false;
+
     assertClinicProviderOperation('stripe', 'stripe.payment.confirm');
-    const runtime = await providerRuntimeOrFallback(payment?.tenant_id, 'stripe', {
+    const runtime = await providerRuntimeOrFallback(payment.tenant_id, 'stripe', {
       secrets: { secretKey: env.STRIPE_SECRET_KEY || '' },
     });
     if (runtime?.status === 'disabled') return false;
     const stripeSecretKey = runtime?.secrets.secretKey;
     if (!stripeSecretKey) return false;
+
     const stripe = require('stripe')(stripeSecretKey);
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     if (session.payment_status !== 'paid') return false;
-    const { invoiceId, tenantId } = session.metadata;
-    const amountPaid = session.amount_total / 100;
-    const invoice = await db('invoices').where({ id: invoiceId }).first();
-    if (!invoice) return false;
-    const newPaid = Number(invoice.paid) + amountPaid;
-    const newDue = Number(invoice.total) - newPaid;
-    await db('invoices').where({ id: invoiceId }).update({ paid: newPaid, due: Math.max(0, newDue), status: newDue <= 0 ? 'paid' : 'partial', payment_method: 'online', paid_at: new Date() });
-    await db('payment_transactions').where({ provider_key: 'stripe', reference: sessionId }).update({ status: 'completed' });
-    await logAudit({ tenantId, action: 'payment.stripe.confirm', entityType: 'invoice', entityId: invoiceId });
+    const metadata = session.metadata && typeof session.metadata === 'object' ? session.metadata as Record<string, string> : {};
+    if (metadata.tenantId !== payment.tenant_id || metadata.invoiceId !== payment.invoice_id) return false;
+
+    const transactionAmountCents = moneyToCents(payment.amount);
+    const providerAmountCents = moneyToCents(session.amount_total === null ? null : Number(session.amount_total) / 100);
+    if (transactionAmountCents === null || providerAmountCents === null || transactionAmountCents !== providerAmountCents) return false;
+
+    await db.transaction(async (trx) => {
+      const lockedPayment = await trx('payment_transactions')
+        .where({ id: payment.id, tenant_id: payment.tenant_id, provider_key: 'stripe', reference: sessionId })
+        .forUpdate()
+        .first() as { status: string; invoice_id: string | null; amount: number | string } | undefined;
+      if (!lockedPayment || lockedPayment.invoice_id !== payment.invoice_id) throw new Error('Stripe payment transaction changed');
+      if (lockedPayment.status === 'completed') return;
+      if (lockedPayment.status !== 'pending') throw new Error('Stripe payment transaction is not pending');
+
+      const invoice = await trx('invoices')
+        .where({ id: lockedPayment.invoice_id, tenant_id: payment.tenant_id })
+        .whereNull('deleted_at')
+        .forUpdate()
+        .first() as { id: string; total: number | string; paid: number | string } | undefined;
+      if (!invoice) throw new Error('Invoice not found');
+
+      const totalCents = moneyToCents(invoice.total);
+      const currentPaidCents = moneyToCents(invoice.paid);
+      const paidCents = moneyToCents(lockedPayment.amount);
+      if (totalCents === null || currentPaidCents === null || paidCents === null || currentPaidCents + paidCents > totalCents) {
+        throw new Error('Stripe payment amount exceeds invoice due amount');
+      }
+
+      const newPaidCents = currentPaidCents + paidCents;
+      const newDueCents = totalCents - newPaidCents;
+      await trx('invoices').where({ id: invoice.id, tenant_id: payment.tenant_id }).update({
+        paid: newPaidCents / 100,
+        due: newDueCents / 100,
+        status: newDueCents === 0 ? 'paid' : 'partial',
+        payment_method: 'online',
+        paid_at: new Date(),
+      });
+      await trx('payment_transactions').where({ id: payment.id, tenant_id: payment.tenant_id, status: 'pending' }).update({ status: 'completed' });
+    });
+
+    await logAudit({ tenantId: payment.tenant_id, action: 'payment.stripe.confirm', entityType: 'invoice', entityId: payment.invoice_id });
     return true;
-  } catch (err: any) {
+  } catch {
     return false;
   }
 }

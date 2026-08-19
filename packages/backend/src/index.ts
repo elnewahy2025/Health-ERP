@@ -103,6 +103,19 @@ async function buildApp() {
     logger: loggerOptions,
   });
 
+  // Preserve the exact JSON bytes for signed provider callbacks while keeping
+  // the normal parsed object available to existing handlers.
+  app.removeContentTypeParser('application/json');
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (request, body, done) => {
+    const rawRequest = request as FastifyRequest & { rawBody?: string };
+    rawRequest.rawBody = String(body);
+    try {
+      done(null, JSON.parse(String(body)));
+    } catch (error) {
+      done(error as Error, undefined);
+    }
+  });
+
   // Plugins
   await app.register(cookie, { secret: env.CSRF_SECRET || 'csrf-secret', hook: 'onRequest' });
   await app.register(cors, { origin: env.CORS_ORIGIN, credentials: true });

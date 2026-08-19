@@ -14,6 +14,7 @@ import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/a
 import { ForbiddenError } from '@healthcare/shared/errors';
 import { providerRuntimeOrFallback } from '../../services/clinic-provider-runtime.js';
 import { assertClinicProviderOperation } from '../../services/clinic-provider-capabilities.js';
+import { mapFawryStatus, moneyToCents, normalizeFawryCallback, verifyFawryV2Signature } from '../../services/payment-callbacks.js';
 
 export async function registerFinancialDeepeningModule(app: FastifyInstance) {
   const env = getEnv();
@@ -410,27 +411,76 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
 
   app.post('/api/v1/payments/fawry/callback', async (request, reply) => {
     assertClinicProviderOperation('fawry', 'fawry.payment.callback.verify');
-    const body = request.body as Record<string, unknown>;
-    const fawryRef = body.fawryRef || body.referenceNumber || body.merchantRefNumber;
-    const storedPayment = fawryRef
-      ? await db('payment_transactions').where({ reference: String(fawryRef) }).select('tenant_id').first() as { tenant_id?: string } | undefined
-      : undefined;
-    const fawryRuntime = await providerRuntimeOrFallback(storedPayment?.tenant_id, 'fawry', {
+    const callback = normalizeFawryCallback((request.body || {}) as Record<string, unknown>);
+    if (!callback) return reply.status(400).send({ error: 'Invalid Fawry callback payload' });
+
+    const candidates = await db('payment_transactions')
+      .where({ provider_key: 'fawry', reference: callback.merchantReference })
+      .select('id', 'tenant_id', 'invoice_id', 'amount', 'status');
+    if (candidates.length !== 1) return reply.status(404).send({ error: 'Fawry payment transaction not found' });
+    const candidate = candidates[0] as {
+      id: string;
+      tenant_id: string;
+      invoice_id: string | null;
+      amount: number | string;
+      status: string;
+    };
+
+    const fawryRuntime = await providerRuntimeOrFallback(candidate.tenant_id, 'fawry', {
       secrets: { secureKey: env.FAWRY_SECURITY_KEY || '' },
     });
-    // Verify Fawry signature presence using the tenant's configured secret when available.
-    const fawrySecurityKey = fawryRuntime?.secrets.secureKey || fawryRuntime?.secrets.hashKey;
-    const receivedSignature = (request.headers['x-fawry-signature'] as string) || (body as Record<string, unknown>).signature;
-    if (fawrySecurityKey && !receivedSignature) {
-      return reply.status(401).send({ error: 'Missing signature' });
+    const fawrySecurityKey = fawryRuntime?.secrets.secureKey || '';
+    if (fawryRuntime?.status === 'disabled' || !fawrySecurityKey || !verifyFawryV2Signature(callback, fawrySecurityKey)) {
+      return reply.status(401).send({ error: 'Invalid Fawry callback signature' });
     }
-    const status = body.status || body.paymentStatus;
 
-    if (fawryRef && status === 'PAID') {
-      await db('payment_transactions')
-        .where({ provider_key: 'fawry', reference: String(fawryRef) })
-        .update({ status: 'completed' });
+    const normalizedStatus = mapFawryStatus(callback.status);
+    if (!normalizedStatus) return reply.status(400).send({ error: 'Unsupported Fawry payment status' });
+    const transactionAmountCents = moneyToCents(candidate.amount);
+    const callbackAmountCents = moneyToCents(callback.orderAmount);
+    if (transactionAmountCents === null || callbackAmountCents === null || transactionAmountCents !== callbackAmountCents) {
+      return reply.status(409).send({ error: 'Fawry callback amount does not match the recorded transaction' });
     }
+
+    await db.transaction(async (trx) => {
+      const payment = await trx('payment_transactions')
+        .where({ id: candidate.id, tenant_id: candidate.tenant_id, provider_key: 'fawry', reference: callback.merchantReference })
+        .forUpdate()
+        .first() as { id: string; invoice_id: string | null; amount: number | string; status: string } | undefined;
+      if (!payment) throw new Error('Fawry payment transaction changed');
+      if (payment.status === 'completed' && normalizedStatus === 'completed') return;
+      if (payment.status === 'completed' && normalizedStatus !== 'completed') return;
+
+      if (normalizedStatus === 'completed') {
+        if (!payment.invoice_id) throw new Error('Fawry payment is not linked to an invoice');
+        const invoice = await trx('invoices')
+          .where({ id: payment.invoice_id, tenant_id: candidate.tenant_id })
+          .whereNull('deleted_at')
+          .forUpdate()
+          .first() as { id: string; total: number | string; paid: number | string } | undefined;
+        if (!invoice) throw new Error('Invoice not found');
+        const totalCents = moneyToCents(invoice.total);
+        const currentPaidCents = moneyToCents(invoice.paid);
+        const paidCents = moneyToCents(payment.amount);
+        if (totalCents === null || currentPaidCents === null || paidCents === null || currentPaidCents + paidCents > totalCents) {
+          throw new Error('Fawry payment amount exceeds invoice due amount');
+        }
+        const newPaidCents = currentPaidCents + paidCents;
+        const newDueCents = totalCents - newPaidCents;
+        await trx('invoices').where({ id: invoice.id, tenant_id: candidate.tenant_id }).update({
+          paid: newPaidCents / 100,
+          due: newDueCents / 100,
+          status: newDueCents === 0 ? 'paid' : 'partial',
+          payment_method: 'fawry',
+          paid_at: new Date(),
+        });
+      }
+      await trx('payment_transactions').where({ id: payment.id, tenant_id: candidate.tenant_id }).update({
+        status: normalizedStatus,
+        updated_at: new Date(),
+      });
+    });
+
     return reply.status(200).send({ status: 'OK' });
   });
 
@@ -462,8 +512,14 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
       customerEmail: z.string().email().optional(),
     }).parse(request.body);
 
-    const invoice = await db('invoices').where({ id: invoiceId, tenant_id: tenantId }).first();
+    const invoice = await db('invoices').where({ id: invoiceId, tenant_id: tenantId }).whereNull('deleted_at').first();
     if (!invoice) return sendError(reply, 'Invoice not found', 404);
+    const amountCents = moneyToCents(amount);
+    const totalCents = moneyToCents(invoice.total);
+    const paidCents = moneyToCents(invoice.paid);
+    if (amountCents === null || totalCents === null || paidCents === null || paidCents + amountCents > totalCents) {
+      return sendError(reply, 'Payment amount exceeds the invoice amount due.', 409);
+    }
 
     const runtime = await providerRuntimeOrFallback(tenantId, 'fawry', {
       config: { merchantCode: env.FAWRY_MERCHANT_CODE || '' },
@@ -482,6 +538,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
       provider_key: 'fawry',
       reference: referenceNumber,
       status: 'pending',
+      updated_at: new Date(),
       notes: `Fawry payment for ${customerName} (${customerPhone})`,
     }).returning('*');
 

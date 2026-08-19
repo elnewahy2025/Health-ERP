@@ -629,6 +629,8 @@ export async function csrfValidation(request: FastifyRequest, reply: FastifyRepl
     url.includes('/portal/request-access') || url.includes('/portal/otp/request') ||
     url.includes('/portal/verify') ||
     url.includes('/booking/request') ||
+    url.includes('/payments/fawry/callback') ||
+    url.includes('/payments/stripe/webhook') ||
     (url.includes('/tenants') && method === 'POST')
   ) return;
 

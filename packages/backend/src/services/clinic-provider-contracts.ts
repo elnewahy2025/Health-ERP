@@ -77,7 +77,7 @@ export const CLINIC_PROVIDER_CONTRACTS: Readonly<Record<string, ClinicProviderCo
       vendor_authentication: unverifiedVendorAuthentication,
       business_operation: unsupportedBusinessOperation,
     },
-    runtimeOperationKeys: ['stripe.checkout.create', 'stripe.payment.confirm'],
+    runtimeOperationKeys: ['stripe.checkout.create', 'stripe.payment.confirm', 'stripe.payment.callback.verify'],
   },
   twilio: {
     providerKey: 'twilio',
