@@ -3,7 +3,7 @@
 **Project:** Health-ERP Clinic Management System  
 **Status date:** 19 August 2026  
 **Repository branch:** `main`  
-**Latest implementation commit:** `7e760b9`
+**Latest implementation commit:** `da5f95a`
 
 ## Executive status
 
@@ -37,10 +37,12 @@ Administrators can now complete regional configuration progressively and manage 
 | `602a162` | Provider-payment access hardening | Corrected invoice scope lookup to use patient branch data, excluded soft-deleted invoices, added patient tenant predicates, implemented department-aware appointment checks, and added executable route-level isolation tests. |
 | `1a72726` | Shared department-scope enforcement | Replaced invalid `patients.department_id` assumptions with tenant-scoped appointment/doctor department predicates across patient-linked policies; corrected patient, appointment, and EMR scope resolvers. |
 | `7e760b9` | Billing department-scope routing | Ensured billing department grants use the shared department policy instead of assigned-patient filtering. |
+| `fc5364b` | Provider callback hardening | Added Stripe raw-body signature verification, Fawry V2 SHA-256 verification, tenant/provider/reference binding, exact amount reconciliation, atomic invoice updates, idempotent finalization, CSRF callback exemptions, and callback route tests. |
+| `da5f95a` | Fawry callback contract tightening | Requires the documented Fawry V2 payment and order amount fields before signature verification. |
 
 ## Database and security model
 
-Migrations `053_modular_clinic_settings.ts`, `054_provider_live_validation_policy.ts`, and `055_payment_provider_status.ts` create or extend the following structures with `hasTable` and `hasColumn` guards:
+Migrations `053_modular_clinic_settings.ts`, `054_provider_live_validation_policy.ts`, `055_payment_provider_status.ts`, and `056_payment_callback_hardening.ts` create or extend the following structures with `hasTable` and `hasColumn` guards:
 
 | Table or extension | Purpose |
 |---|---|
@@ -49,7 +51,7 @@ Migrations `053_modular_clinic_settings.ts`, `054_provider_live_validation_polic
 | `tenant_provider_connections` | Tenant-wide provider connection metadata: provider, environment, status, nonsecret configuration, validation status, and error metadata. |
 | `clinic_integration_secrets` extensions | Connection linkage, secret version, active state, rotation metadata, expiry, and last-used metadata. Existing encrypted secrets are preserved. |
 | `audit_logs` extensions | Module, provider, scope, and request context fields for future audit correlation. |
-| `payment_transactions` extension | Migration 055 adds nullable `provider_key`, indexes it, and backfills existing Fawry and Stripe rows. Internal cash/card transactions remain `NULL`. |
+| `payment_transactions` extension | Migration 055 adds nullable `provider_key`, indexes it, and backfills existing Fawry and Stripe rows. Migration 056 adds nullable `updated_at` with a created-time backfill and a tenant/provider/reference lookup index. Internal cash/card transactions remain `NULL`. |
 
 Existing tenants receive an incomplete generic regional profile. Existing integration secrets are linked to tenant provider connection records when possible. The migration `down()` function does not delete tenant configuration, provider links, secrets, or audit history.
 
@@ -82,6 +84,8 @@ All routes below use the existing `settings.view` or `settings.manage` permissio
 | PUT | `/api/v1/clinic-providers/:providerKey/secrets/:secretKey` | `settings.manage` | Encrypts and rotates one provider secret. |
 | DELETE | `/api/v1/clinic-providers/:providerKey/secrets/:secretKey` | `settings.manage` | Revokes one provider secret without deleting tenant history. |
 | GET | `/api/v1/invoices/:invoiceId/provider-payments` | `billing.view` | Returns tenant-scoped external payment history with only `id`, `providerKey`, `status`, `amount`, `reference`, `createdAt`, and `updatedAt`. |
+| POST | `/api/v1/payments/fawry/callback` | Provider signature | Verifies the documented Fawry V2 SHA-256 signature, binds the callback to one tenant/provider transaction, reconciles amount, and finalizes idempotently. |
+| POST | `/api/v1/payments/stripe/webhook` | Provider signature | Verifies the Stripe-Signature raw-body HMAC, binds the event to one Stripe transaction, and delegates to idempotent Checkout confirmation. |
 
 Two namespaced `/api/v1/clinic-provider-configurations` routes remain as internal-compatible aliases for the initial implementation slice.
 
@@ -102,9 +106,9 @@ The following paths now use tenant-scoped runtime credentials when available:
 | Operational path | Tenant resolution |
 |---|---|
 | Stripe checkout creation | Uses the authenticated billing tenant ID. |
-| Stripe confirmation | Recovers tenant ID from the stored payment transaction before selecting the Stripe secret. |
-| Fawry payment creation | Uses the authenticated billing tenant ID and returns a clear readiness error if merchant configuration is incomplete. |
-| Fawry callback secret selection | Recovers tenant ID from the stored payment reference when available. |
+| Stripe confirmation | Recovers tenant ID from the stored Stripe transaction before selecting the Stripe secret, verifies session metadata and amount, and finalizes invoice/payment state inside one transaction. |
+| Fawry payment creation | Uses the authenticated billing tenant ID, rejects amounts above invoice due, and returns a clear readiness error if merchant configuration is incomplete. |
+| Fawry callback secret selection | Resolves exactly one Fawry transaction by provider and merchant reference before loading that tenant’s secure key. |
 | SMS notifications and reminders | Passes the notification tenant ID into the Twilio runtime resolver. |
 | Outbound voice and conferences | Uses the tenant ID already carried by the voice route. |
 | Twilio voice status callback | Recovers tenant ID from the stored voice call before validating the callback signature. |
@@ -144,15 +148,19 @@ The billing page now exposes separate permission-gated Stripe checkout and Fawry
 
 ## Validation results
 
-The provider-payment and department-scope slices were validated successfully. Shared package build passed. Backend and frontend TypeScript checks passed. Backend tests passed with **35 passed test files, 2 skipped integration files, 255 tests passed, and 6 skipped tests**. Frontend tests passed with **13 test files and 49 tests passed**. The added unit coverage includes patient-linked and appointment department-policy predicates, while the executable provider-payment route tests cover permission denial, cross-tenant 404 behavior, branch scope, department scope, assigned-patient scope, and nonsecret response fields. `git diff --check` passed. The implementation is committed in `1a72726` and `7e760b9`; the documentation update is the next commit.
+The provider-payment, department-scope, and callback-hardening slices were validated successfully. Shared package build passed. Backend and frontend TypeScript checks passed. Backend tests passed with **37 passed test files, 2 skipped integration files, 262 passed tests, and 6 skipped tests**. Frontend tests passed with **13 test files and 49 tests passed**. Callback-specific executable tests cover valid and invalid Fawry signatures, amount mismatch rejection, idempotent repeated Fawry callbacks, invalid Stripe signatures, verified Stripe completion events, and nonsecret provider history. `git diff --check` passed. The implementation is committed in `fc5364b` and `da5f95a`; this documentation update is the next commit.
 
 The backend test run still prints existing non-failing warnings about Redis connection attempts in the isolated test environment and the audit test’s intentionally swallowed database-write failure. These warnings did not fail the suite and were not introduced by the modular settings work.
 
 ## Rollback and deployment notes
 
-Deploy migrations 053 and 054 before the provider-configuration build, and migration 055 before deploying the payment-status build. Migration 055 is forward-safe: it adds a nullable indexed column, backfills only known Fawry/Stripe provider keys, and its `down()` path does not drop the column or delete payment history. A rollback of application code therefore does not require deleting the new column or transactions. If the application build must be reverted, the existing legacy clinic settings facade, legacy environment provider fallback, and pre-existing workflows remain available.
+Deploy migrations 053 and 054 before the provider-configuration build, migration 055 before deploying the payment-status build, and migration 056 before enabling signed callback finalization. Migrations 055 and 056 are forward-safe: they add nullable/indexed state, backfill only safe historical values, and their `down()` paths do not drop columns or delete payment history. A rollback of application code therefore does not require deleting the new columns or transactions. If the application build must be reverted, the existing legacy clinic settings facade, legacy environment provider fallback, and pre-existing workflows remain available. Configure Stripe webhook secrets and Fawry secure keys per tenant before enabling provider callback delivery; invalid, unsigned, ambiguous, or amount-mismatched callbacks are rejected without changing invoice state.
 
 Before production use, set a strong `ENCRYPTION_KEY` and back up the PostgreSQL database. Existing provider secrets should be rotated through Settings after migration if their provenance is uncertain. Use sandbox environments first, validate provider readiness, and then switch the provider environment to production only after the vendor account is ready. Run `npm run test:billing-integration -w packages/backend` against a dedicated PostgreSQL test database in CI or staging; the sandbox used for this validation had no PostgreSQL listener, so the migration-backed integration suite was not executed here.
+
+## Provider callback references
+
+The callback implementation follows [Stripe webhook signature verification guidance](https://docs.stripe.com/webhooks) and [Stripe payment webhook handling guidance](https://docs.stripe.com/webhooks/handling-payment-events). Fawry callback normalization follows the [Fawry Server-to-Server Notification V2 contract](https://developer.fawrystaging.com/docs/sdks/payment-notifications/server-notification-v2), including its SHA-256 `messageSignature`, documented amount fields, order statuses, and retry behavior for non-200 responses. The older [Fawry Server-to-Server Notification V1 contract](https://developer.fawrystaging.com/docs/payment-notifications/server-notification-v1) is not silently treated as V2; its MD5 GET signature format requires a separate explicit compatibility implementation.
 
 ## Next recommended implementation slice
 
