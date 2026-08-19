@@ -20,6 +20,7 @@ export interface AiProvider {
   provider: string;
   apiEndpoint?: string;
   config: Record<string, unknown>;
+  apiKeyConfigured?: boolean;
   isActive: boolean;
   createdAt: string;
 }
@@ -48,6 +49,8 @@ export interface AiRequest {
   latencyMs: number;
   status: string;
   error?: string;
+  errorCode?: string;
+  idempotencyKey?: string;
   source: string;
   createdAt: string;
 }
@@ -84,8 +87,20 @@ export interface CreateAiProviderPayload {
   name: string;
   provider: string;
   apiEndpoint?: string;
+  apiKey?: string;
   config?: Record<string, unknown>;
   isActive?: boolean;
+}
+
+export interface AiChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface AiChatResult extends AiRequest {
+  response: string;
+  modelName: string;
+  replayed: boolean;
 }
 
 export const aiHubApi = {
@@ -109,6 +124,6 @@ export const aiHubApi = {
     apiClient.get('/ai/requests', { params }).then((r) => r.data.data as AiRequest[]),
   getCosts: (params?: { days?: number }) =>
     apiClient.get('/ai/costs', { params }).then((r) => r.data.data as AiCostData),
-  chat: (data: { assistantId?: string; modelId?: string; prompt: string; source?: string }) =>
-    apiClient.post('/ai/chat', data).then((r) => r.data.data),
+  chat: (data: { assistantId?: string; modelId?: string; prompt: string; messages?: AiChatMessage[]; source?: string; idempotencyKey?: string }) =>
+    apiClient.post('/ai/chat', data).then((r) => r.data.data as AiChatResult),
 };

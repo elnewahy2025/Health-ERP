@@ -365,9 +365,10 @@ export const createBreachLogSchema = z.object({
 
 // ── AI Hub ──
 export const createAiProviderSchema = z.object({
-  name: z.string().min(1).max(200),
-  provider: z.string().min(1).max(100),
+  name: z.string().trim().min(1).max(200),
+  provider: z.string().trim().min(1).max(100),
   apiEndpoint: z.string().url().optional(),
+  apiKey: z.string().min(1).max(1000).optional(),
   config: z.record(z.unknown()).optional(),
   isActive: z.boolean().optional(),
 });
@@ -400,8 +401,16 @@ export const updateAiAssistantSchema = createAiAssistantSchema.partial();
 export const chatCompletionSchema = z.object({
   assistantId: z.string().uuid().optional(),
   modelId: z.string().uuid().optional(),
-  prompt: z.string().min(1).max(50000),
-  source: z.string().max(50).optional(),
+  prompt: z.string().trim().min(1).max(50000),
+  messages: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string().trim().min(1).max(20000),
+  })).max(40).optional(),
+  source: z.string().trim().max(50).optional(),
+  idempotencyKey: z.string().trim().min(1).max(180).optional(),
+}).refine((value) => Boolean(value.assistantId || value.modelId), {
+  message: 'assistantId or modelId is required',
+  path: ['assistantId'],
 });
 
 // ── BI Dashboards ──

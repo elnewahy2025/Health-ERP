@@ -21,6 +21,7 @@
     "test:instapay-integration": "tsx scripts/run-postgres-integration.ts instapay",
     "test:automation-integration": "tsx scripts/run-postgres-integration.ts automation",
     "test:provider-verification-integration": "tsx scripts/run-postgres-integration.ts providerVerification",
+    "test:ai-chat-integration": "tsx scripts/run-postgres-integration.ts aiChat",
     "test:watch": "vitest",
     "migrate": "npx tsx src/core/migrate.ts",
     "migrate:make": "knex migrate:make --knexfile knexfile.ts",

@@ -4,6 +4,7 @@ import {
   aiHubApi,
   type AiAssistant,
   type AiProvider,
+  type AiModel,
   type AiRequest,
   type AiCostData,
 } from '../lib/api';
@@ -25,10 +26,12 @@ import {
   DollarSign,
   Activity,
   AlertTriangle,
+  MessageSquare,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useAuth } from '../stores/authStore';
 
-type TabType = 'assistants' | 'providers' | 'requests' | 'costs';
+type TabType = 'chat' | 'assistants' | 'providers' | 'requests' | 'costs';
 
 const CATEGORY_OPTIONS = [
   { value: 'general', label: 'General' },
@@ -40,10 +43,12 @@ const CATEGORY_OPTIONS = [
 
 export default function AiHubPage() {
   const { t } = useTranslation();
+  const { can } = useAuth();
 
   const [tab, setTab] = useState<TabType>('assistants');
   const [assistants, setAssistants] = useState<AiAssistant[]>([]);
   const [providers, setProviders] = useState<AiProvider[]>([]);
+  const [models, setModels] = useState<AiModel[]>([]);
   const [requests, setRequests] = useState<AiRequest[]>([]);
   const [costData, setCostData] = useState<AiCostData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,7 +69,15 @@ export default function AiHubPage() {
     name: '',
     provider: '',
     apiEndpoint: '',
+    apiKey: '',
   });
+  const [chatAssistantId, setChatAssistantId] = useState('none');
+  const [chatModelId, setChatModelId] = useState('none');
+  const [chatPrompt, setChatPrompt] = useState('');
+  const [chatResponse, setChatResponse] = useState<string | null>(null);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [chatRequest, setChatRequest] = useState<AiRequest | null>(null);
+  const [chatSubmitting, setChatSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -74,21 +87,24 @@ export default function AiHubPage() {
       setLoading(true);
       setError(null);
       try {
-        const [assistantRes, providerRes, requestRes, costRes] =
-          await Promise.allSettled([
-            aiHubApi.listAssistants(),
-            aiHubApi.listProviders(),
-            aiHubApi.listRequests(),
-            aiHubApi.getCosts(),
-          ]);
+          const [assistantRes, providerRes, modelRes, requestRes, costRes] =
+            await Promise.allSettled([
+              aiHubApi.listAssistants(),
+              aiHubApi.listProviders(),
+              aiHubApi.listModels(),
+              aiHubApi.listRequests(),
+              aiHubApi.getCosts(),
+            ]);
         if (cancelled) return;
         if (assistantRes.status === 'fulfilled') setAssistants(assistantRes.value);
         if (providerRes.status === 'fulfilled') setProviders(providerRes.value);
+        if (modelRes.status === 'fulfilled') setModels(modelRes.value);
         if (requestRes.status === 'fulfilled') setRequests(requestRes.value);
         if (costRes.status === 'fulfilled') setCostData(costRes.value);
         const allFailed =
           assistantRes.status === 'rejected' &&
-          providerRes.status === 'rejected';
+          providerRes.status === 'rejected' &&
+          modelRes.status === 'rejected';
         if (allFailed) {
           setError(t('aiHub.loadFailed'));
         }
@@ -180,10 +196,11 @@ export default function AiHubPage() {
         name: sanitizeString(providerForm.name),
         provider: sanitizeString(providerForm.provider),
         apiEndpoint: providerForm.apiEndpoint || undefined,
+        apiKey: providerForm.apiKey || undefined,
       });
       toast.success(t('common.created'));
       setShowProviderModal(false);
-      setProviderForm({ name: '', provider: '', apiEndpoint: '' });
+      setProviderForm({ name: '', provider: '', apiEndpoint: '', apiKey: '' });
       setFormErrors({});
       const updated = await aiHubApi.listProviders();
       setProviders(updated);
@@ -191,6 +208,37 @@ export default function AiHubPage() {
       toast.error(t('common.error'));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleChat = async () => {
+    const prompt = chatPrompt.trim();
+    if (!prompt) {
+      setChatError(t('aiHub.chatPromptRequired'));
+      return;
+    }
+    if (chatAssistantId === 'none' && chatModelId === 'none') {
+      setChatError(t('aiHub.chatSelectionRequired'));
+      return;
+    }
+    setChatSubmitting(true);
+    setChatError(null);
+    try {
+      const result = await aiHubApi.chat({
+        assistantId: chatAssistantId === 'none' ? undefined : chatAssistantId,
+        modelId: chatModelId === 'none' ? undefined : chatModelId,
+        prompt,
+        source: 'ai_hub_chat',
+        idempotencyKey: crypto.randomUUID(),
+      });
+      setChatResponse(result.response);
+      setChatRequest(result);
+      setRequests((current) => [result, ...current.filter((item) => item.id !== result.id)]);
+      setChatPrompt('');
+    } catch {
+      setChatError(t('aiHub.chatUnavailable'));
+    } finally {
+      setChatSubmitting(false);
     }
   };
 
@@ -207,8 +255,17 @@ export default function AiHubPage() {
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.provider.toLowerCase().includes(search.toLowerCase())
   );
+  const chatAssistantOptions = [
+    { value: 'none', label: t('aiHub.noAssistant') },
+    ...assistants.filter((assistant) => assistant.isActive).map((assistant) => ({ value: assistant.id, label: assistant.name })),
+  ];
+  const chatModelOptions = [
+    { value: 'none', label: t('aiHub.chooseModel') },
+    ...models.filter((model) => model.isActive && ['chat', 'multimodal'].includes(model.capabilities)).map((model) => ({ value: model.id, label: model.displayName || model.modelName })),
+  ];
 
   const tabs: { key: TabType; icon: React.ReactNode; label: string; count: number }[] = [
+    ...(can('ai_hub.create') ? [{ key: 'chat' as const, icon: <MessageSquare className="w-4 h-4" />, label: t('aiHub.chat'), count: 0 }] : []),
     { key: 'assistants', icon: <Bot className="w-4 h-4" />, label: t('aiHub.assistants'), count: assistants.length },
     { key: 'providers', icon: <Cpu className="w-4 h-4" />, label: t('aiHub.providers'), count: providers.length },
     { key: 'requests', icon: <Activity className="w-4 h-4" />, label: t('aiHub.requests'), count: requests.length },
@@ -241,12 +298,12 @@ export default function AiHubPage() {
             {t('aiHub.providerCount', { count: providers.length })}
           </p>
         </div>
-        {tab === 'assistants' && (
+        {tab === 'assistants' && can('ai_hub.create') && (
           <Button onClick={() => { setShowAssistantModal(true); setFormErrors({}); }}>
             <Plus className="w-4 h-4 mr-1" /> {t('aiHub.newAssistant')}
           </Button>
         )}
-        {tab === 'providers' && (
+        {tab === 'providers' && can('ai_hub.create') && (
           <Button onClick={() => { setShowProviderModal(true); setFormErrors({}); }}>
             <Plus className="w-4 h-4 mr-1" /> {t('aiHub.newProvider')}
           </Button>
@@ -271,7 +328,7 @@ export default function AiHubPage() {
       </div>
 
       {/* Search */}
-      {tab !== 'costs' && (
+      {tab !== 'costs' && tab !== 'chat' && (
         <div className="mb-4 max-w-md">
           <Input
             
@@ -283,6 +340,59 @@ export default function AiHubPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </div>
+      )}
+
+      {/* Chat Tab */}
+      {tab === 'chat' && (
+        <div className="max-w-4xl space-y-4">
+          <div className="bg-white rounded-lg border p-5 dark:bg-gray-900 dark:border-gray-800">
+            <h2 className="text-lg font-semibold flex items-center gap-2"><MessageSquare className="w-5 h-5" /> {t('aiHub.chatTitle')}</h2>
+            <p className="text-sm text-gray-500 mt-1">{t('aiHub.chatDescription')}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+              <Select
+                label={t('aiHub.assistant')}
+                value={chatAssistantId}
+                onChange={(e) => {
+                  const selected = e.target.value;
+                  setChatAssistantId(selected);
+                  const assistant = assistants.find((item) => item.id === selected);
+                  if (assistant?.modelId) setChatModelId(assistant.modelId);
+                }}
+                options={chatAssistantOptions}
+              />
+              <Select
+                label={t('aiHub.model')}
+                value={chatModelId}
+                onChange={(e) => setChatModelId(e.target.value)}
+                options={chatModelOptions}
+              />
+            </div>
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('aiHub.prompt')}</label>
+              <textarea
+                className="w-full border rounded-lg p-3 text-sm min-h-[140px] dark:bg-gray-950 dark:border-gray-700"
+                value={chatPrompt}
+                onChange={(e) => { setChatPrompt(e.target.value); setChatError(null); }}
+                maxLength={50000}
+                placeholder={t('aiHub.promptPlaceholder')}
+              />
+            </div>
+            <div className="flex items-center justify-between mt-4 gap-4">
+              <p className="text-xs text-gray-500">{t('aiHub.configurationHint')}</p>
+              <Button onClick={handleChat} loading={chatSubmitting}>{t('aiHub.sendPrompt')}</Button>
+            </div>
+            {chatError && <p className="text-sm text-red-600 mt-3">{chatError}</p>}
+          </div>
+          {chatResponse && (
+            <div className="bg-white rounded-lg border p-5 dark:bg-gray-900 dark:border-gray-800">
+              <div className="flex items-center justify-between gap-4 mb-3">
+                <h3 className="font-semibold">{t('aiHub.response')}</h3>
+                {chatRequest && <Badge variant="success">{chatRequest.modelId ? (models.find((model) => model.id === chatRequest.modelId)?.displayName || models.find((model) => model.id === chatRequest.modelId)?.modelName) : t('aiHub.completed')}</Badge>}
+              </div>
+              <div className="whitespace-pre-wrap text-sm leading-6">{chatResponse}</div>
+            </div>
+          )}
         </div>
       )}
 
@@ -339,13 +449,14 @@ export default function AiHubPage() {
                 <th className="text-left p-3 text-sm font-medium text-gray-600">{t('aiHub.name')}</th>
                 <th className="text-left p-3 text-sm font-medium text-gray-600">{t('aiHub.provider')}</th>
                 <th className="text-left p-3 text-sm font-medium text-gray-600">{t('aiHub.endpoint')}</th>
+                <th className="text-left p-3 text-sm font-medium text-gray-600">{t('aiHub.credentials')}</th>
                 <th className="text-left p-3 text-sm font-medium text-gray-600">{t('aiHub.isActive')}</th>
               </tr>
             </thead>
             <tbody>
               {filteredProviders.length === 0 ? (
                 <tr>
-                  <td colSpan={4}>
+                  <td colSpan={5}>
                     <EmptyState
                       icon={<Cpu className="w-12 h-12 text-gray-300" />}
                       title={t('aiHub.noProviders')}
@@ -361,6 +472,7 @@ export default function AiHubPage() {
                     <td className="p-3 text-sm text-gray-500 max-w-xs truncate">
                       {p.apiEndpoint ?? '-'}
                     </td>
+                    <td className="p-3 text-sm">{p.apiKeyConfigured ? t('aiHub.configured') : t('aiHub.notConfigured')}</td>
                     <td className="p-3">
                       <Badge variant={p.isActive ? 'success' : 'gray'}>
                         {p.isActive ? t('aiHub.active') : t('aiHub.inactive')}
@@ -598,7 +710,7 @@ export default function AiHubPage() {
               setProviderForm((prev) => ({ ...prev, provider: e.target.value }))
             }
             error={formErrors.provider}
-            placeholder="openai, anthropic, google..."
+            placeholder={t('aiHub.providerTypePlaceholder')}
           />
           <Input
             label={t('aiHub.endpoint')}
@@ -610,7 +722,19 @@ export default function AiHubPage() {
               }))
             }
             error={formErrors.apiEndpoint}
-            placeholder="https://api.openai.com/v1"
+            placeholder="https://provider.example/v1"
+          />
+          <Input
+            label={t('aiHub.apiKey')}
+            type="password"
+            value={providerForm.apiKey}
+            onChange={(e) =>
+              setProviderForm((prev) => ({
+                ...prev,
+                apiKey: e.target.value,
+              }))
+            }
+            helpText={t('aiHub.apiKeyHelp')}
           />
         </div>
       </Modal>

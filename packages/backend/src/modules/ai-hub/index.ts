@@ -1,10 +1,14 @@
 import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
+import { encryptField } from '@healthcare/shared/utils';
+import { NotFoundError } from '@healthcare/shared/errors';
 import { db } from '../../core/database.js';
 import { sendSuccess } from '../../utils/response.js';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
+import { createAiAssistantSchema, createAiModelSchema, createAiProviderSchema, chatCompletionSchema } from '../../utils/validation.js';
+import { completeTenantAiChat } from '../../services/ai-completion.js';
 
 interface AiProviderRow {
   id: string;
@@ -12,6 +16,7 @@ interface AiProviderRow {
   name: string;
   provider: string;
   api_endpoint: string | null;
+  api_key_encrypted?: string | null;
   config: unknown;
   is_active: boolean;
   created_at: Date;
@@ -50,7 +55,9 @@ interface AiRequestRow {
   latency_ms: number;
   status: string;
   error: string | null;
+  error_code?: string | null;
   source: string | null;
+  idempotency_key?: string | null;
   created_at: Date;
 }
 
@@ -73,17 +80,20 @@ export async function registerAiHubModule(app: FastifyInstance) {
     return sendSuccess(reply, providers.map((p: AiProviderRow) => ({
       id: p.id, name: p.name, provider: p.provider,
       apiEndpoint: p.api_endpoint, config: p.config,
+      apiKeyConfigured: Boolean(p.api_key_encrypted),
       isActive: p.is_active, createdAt: p.created_at,
     })));
   });
 
-  app.post('/api/v1/ai/providers', { preHandler: [authenticate, authorize('ai_hub.view')] }, async (request, reply) => {
+  app.post('/api/v1/ai/providers', { preHandler: [authenticate, authorize('ai_hub.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
-    const body = request.body as Record<string, unknown>;
+    const body = createAiProviderSchema.parse(request.body);
     const [p] = await db('ai_providers').insert({
       tenant_id: tenantId, name: body.name, provider: body.provider,
-      api_endpoint: body.apiEndpoint || null, config: JSON.stringify(body.config || {}),
+      api_endpoint: body.apiEndpoint || null,
+      api_key_encrypted: body.apiKey ? encryptField(body.apiKey) : null,
+      config: JSON.stringify(body.config || {}),
       is_active: body.isActive !== false,
     }).returning('*');
 
@@ -98,17 +108,19 @@ export async function registerAiHubModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: p.id, name: p.name }, 'AI provider added', 201);
   });
 
-  app.put('/api/v1/ai/providers/:id', { preHandler: [authenticate, authorize('ai_hub.edit')] }, async (request, reply) => {
+  app.put('/api/v1/ai/providers/:id', { preHandler: [authenticate, authorize('ai_hub.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
-    const body = request.body as Record<string, unknown>;
+    const body = createAiProviderSchema.partial().parse(request.body);
     const update: Record<string, unknown> = { updated_at: new Date() };
-    if (body.name) update.name = body.name;
-    if (body.config) update.config = JSON.stringify(body.config);
+    if (body.name !== undefined) update.name = body.name;
+    if (body.config !== undefined) update.config = JSON.stringify(body.config);
     if (body.isActive !== undefined) update.is_active = body.isActive;
-    if (body.apiEndpoint) update.api_endpoint = body.apiEndpoint;
-    await db('ai_providers').where({ id, tenant_id: tenantId }).update(update);
+    if (body.apiEndpoint !== undefined) update.api_endpoint = body.apiEndpoint || null;
+    if (body.apiKey !== undefined) update.api_key_encrypted = encryptField(body.apiKey);
+    const changed = await db('ai_providers').where({ id, tenant_id: tenantId }).update(update);
+    if (!changed) throw new NotFoundError('AI provider', id);
 
     await logAudit({
       tenantId, userId: ctx.userId,
@@ -133,10 +145,12 @@ export async function registerAiHubModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/ai/models', { preHandler: [authenticate, authorize('ai_hub.view')] }, async (request, reply) => {
+  app.post('/api/v1/ai/models', { preHandler: [authenticate, authorize('ai_hub.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
-    const body = request.body as Record<string, unknown>;
+    const body = createAiModelSchema.parse(request.body);
+    const provider = await db('ai_providers').where({ id: body.providerId, tenant_id: tenantId }).first();
+    if (!provider) throw new NotFoundError('AI provider', body.providerId);
     const [m] = await db('ai_models').insert({
       tenant_id: tenantId, provider_id: body.providerId, model_name: body.modelName,
       display_name: body.displayName || null, capabilities: body.capabilities || 'chat',
@@ -173,11 +187,12 @@ export async function registerAiHubModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/ai/assistants', { preHandler: [authenticate, authorize('ai_hub.view')] }, async (request, reply) => {
+  app.post('/api/v1/ai/assistants', { preHandler: [authenticate, authorize('ai_hub.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
-    const body = request.body as Record<string, unknown>;
-    const slug = String(body.slug || (body.name as string).toLowerCase().replace(/\s+/g, '_'));
+    const body = createAiAssistantSchema.parse(request.body);
+    if (body.modelId && !(await db('ai_models').where({ id: body.modelId, tenant_id: tenantId }).first())) throw new NotFoundError('AI model', body.modelId);
+    const slug = String(body.slug || body.name.toLowerCase().replace(/\s+/g, '_'));
     const [a] = await db('ai_assistants').insert({
       tenant_id: tenantId, name: body.name, slug, category: body.category || 'general',
       system_prompt: body.systemPrompt || null, tools: JSON.stringify(body.tools || []),
@@ -196,11 +211,12 @@ export async function registerAiHubModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: a.id, name: a.name, slug: a.slug }, 'Assistant created', 201);
   });
 
-  app.put('/api/v1/ai/assistants/:id', { preHandler: [authenticate, authorize('ai_hub.edit')] }, async (request, reply) => {
+  app.put('/api/v1/ai/assistants/:id', { preHandler: [authenticate, authorize('ai_hub.manage')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
-    const body = request.body as Record<string, unknown>;
+    const body = createAiAssistantSchema.partial().parse(request.body);
+    if (body.modelId && !(await db('ai_models').where({ id: body.modelId, tenant_id: tenantId }).first())) throw new NotFoundError('AI model', body.modelId);
     const update: Record<string, unknown> = { updated_at: new Date() };
     if (body.name) update.name = body.name;
     if (body.systemPrompt !== undefined) update.system_prompt = body.systemPrompt;
@@ -234,7 +250,8 @@ export async function registerAiHubModule(app: FastifyInstance) {
       prompt: r.prompt?.substring(0, 200), response: r.response?.substring(0, 200),
       promptTokens: r.prompt_tokens, completionTokens: r.completion_tokens,
       cost: Number(r.cost), latencyMs: r.latency_ms,
-      status: r.status, error: r.error, source: r.source,
+      status: r.status, error: r.error, errorCode: r.error_code, source: r.source,
+      idempotencyKey: r.idempotency_key,
       createdAt: r.created_at,
     })));
   });
@@ -260,26 +277,31 @@ export async function registerAiHubModule(app: FastifyInstance) {
     });
   });
 
-  // ── Chat Completion (proxy stub) ──
+  // ── Chat Completion ──
   app.post('/api/v1/ai/chat', { preHandler: [authenticate, authorize('ai_hub.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
-    const body = request.body as Record<string, unknown>;
-    const [reqLog] = await db('ai_requests').insert({
-      tenant_id: tenantId, assistant_id: body.assistantId || null,
-      model_id: body.modelId || null, user_id: ctx.userId,
-      prompt: body.prompt || '', status: 'completed',
-      source: body.source || 'chat',
-    }).returning('*');
+    const body = chatCompletionSchema.parse(request.body);
+    const result = await completeTenantAiChat({
+      tenantId, userId: ctx.userId, assistantId: body.assistantId, modelId: body.modelId,
+      prompt: body.prompt, messages: body.messages, source: body.source || 'chat', idempotencyKey: body.idempotencyKey,
+    });
 
     await logAudit({
       tenantId, userId: ctx.userId,
-      action: 'ai.chat_request', entityType: 'ai_request', entityId: reqLog.id,
-      metadata: { source: body.source, assistantId: body.assistantId },
+      action: 'ai.chat_request', entityType: 'ai_request', entityId: result.id,
+      metadata: { source: result.source, assistantId: result.assistantId, modelId: result.modelId, status: result.status, errorCode: result.errorCode, replayed: result.replayed },
       ipAddress: request.ip,
       userAgent: request.headers['user-agent'] as string,
     });
 
-    return sendSuccess(reply, { id: reqLog.id, message: 'AI request logged. Provider integration required for actual completion.' });
+    if (result.status === 'processing') {
+      return sendSuccess(reply, result, 'AI completion is still processing', 202);
+    }
+    if (result.status !== 'completed') {
+      const statusCode = result.errorCode?.startsWith('AI_PROVIDER_') ? 503 : 400;
+      return reply.status(statusCode).send({ success: false, error: result.error || 'AI completion was not available', code: result.errorCode || 'AI_COMPLETION_FAILED', data: { id: result.id, status: result.status, errorCode: result.errorCode, replayed: result.replayed }, timestamp: new Date().toISOString() });
+    }
+    return sendSuccess(reply, result, 'AI completion generated');
   });
 }
