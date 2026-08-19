@@ -34,9 +34,19 @@ const unverifiedVendorAuthentication = {
   operationKeys: ['provider.vendor.authenticate'],
 } as const;
 
-const unsupportedBusinessOperation = {
-  status: 'not_implemented',
-  operationKeys: [],
+const fawryBusinessOperation = {
+  status: 'implemented',
+  operationKeys: ['fawry.payment.create', 'fawry.payment.callback.verify'],
+} as const;
+
+const stripeBusinessOperation = {
+  status: 'implemented',
+  operationKeys: ['stripe.checkout.create', 'stripe.payment.confirm', 'stripe.payment.callback.verify'],
+} as const;
+
+const twilioBusinessOperation = {
+  status: 'implemented',
+  operationKeys: ['twilio.sms.send', 'twilio.voice.call', 'twilio.voice.callback.verify'],
 } as const;
 
 export const CLINIC_PROVIDER_CONTRACTS: Readonly<Record<string, ClinicProviderContract>> = {
@@ -63,7 +73,7 @@ export const CLINIC_PROVIDER_CONTRACTS: Readonly<Record<string, ClinicProviderCo
       structural_validation: structuralCapability,
       endpoint_reachability: endpointCapability,
       vendor_authentication: unverifiedVendorAuthentication,
-      business_operation: unsupportedBusinessOperation,
+      business_operation: fawryBusinessOperation,
     },
     runtimeOperationKeys: ['fawry.payment.create', 'fawry.payment.callback.verify'],
   },
@@ -75,7 +85,7 @@ export const CLINIC_PROVIDER_CONTRACTS: Readonly<Record<string, ClinicProviderCo
       structural_validation: structuralCapability,
       endpoint_reachability: endpointCapability,
       vendor_authentication: unverifiedVendorAuthentication,
-      business_operation: unsupportedBusinessOperation,
+      business_operation: stripeBusinessOperation,
     },
     runtimeOperationKeys: ['stripe.checkout.create', 'stripe.payment.confirm', 'stripe.payment.callback.verify'],
   },
@@ -87,7 +97,7 @@ export const CLINIC_PROVIDER_CONTRACTS: Readonly<Record<string, ClinicProviderCo
       structural_validation: structuralCapability,
       endpoint_reachability: endpointCapability,
       vendor_authentication: unverifiedVendorAuthentication,
-      business_operation: unsupportedBusinessOperation,
+      business_operation: twilioBusinessOperation,
     },
     runtimeOperationKeys: ['twilio.sms.send', 'twilio.voice.call', 'twilio.voice.callback.verify'],
   },

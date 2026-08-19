@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import Stripe from 'stripe';
 import { getEnv } from '@healthcare/shared/config';
 import { clinicConfigurationDefinition } from '@healthcare/shared/config/clinic-configuration';
 import { listEffectiveClinicConfiguration } from './clinic-configuration.js';
@@ -34,6 +35,8 @@ interface PaymentResult {
   paymentId?: string;
   redirectUrl?: string;
   reference?: string;
+  status?: string;
+  environment?: string;
   error?: string;
 }
 
@@ -74,7 +77,7 @@ export function generateEtaQrCode( sellerName: string, taxRegistrationNumber: st
 }
 
 // Stripe payment
-export async function createStripePayment(invoiceId: string, amount: number, currency: string, tenantId: string): Promise<PaymentResult> {
+export async function createStripePayment(invoiceId: string, amount: number, currency: string, tenantId: string, idempotencyKey?: string): Promise<PaymentResult> {
   const env = getEnv();
   try {
     assertClinicProviderOperation('stripe', 'stripe.checkout.create');
@@ -84,7 +87,9 @@ export async function createStripePayment(invoiceId: string, amount: number, cur
     if (runtime?.status === 'disabled') return { success: false, error: 'Stripe is disabled for this clinic.' };
     const stripeSecretKey = runtime?.secrets.secretKey;
     if (!stripeSecretKey) return { success: false, error: 'Stripe is not configured for this clinic.' };
-    const stripe = require('stripe')(stripeSecretKey);
+    const normalizedCurrency = currency.toUpperCase();
+    const normalizedIdempotencyKey = idempotencyKey?.trim() || null;
+    const stripe = new Stripe(stripeSecretKey);
     const invoice = await db('invoices').where({ id: invoiceId, tenant_id: tenantId }).whereNull('deleted_at').first();
     if (!invoice) return { success: false, error: 'Invoice not found' };
     const amountCents = moneyToCents(amount);
@@ -92,6 +97,19 @@ export async function createStripePayment(invoiceId: string, amount: number, cur
     const paidCents = moneyToCents(invoice.paid);
     if (amountCents === null || totalCents === null || paidCents === null || paidCents + amountCents > totalCents) {
       return { success: false, error: 'Payment amount exceeds the invoice amount due.' };
+    }
+    if (normalizedIdempotencyKey) {
+      const existing = await db('payment_transactions')
+        .where({ tenant_id: tenantId, provider_key: 'stripe', idempotency_key: normalizedIdempotencyKey })
+        .select('reference', 'provider_url', 'status', 'provider_environment', 'provider_currency', 'amount')
+        .first() as { reference: string | null; provider_url: string | null; status: string; provider_environment: string | null; provider_currency: string | null; amount: number | string } | undefined;
+      if (existing) {
+        if (moneyToCents(existing.amount) !== amountCents || existing.provider_currency !== normalizedCurrency || existing.provider_environment !== runtime?.environment) {
+          return { success: false, error: 'Stripe idempotency key was already used for a different payment request.' };
+        }
+        return { success: true, paymentId: existing.reference || undefined, redirectUrl: existing.provider_url || undefined, status: existing.status, environment: existing.provider_environment || undefined };
+      }
+      await db('payment_transactions').insert({ tenant_id: tenantId, invoice_id: invoiceId, amount, method: 'online', provider_key: 'stripe', reference: null, notes: 'Stripe checkout', status: 'creating', idempotency_key: normalizedIdempotencyKey, provider_environment: runtime?.environment || null, provider_currency: normalizedCurrency, updated_at: new Date() });
     }
     const patient = await db('patients').where({ id: invoice.patient_id, tenant_id: tenantId }).first();
     const tenant = await db('tenants').where({ id: tenantId }).first();
@@ -105,21 +123,28 @@ export async function createStripePayment(invoiceId: string, amount: number, cur
       customer_email: patient?.email || undefined,
       line_items: [{
         price_data: {
-          currency: currency.toLowerCase(),
+          currency: normalizedCurrency.toLowerCase(),
           product_data: { name: `Invoice ${invoice.invoice_number} — ${displayName}` },
           unit_amount: Math.round(amount * 100),
         },
         quantity: 1,
       }],
       mode: 'payment',
-      metadata: { invoiceId, tenantId },
-      success_url: `${env.APP_URL}/billing?payment=success&invoice=${invoiceId}`,
-      cancel_url: `${env.APP_URL}/billing?payment=cancelled&invoice=${invoiceId}`,
-    });
-    await db('payment_transactions').insert({ tenant_id: tenantId, invoice_id: invoiceId, amount, method: 'online', provider_key: 'stripe', reference: session.id, notes: 'Stripe checkout', status: 'pending', updated_at: new Date() });
-    await logAudit({ tenantId, action: 'payment.stripe.create', entityType: 'invoice', entityId: invoiceId, metadata: { amount, currency } });
-    return { success: true, paymentId: session.id, redirectUrl: session.url };
+      metadata: { invoiceId, tenantId, ...(normalizedIdempotencyKey ? { idempotencyKey: normalizedIdempotencyKey } : {}) },
+      success_url: `${env.APP_URL}/billing?payment=success&invoice=${invoiceId}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${env.APP_URL}/billing?payment=cancelled&invoice=${invoiceId}&session_id={CHECKOUT_SESSION_ID}`,
+    }, normalizedIdempotencyKey ? { idempotencyKey: normalizedIdempotencyKey } : undefined);
+    if (normalizedIdempotencyKey) {
+      await db('payment_transactions').where({ tenant_id: tenantId, provider_key: 'stripe', idempotency_key: normalizedIdempotencyKey, status: 'creating' }).update({ reference: session.id, provider_url: session.url || null, status: 'pending', updated_at: new Date() });
+    } else {
+      await db('payment_transactions').insert({ tenant_id: tenantId, invoice_id: invoiceId, amount, method: 'online', provider_key: 'stripe', reference: session.id, notes: 'Stripe checkout', status: 'pending', provider_environment: runtime?.environment || null, provider_currency: normalizedCurrency, provider_url: session.url || null, updated_at: new Date() });
+    }
+    await logAudit({ tenantId, action: 'payment.stripe.create', entityType: 'invoice', entityId: invoiceId, metadata: { amount, currency: normalizedCurrency, providerEnvironment: runtime?.environment, idempotent: Boolean(normalizedIdempotencyKey) } });
+    return { success: true, paymentId: session.id, redirectUrl: session.url || undefined, status: 'pending', environment: runtime?.environment };
   } catch (err: any) {
+    if (idempotencyKey?.trim()) {
+      await db('payment_transactions').where({ tenant_id: tenantId, provider_key: 'stripe', idempotency_key: idempotencyKey.trim(), status: 'creating' }).update({ status: 'failed', notes: 'Stripe checkout creation failed', updated_at: new Date() }).catch(() => undefined);
+    }
     return { success: false, error: err.message };
   }
 }
@@ -131,13 +156,15 @@ export async function confirmStripePayment(sessionId: string): Promise<boolean> 
   try {
     const payment = await db('payment_transactions')
       .where({ provider_key: 'stripe', reference: sessionId })
-      .select('id', 'tenant_id', 'invoice_id', 'amount', 'status')
+      .select('id', 'tenant_id', 'invoice_id', 'amount', 'status', 'provider_environment', 'provider_currency')
       .first() as {
         id: string;
         tenant_id: string;
         invoice_id: string | null;
         amount: number | string;
         status: string;
+        provider_environment: string | null;
+        provider_currency: string | null;
       } | undefined;
     if (!payment?.tenant_id || !payment.invoice_id) return false;
 
@@ -146,18 +173,22 @@ export async function confirmStripePayment(sessionId: string): Promise<boolean> 
       secrets: { secretKey: env.STRIPE_SECRET_KEY || '' },
     });
     if (runtime?.status === 'disabled') return false;
+    if (payment.provider_environment && runtime?.environment !== payment.provider_environment) return false;
     const stripeSecretKey = runtime?.secrets.secretKey;
     if (!stripeSecretKey) return false;
 
-    const stripe = require('stripe')(stripeSecretKey);
+    const stripe = new Stripe(stripeSecretKey);
     const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (Boolean(session.livemode) !== (runtime?.environment === 'production')) return false;
     if (session.payment_status !== 'paid') return false;
     const metadata = session.metadata && typeof session.metadata === 'object' ? session.metadata as Record<string, string> : {};
     if (metadata.tenantId !== payment.tenant_id || metadata.invoiceId !== payment.invoice_id) return false;
 
     const transactionAmountCents = moneyToCents(payment.amount);
     const providerAmountCents = moneyToCents(session.amount_total === null ? null : Number(session.amount_total) / 100);
+    const providerCurrency = String(session.currency || '').toUpperCase();
     if (transactionAmountCents === null || providerAmountCents === null || transactionAmountCents !== providerAmountCents) return false;
+    if (payment.provider_currency && providerCurrency !== payment.provider_currency.toUpperCase()) return false;
 
     await db.transaction(async (trx) => {
       const lockedPayment = await trx('payment_transactions')
@@ -198,6 +229,50 @@ export async function confirmStripePayment(sessionId: string): Promise<boolean> 
     return true;
   } catch {
     return false;
+  }
+}
+
+export interface StripePaymentReturnState {
+  sessionId: string;
+  status: 'completed' | 'pending' | 'expired' | 'not_found' | 'reconciliation_failed';
+  paymentStatus: string | null;
+  invoiceId: string | null;
+  paymentTransactionId: string | null;
+  amount: number | string | null;
+  currency: string | null;
+  providerEnvironment: string | null;
+}
+
+export async function refreshStripePaymentFromReturn(sessionId: string, tenantId: string): Promise<StripePaymentReturnState> {
+  const payment = await db('payment_transactions')
+    .where({ tenant_id: tenantId, provider_key: 'stripe', reference: sessionId })
+    .select('id', 'tenant_id', 'invoice_id', 'amount', 'status', 'provider_environment', 'provider_currency')
+    .first() as { id: string; tenant_id: string; invoice_id: string | null; amount: number | string; status: string; provider_environment: string | null; provider_currency: string | null } | undefined;
+  if (!payment) return { sessionId, status: 'not_found', paymentStatus: null, invoiceId: null, paymentTransactionId: null, amount: null, currency: null, providerEnvironment: null };
+  if (payment.status === 'completed') return { sessionId, status: 'completed', paymentStatus: 'paid', invoiceId: payment.invoice_id, paymentTransactionId: payment.id, amount: payment.amount, currency: payment.provider_currency, providerEnvironment: payment.provider_environment };
+
+  if (await confirmStripePayment(sessionId)) {
+    return { sessionId, status: 'completed', paymentStatus: 'paid', invoiceId: payment.invoice_id, paymentTransactionId: payment.id, amount: payment.amount, currency: payment.provider_currency, providerEnvironment: payment.provider_environment };
+  }
+
+  const runtime = await providerRuntimeOrFallback(tenantId, 'stripe', { secrets: { secretKey: getEnv().STRIPE_SECRET_KEY || '' } });
+  if (!runtime?.secrets.secretKey || runtime.status === 'disabled' || (payment.provider_environment && payment.provider_environment !== runtime.environment)) {
+    return { sessionId, status: 'reconciliation_failed', paymentStatus: null, invoiceId: payment.invoice_id, paymentTransactionId: payment.id, amount: payment.amount, currency: payment.provider_currency, providerEnvironment: payment.provider_environment };
+  }
+  try {
+    const stripe = require('stripe')(runtime.secrets.secretKey);
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const metadata = session.metadata && typeof session.metadata === 'object' ? session.metadata as Record<string, string> : {};
+    if (metadata.tenantId !== tenantId || metadata.invoiceId !== payment.invoice_id || Boolean(session.livemode) !== (runtime.environment === 'production')) {
+      return { sessionId, status: 'reconciliation_failed', paymentStatus: String(session.payment_status || ''), invoiceId: payment.invoice_id, paymentTransactionId: payment.id, amount: payment.amount, currency: payment.provider_currency, providerEnvironment: payment.provider_environment };
+    }
+    const providerCurrency = String(session.currency || '').toUpperCase() || null;
+    if (payment.provider_currency && providerCurrency !== payment.provider_currency.toUpperCase()) {
+      return { sessionId, status: 'reconciliation_failed', paymentStatus: String(session.payment_status || ''), invoiceId: payment.invoice_id, paymentTransactionId: payment.id, amount: payment.amount, currency: providerCurrency, providerEnvironment: payment.provider_environment };
+    }
+    return { sessionId, status: session.status === 'expired' ? 'expired' : 'pending', paymentStatus: String(session.payment_status || ''), invoiceId: payment.invoice_id, paymentTransactionId: payment.id, amount: payment.amount, currency: providerCurrency, providerEnvironment: payment.provider_environment };
+  } catch {
+    return { sessionId, status: 'reconciliation_failed', paymentStatus: null, invoiceId: payment.invoice_id, paymentTransactionId: payment.id, amount: payment.amount, currency: payment.provider_currency, providerEnvironment: payment.provider_environment };
   }
 }
 

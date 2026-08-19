@@ -242,7 +242,7 @@ async function requestEtaJson(runtime: TenantProviderRuntime, url: string, init:
   }
 }
 
-async function getEtaAccessToken(tenantId: string, runtime: TenantProviderRuntime, config: RuntimeConfig): Promise<string> {
+async function getEtaAccessToken(tenantId: string, runtime: TenantProviderRuntime, config: Pick<RuntimeConfig, 'identityEndpointUrl'>): Promise<string> {
   const cacheKey = `${tenantId}:${runtime.environment}:${config.identityEndpointUrl}`;
   const cached = tokenCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now() + 60_000) return cached.token;
@@ -264,6 +264,27 @@ async function getEtaAccessToken(tenantId: string, runtime: TenantProviderRuntim
   if (!token) throw new ConflictError('ETA token response did not contain access_token');
   tokenCache.set(cacheKey, { token, expiresAt: Date.now() + Math.max(60, expiresIn - 60) * 1000 });
   return token;
+}
+
+export async function verifyEtaOAuthAuthentication(tenantId: string): Promise<{
+  status: 'passed';
+  resultCode: string;
+  message: string;
+  evidence: Record<string, unknown>;
+  expiresAt: Date;
+}> {
+  const runtime = await getTenantProviderRuntime(tenantId, 'eta');
+  if (!runtime) throw new ConflictError('ETA provider connection is not configured for this clinic');
+  if (runtime.status === 'disabled') throw new ConflictError('ETA provider connection is disabled for this clinic');
+  const identityEndpointUrl = requiredString(runtime.config, 'identityEndpointUrl');
+  await getEtaAccessToken(tenantId, runtime, { identityEndpointUrl });
+  return {
+    status: 'passed',
+    resultCode: 'eta_oauth_authenticated',
+    message: 'ETA OAuth authentication succeeded; no document was submitted',
+    evidence: { providerEnvironment: runtime.environment, identityEndpointConfigured: true, documentSubmissionPerformed: false },
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+  };
 }
 
 async function loadDocumentTypeVersion(runtime: TenantProviderRuntime, config: RuntimeConfig, token: string): Promise<{ typeName: string; name: string; status: string; schema: unknown }> {

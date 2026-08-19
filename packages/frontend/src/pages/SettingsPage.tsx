@@ -128,6 +128,7 @@ export default function SettingsPage() {
   const [regionalSaving, setRegionalSaving] = useState(false);
   const [providerSaving, setProviderSaving] = useState<string | null>(null);
   const [providerTesting, setProviderTesting] = useState<string | null>(null);
+  const [providerVerifying, setProviderVerifying] = useState<string | null>(null);
   const [secretSaving, setSecretSaving] = useState<string | null>(null);
   const [providerConfigDraft, setProviderConfigDraft] = useState<Record<string, Record<string, unknown>>>({});
   const [providerEnvironmentDraft, setProviderEnvironmentDraft] = useState<Record<string, 'sandbox' | 'production'>>({});
@@ -430,6 +431,30 @@ export default function SettingsPage() {
       toast.error(t('settings.providerTestError'));
     } finally {
       setProviderTesting(null);
+    }
+  };
+
+  const verificationTypeForProvider = (provider: ClinicProviderConfiguration): string | null => {
+    if (provider.providerKey === 'stripe') return (providerEnvironmentDraft[provider.providerKey] || provider.connection?.environment || 'sandbox') === 'sandbox' ? 'sandbox_authentication' : 'account_authentication';
+    if (provider.providerKey === 'twilio') return 'account_authentication';
+    if (provider.providerKey === 'eta') return 'oauth_authentication';
+    if (provider.providerKey === 'fawry') return 'sandbox_readiness';
+    return null;
+  };
+
+  const handleVerifyProvider = async (provider: ClinicProviderConfiguration) => {
+    const verificationType = verificationTypeForProvider(provider);
+    if (!verificationType) return;
+    setProviderVerifying(provider.providerKey);
+    try {
+      const result = await clinicConfigurationApi.verifyProvider(provider.providerKey, verificationType);
+      setProviders((current) => current.map((item) => item.providerKey === provider.providerKey ? { ...item, latestVerification: result } : item));
+      if (result.status === 'passed') toast.success(t('settings.providerVerificationPassed'));
+      else toast.error(result.message || t('settings.providerVerificationFailed'));
+    } catch {
+      toast.error(t('settings.providerVerificationFailed'));
+    } finally {
+      setProviderVerifying(null);
     }
   };
 
@@ -910,8 +935,20 @@ export default function SettingsPage() {
                             <Button size="sm" variant="secondary" onClick={() => void handleTestProvider(provider)} loading={providerTesting === provider.providerKey} icon={<RefreshCw className="w-4 h-4" />}>
                               {providerTesting === provider.providerKey ? t('settings.testingProvider') : t('settings.testProvider')}
                             </Button>
+                            {verificationTypeForProvider(provider) && <Button size="sm" variant="secondary" onClick={() => void handleVerifyProvider(provider)} loading={providerVerifying === provider.providerKey} icon={<CheckCircle2 className="w-4 h-4" />}>
+                              {providerVerifying === provider.providerKey ? t('settings.verifyingProvider') : t('settings.verifyProvider')}
+                            </Button>}
                           </Can>
                         </div>
+
+                        {provider.latestVerification && <div className="rounded-lg border border-[var(--border)] p-3 space-y-1 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium text-[var(--text-primary)]">{t('settings.providerVerificationEvidence')}</span>
+                            <span className={provider.latestVerification.status === 'passed' ? 'text-green-700' : provider.latestVerification.status === 'failed' ? 'text-red-700' : 'text-amber-700'}>{provider.latestVerification.status}</span>
+                          </div>
+                          <p className="text-[var(--text-muted)]">{provider.latestVerification.message || provider.latestVerification.resultCode || t('settings.providerVerificationNoMessage')}</p>
+                          <p className="text-[var(--text-muted)]">{provider.latestVerification.verificationType} · {provider.latestVerification.environment} · {provider.latestVerification.completedAt ? new Date(provider.latestVerification.completedAt).toLocaleString() : t('settings.providerVerificationPending')}</p>
+                        </div>}
 
                         <div className="border-t border-[var(--border)] pt-4 space-y-3">
                           <div>

@@ -77,6 +77,26 @@ export interface ClinicProviderSecretMetadata {
   expiresAt: string | null;
 }
 
+export interface ProviderVerificationRun {
+  id: string;
+  tenantId: string;
+  providerKey: string;
+  environment: string;
+  verificationType: string;
+  idempotencyKey: string;
+  status: 'queued' | 'running' | 'passed' | 'failed' | 'not_supported' | string;
+  resultCode: string | null;
+  message: string | null;
+  evidence: Record<string, unknown>;
+  actorId: string | null;
+  requestId: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ClinicProviderConfiguration {
   providerKey: string;
   moduleKey: string;
@@ -118,6 +138,7 @@ export interface ClinicProviderConfiguration {
     capabilities: Record<string, { status: 'implemented' | 'not_implemented' | 'not_verified' | 'not_applicable'; operationKeys: string[] }>;
     runtimeOperationKeys: string[];
   } | null;
+  latestVerification: ProviderVerificationRun | null;
 }
 
 export const clinicConfigurationApi = {
@@ -170,6 +191,10 @@ export const clinicConfigurationApi = {
     .then((response) => response.data.data as ClinicProviderConfiguration),
   testProvider: (providerKey: string) => apiClient.post(`/clinic-providers/${encodeURIComponent(providerKey)}/test`)
     .then((response) => response.data.data as ClinicProviderConfiguration),
+  verifyProvider: (providerKey: string, verificationType: string, idempotencyKey?: string) => apiClient.post(`/clinic-providers/${encodeURIComponent(providerKey)}/verify`, { verificationType, ...(idempotencyKey ? { idempotencyKey } : {}) })
+    .then((response) => response.data.data as ProviderVerificationRun),
+  providerVerifications: (providerKey: string) => apiClient.get(`/clinic-providers/${encodeURIComponent(providerKey)}/verifications`)
+    .then((response) => response.data.data as ProviderVerificationRun[]),
   updateProviderSecret: (providerKey: string, secretKey: string, value: string, expectedVersion?: number) =>
     apiClient.put(`/clinic-providers/${encodeURIComponent(providerKey)}/secrets/${encodeURIComponent(secretKey)}`, { value, expectedVersion })
       .then((response) => response.data.data as ClinicProviderConfiguration),

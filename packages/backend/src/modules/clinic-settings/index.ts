@@ -26,6 +26,7 @@ import {
   revokeProviderSecret,
   validateProviderConfiguration,
 } from '../../services/clinic-provider-configuration.js';
+import { listProviderVerificationRuns, runProviderVerification, generateProviderVerificationIdempotencyKey, type ProviderVerificationType } from '../../services/provider-verification.js';
 
 const DEFAULT_CLINIC_CURRENCY = String(
   clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '',
@@ -210,6 +211,31 @@ export async function registerClinicSettingsModule(app: FastifyInstance) {
       ipAddress: request.ip,
       userAgent: request.headers['user-agent'] as string | undefined,
     }), 'Provider configuration tested');
+  });
+
+  app.post('/api/v1/clinic-providers/:providerKey/verify', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const params = z.object({ providerKey: z.string().min(1).max(80) }).parse(request.params);
+    const body = z.object({
+      verificationType: z.enum(['sandbox_authentication', 'account_authentication', 'oauth_authentication', 'sandbox_readiness']),
+      idempotencyKey: z.string().trim().min(8).max(180).optional(),
+    }).parse(request.body);
+    const result = await runProviderVerification({
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      providerKey: params.providerKey,
+      verificationType: body.verificationType as ProviderVerificationType,
+      idempotencyKey: body.idempotencyKey || generateProviderVerificationIdempotencyKey(params.providerKey, body.verificationType),
+      requestId: ctx.requestId,
+    });
+    return sendSuccess(reply, result, 'Provider verification completed');
+  });
+
+  app.get('/api/v1/clinic-providers/:providerKey/verifications', { preHandler: [authenticate, authorize('settings.view')] }, async (request, reply) => {
+    const ctx = getCtx(request);
+    const params = z.object({ providerKey: z.string().min(1).max(80) }).parse(request.params);
+    const query = z.object({ limit: z.coerce.number().int().min(1).max(50).optional().default(10) }).parse(request.query);
+    return sendSuccess(reply, await listProviderVerificationRuns(ctx.tenantId, params.providerKey, query.limit));
   });
 
   app.put('/api/v1/clinic-providers/:providerKey/secrets/:secretKey', { preHandler: [authenticate, authorize('settings.manage')] }, async (request, reply) => {

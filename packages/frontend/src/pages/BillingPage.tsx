@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { billingApi, paymentApi, egyptPaymentApi } from '../lib/api';
 import type { Invoice, InvoiceItem, InvoiceStatus, PaymentMethod } from '@healthcare/shared/types';
 import type { ProviderPaymentTransaction } from '../lib/api/billing';
@@ -96,6 +97,11 @@ const INITIAL_PAYMENT: PaymentForm = {
   notes: '',
 };
 
+function createStripeIdempotencyKey(invoiceId: string): string {
+  const uuid = typeof window !== 'undefined' && window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `stripe-checkout:${invoiceId}:${uuid}`;
+}
+
 function createEmptyItem(): InvoiceItemForm {
   return { description: '', code: '', quantity: 1, unitPrice: 0, type: 'consultation' };
 }
@@ -165,6 +171,7 @@ function SortIndicator({ active, direction }: { active: boolean; direction: 'asc
 
 export default function BillingPage() {
   const { t } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { identity } = useClinicConfiguration();
   const formatMoney = (amount: number | string | null | undefined) => formatClinicMoney(
     amount,
@@ -188,6 +195,7 @@ export default function BillingPage() {
   const [saving, setSaving] = useState(false);
   const [providerAction, setProviderAction] = useState<'stripe' | 'fawry' | 'instapay' | null>(null);
   const [providerNotice, setProviderNotice] = useState<string | null>(null);
+  const [stripeIdempotencyKey, setStripeIdempotencyKey] = useState<string | null>(null);
   const [fawryPhone, setFawryPhone] = useState('');
   const [fawryEmail, setFawryEmail] = useState('');
   const [providerPayments, setProviderPayments] = useState<ProviderPaymentTransaction[]>([]);
@@ -239,6 +247,39 @@ export default function BillingPage() {
     run();
     return () => { cancelled = true; };
   }, [page, statusFilter, sortField, sortDirection, t]);
+
+  useEffect(() => {
+    const paymentHint = searchParams.get('payment');
+    const sessionId = searchParams.get('session_id');
+    if (!sessionId || !['success', 'cancelled'].includes(paymentHint || '')) return;
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const result = await paymentApi.refreshStripeReturn(sessionId);
+        if (cancelled) return;
+        if (result.invoiceId) {
+          const updatedInvoice = await billingApi.get(result.invoiceId);
+          if (!cancelled) setInvoices((current) => current.map((invoice) => invoice.id === updatedInvoice.id ? updatedInvoice : invoice));
+        }
+        if (result.status === 'completed') toast.success(t('billing.stripePaymentCompleted'));
+        else if (result.status === 'expired') toast.error(t('billing.stripePaymentExpired'));
+        else if (result.status === 'pending') toast(t('billing.stripePaymentPending'));
+        else toast.error(t('billing.stripePaymentRefreshFailed'));
+      } catch {
+        if (!cancelled) toast.error(t('billing.stripePaymentRefreshFailed'));
+      } finally {
+        if (!cancelled) {
+          const cleanParams = new URLSearchParams(searchParams);
+          cleanParams.delete('payment');
+          cleanParams.delete('invoice');
+          cleanParams.delete('session_id');
+          setSearchParams(cleanParams, { replace: true });
+        }
+      }
+    };
+    void refresh();
+    return () => { cancelled = true; };
+  }, [searchParams, setSearchParams, t]);
 
   const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -300,7 +341,7 @@ export default function BillingPage() {
     setProviderAction('stripe');
     setProviderNotice(null);
     try {
-      const result = await paymentApi.createStripeSession(selectedInvoice.id, selectedInvoice.due, identity?.currency);
+      const result = await paymentApi.createStripeSession(selectedInvoice.id, selectedInvoice.due, identity?.currency, stripeIdempotencyKey || createStripeIdempotencyKey(selectedInvoice.id));
       if (!result?.redirectUrl) {
         const message = t('billing.providerPaymentFailed');
         setProviderNotice(message);
@@ -464,6 +505,7 @@ export default function BillingPage() {
 
   const openPayModal = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
+    setStripeIdempotencyKey(createStripeIdempotencyKey(invoice.id));
     setPaymentForm(INITIAL_PAYMENT);
     setProviderNotice(null);
     setFawryPhone(invoice.patientPhone || '');
@@ -488,6 +530,7 @@ export default function BillingPage() {
   const closePayModal = () => {
     setShowPayModal(false);
     setSelectedInvoice(null);
+    setStripeIdempotencyKey(null);
     setPaymentForm(INITIAL_PAYMENT);
     setProviderAction(null);
     setManualDecisionAction(null);

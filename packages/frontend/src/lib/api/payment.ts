@@ -24,9 +24,22 @@ export interface ManualInstapayReconciliation {
   idempotent?: boolean;
 }
 
+export interface StripePaymentReturnState {
+  sessionId: string;
+  status: 'completed' | 'pending' | 'expired' | 'not_found' | 'reconciliation_failed' | string;
+  paymentStatus: string | null;
+  invoiceId: string | null;
+  paymentTransactionId: string | null;
+  amount: number | string | null;
+  currency: string | null;
+  providerEnvironment: string | null;
+}
+
 export const paymentApi = {
-  createStripeSession: (invoiceId: string, amount: number, currency?: string) =>
-    apiClient.post('/payments/stripe/create', { invoiceId, amount, ...(currency ? { currency } : {}) }).then(r => r.data.data),
+  createStripeSession: (invoiceId: string, amount: number, currency?: string, idempotencyKey?: string) =>
+    apiClient.post('/payments/stripe/create', { invoiceId, amount, ...(currency ? { currency } : {}), ...(idempotencyKey ? { idempotencyKey } : {}) }).then(r => r.data.data),
+  refreshStripeReturn: (sessionId: string) =>
+    apiClient.get('/payments/stripe/return', { params: { sessionId } }).then(r => r.data.data as StripePaymentReturnState),
   paymentLink: (invoiceId: string, tenantSlug: string) =>
     apiClient.get(`/payments/link/${tenantSlug}/${invoiceId}`).then(r => r.data.data),
 };

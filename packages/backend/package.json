@@ -20,6 +20,7 @@
     "test:eta-integration": "tsx scripts/run-postgres-integration.ts eta",
     "test:instapay-integration": "tsx scripts/run-postgres-integration.ts instapay",
     "test:automation-integration": "tsx scripts/run-postgres-integration.ts automation",
+    "test:provider-verification-integration": "tsx scripts/run-postgres-integration.ts providerVerification",
     "test:watch": "vitest",
     "migrate": "npx tsx src/core/migrate.ts",
     "migrate:make": "knex migrate:make --knexfile knexfile.ts",
@@ -50,7 +51,9 @@
     "qrcode": "^1.5.4",
     "sanitize-html": "^2.17.6",
     "slugify": "^1.6.6",
+    "stripe": "^22.5.0",
     "tsx": "^4.15.0",
+    "twilio": "^6.1.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

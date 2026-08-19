@@ -4,6 +4,7 @@ import { ConflictError, NotFoundError, ValidationError } from '@healthcare/share
 import { logAudit } from './audit.js';
 import { validateClinicProviderAdapter } from './clinic-provider-adapters.js';
 import { getClinicProviderContract, type ClinicProviderContract } from './clinic-provider-contracts.js';
+import { getLatestProviderVerification, type ProviderVerificationView } from './provider-verification.js';
 
 export type ProviderEnvironment = 'sandbox' | 'production';
 export type ProviderConnectionStatus = 'setup_required' | 'configured' | 'disabled' | 'invalid';
@@ -188,6 +189,7 @@ export interface ProviderConfigurationView {
   }>;
   readiness: ProviderReadiness;
   contract: ClinicProviderContract | null;
+  latestVerification: ProviderVerificationView | null;
 }
 
 interface ConfigurationMutationContext {
@@ -454,6 +456,7 @@ export async function listProviderConfigurations(tenantId: string): Promise<Prov
       ? await loadModuleConfiguration(tenantId, definition.moduleConfigurationKey)
       : null;
     const secrets = await loadSecrets(tenantId, definition.providerKey, connection?.id || null);
+    const latestVerification = await getLatestProviderVerification(tenantId, definition.providerKey);
     return {
       providerKey: definition.providerKey,
       moduleKey: definition.moduleKey,
@@ -479,6 +482,7 @@ export async function listProviderConfigurations(tenantId: string): Promise<Prov
       secrets: Object.fromEntries(definition.secretKeys.map((key) => [key, mapSecret(secrets.get(key))])),
       readiness: evaluateReadiness(definition, connection, moduleConfiguration, secrets, regionalProfile),
       contract: getClinicProviderContract(definition.providerKey),
+      latestVerification,
     } satisfies ProviderConfigurationView;
   }));
 }

@@ -19,7 +19,7 @@ import type { InvoiceRow } from '../types.js';
 import { assertClinicProviderOperation } from '../../services/clinic-provider-capabilities.js';
 import { providerRuntimeOrFallback } from '../../services/clinic-provider-runtime.js';
 import { verifyStripeSignature } from '../../services/payment-callbacks.js';
-import { confirmStripePayment } from '../../services/payment.js';
+import { confirmStripePayment, refreshStripePaymentFromReturn } from '../../services/payment.js';
 
 export async function registerBillingModule(app: FastifyInstance) {
   /** Scope for invoice lists: tenant-wide, branch-wide, or assigned patients. */
@@ -455,13 +455,24 @@ export async function registerBillingModule(app: FastifyInstance) {
     return reply.code(200).send({ received: true });
   });
 
+  // Authenticated browser return refresh. Query-string success/cancel values are hints only.
+  app.get('/api/v1/payments/stripe/return', {
+    preHandler: [authenticate, authorize('billing.view')],
+  }, async (request, reply) => {
+    const tenantId = getTenantId(request);
+    const { sessionId } = z.object({ sessionId: z.string().min(1).max(255) }).parse(request.query);
+    const result = await refreshStripePaymentFromReturn(sessionId, tenantId);
+    if (result.status === 'not_found') return reply.code(404).send({ error: 'Stripe payment session not found' });
+    return sendSuccess(reply, result);
+  });
+
   // Create Stripe checkout session
   app.post('/api/v1/payments/stripe/create', {
     preHandler: [authenticate, authorize('billing.create')],
   }, async (request, reply) => {
     const tenantId = getTenantId(request);
-    const { invoiceId, amount, currency: requestedCurrency } = z.object({
-      invoiceId: z.string().uuid(), amount: z.number().positive(), currency: z.string().trim().min(3).max(3).optional(),
+    const { invoiceId, amount, currency: requestedCurrency, idempotencyKey } = z.object({
+      invoiceId: z.string().uuid(), amount: z.number().positive(), currency: z.string().trim().min(3).max(3).optional(), idempotencyKey: z.string().trim().min(8).max(180).optional(),
     }).parse(request.body);
     const configuredCurrency = (await listEffectiveClinicConfiguration(tenantId))
       .find((entry) => entry.key === 'clinic.finance.currency')?.value;
@@ -469,7 +480,7 @@ export async function registerBillingModule(app: FastifyInstance) {
     const currency = String(requestedCurrency || configuredCurrency || defaultCurrency).toUpperCase();
 
     const { createStripePayment } = await import('../../services/payment.js');
-    const result = await createStripePayment(invoiceId, amount, currency, tenantId);
+    const result = await createStripePayment(invoiceId, amount, currency, tenantId, idempotencyKey);
     if (!result.success) return reply.code(400).send({ error: result.error });
     const { userId } = getCtx(request);
     try { await logAudit({ tenantId, userId, action: 'payment.stripe_created', entityType: 'invoice', entityId: invoiceId,
