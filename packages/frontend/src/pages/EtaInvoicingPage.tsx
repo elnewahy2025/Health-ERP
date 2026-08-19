@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
-import { FileText, Send, Eye, QrCode, AlertTriangle, XCircle } from 'lucide-react';
+import { FileText, Send, Eye, QrCode, AlertTriangle, XCircle, RefreshCw } from 'lucide-react';
 import {
   Card, CardBody, Button, Input, Select, Badge, Table, PageLoader,
   Modal,
@@ -27,13 +27,19 @@ interface EtaInvoice {
   created_at: string;
   error_message: string;
   rejection_reason: string;
+  submission_uuid?: string;
+  last_status_check_at?: string;
 }
 
 /* ── Constants ─────────────────────────────────────────────────────── */
 
 const STATUS_VARIANTS: Record<string, 'success' | 'warning' | 'danger' | 'info' | 'gray'> = {
   approved: 'success',
+  pending: 'gray',
+  processing: 'info',
   submitted: 'info',
+  retry_wait: 'warning',
+  failed: 'danger',
   rejected: 'danger',
   draft: 'gray',
   cancelled: 'warning',
@@ -58,6 +64,7 @@ export default function EtaInvoicingPage() {
   const [invoiceIdInput, setInvoiceIdInput] = useState('');
   const [generating, setGenerating] = useState(false);
   const [providerNotice, setProviderNotice] = useState<string | null>(null);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
 
   /* ── Data fetching ── */
 
@@ -119,7 +126,7 @@ export default function EtaInvoicingPage() {
     } catch (error: unknown) {
       const providerError = getProviderErrorInfo(error);
       if (providerError?.kind === 'unsupported_operation') {
-        const message = t('eta.submitUnsupported');
+        const message = t('eta.providerSetupRequired');
         setProviderNotice(message);
         toast.error(message);
       } else if (providerError?.kind === 'not_ready' || providerError?.kind === 'disabled') {
@@ -129,6 +136,19 @@ export default function EtaInvoicingPage() {
       } else {
         toast.error(t('eta.submitFailed'));
       }
+    }
+  }, [t, fetchInvoices]);
+
+  const handleRefreshStatus = useCallback(async (id: string): Promise<void> => {
+    setRefreshingId(id);
+    try {
+      await api.get(`/eta/invoices/${id}/status`);
+      toast.success(t('eta.statusRefreshed'));
+      await fetchInvoices();
+    } catch {
+      toast.error(t('eta.statusRefreshFailed'));
+    } finally {
+      setRefreshingId(null);
     }
   }, [t, fetchInvoices]);
 
@@ -193,6 +213,16 @@ export default function EtaInvoicingPage() {
               <Send className="w-4 h-4 text-green-600" />
             </button>
           )}
+          {['pending', 'processing', 'submitted', 'retry_wait'].includes(item.status) && (
+            <button
+              onClick={() => void handleRefreshStatus(item.id)}
+              className="p-1 rounded hover:bg-blue-100 disabled:opacity-50"
+              aria-label={t('eta.refreshStatus')}
+              disabled={refreshingId === item.id}
+            >
+              <RefreshCw className={`w-4 h-4 text-blue-600 ${refreshingId === item.id ? 'animate-spin' : ''}`} />
+            </button>
+          )}
         </div>
       ),
     },
@@ -200,7 +230,7 @@ export default function EtaInvoicingPage() {
 
   /* ── Stats ── */
 
-  const stats = ['draft', 'submitted', 'approved', 'rejected', 'cancelled'].map((s) => ({
+  const stats = ['draft', 'pending', 'processing', 'submitted', 'approved', 'rejected', 'failed', 'cancelled'].map((s) => ({
     label: s,
     count: invoices.filter((i) => i.status === s).length,
   }));
@@ -254,7 +284,7 @@ export default function EtaInvoicingPage() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
         {stats.map((s) => (
           <Card key={s.label}>
             <CardBody className="p-4 text-center">
@@ -273,9 +303,13 @@ export default function EtaInvoicingPage() {
         options={[
           { value: '', label: t('eta.allStatuses') },
           { value: 'draft', label: t('eta.draft') },
+          { value: 'pending', label: t('eta.pending') },
+          { value: 'processing', label: t('eta.processing') },
           { value: 'submitted', label: t('eta.submitted') },
+          { value: 'retry_wait', label: t('eta.retry_wait') },
           { value: 'approved', label: t('eta.approved') },
           { value: 'rejected', label: t('eta.rejected') },
+          { value: 'failed', label: t('eta.failed') },
         ]}
       />
 
@@ -354,6 +388,12 @@ export default function EtaInvoicingPage() {
               <div className="flex items-start gap-2 p-3 bg-red-50 rounded-lg">
                 <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
                 <p className="text-sm text-red-700">{escapeHtml(selected.error_message)}</p>
+              </div>
+            )}
+            {selected.submission_uuid && (
+              <div>
+                <p className="text-sm text-gray-500">{t('eta.submissionUuid')}</p>
+                <p className="font-mono text-xs break-all">{escapeHtml(selected.submission_uuid)}</p>
               </div>
             )}
             {selected.rejection_reason && (

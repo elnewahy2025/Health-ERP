@@ -19,7 +19,7 @@ describe('Clinic provider structural adapters', () => {
       secrets: { clientId: 'client-plaintext-value' },
     });
     expect(result.status).toBe('setup_required');
-    expect(result.missing).toEqual(expect.arrayContaining(['config:invoiceSeries', 'config:activityCode', 'secret:clientSecret', 'secret:signingKey']));
+    expect(result.missing).toEqual(expect.arrayContaining(['config:invoiceSeries', 'config:identityEndpointUrl', 'config:documentTypeVersionId', 'config:taxRate', 'secret:clientSecret', 'secret:signingCertificate', 'secret:signingPrivateKey']));
     expect(JSON.stringify(result)).not.toContain('client-plaintext-value');
   });
 

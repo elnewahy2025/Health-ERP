@@ -38,6 +38,10 @@ const targets: Record<string, { env: string; testFile: string }> = {
     env: 'RUN_REPORTS_DB_TESTS',
     testFile: 'src/modules/__tests__/reports.integration.test.ts',
   },
+  eta: {
+    env: 'RUN_ETA_DB_TESTS',
+    testFile: 'src/modules/__tests__/eta-invoicing.integration.test.ts',
+  },
 };
 const selected = targets[target];
 if (!selected) throw new Error(`Unknown PostgreSQL integration target: ${target}`);

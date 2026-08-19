@@ -49,11 +49,11 @@ export const CLINIC_PROVIDER_CONTRACTS: Readonly<Record<string, ClinicProviderCo
       endpoint_reachability: endpointCapability,
       vendor_authentication: unverifiedVendorAuthentication,
       business_operation: {
-        status: 'not_implemented',
+        status: 'implemented',
         operationKeys: ['eta.invoice.submit', 'eta.invoice.status'],
       },
     },
-    runtimeOperationKeys: [],
+    runtimeOperationKeys: ['eta.invoice.submit', 'eta.invoice.status', 'eta.invoice.callback.verify'],
   },
   fawry: {
     providerKey: 'fawry',

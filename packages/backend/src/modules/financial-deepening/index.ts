@@ -12,7 +12,8 @@ import { authorize } from '../../services/authorization.js';
 import { applyScopePolicy } from '../../services/scope-policy.js';
 import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 import { ForbiddenError } from '@healthcare/shared/errors';
-import { providerRuntimeOrFallback } from '../../services/clinic-provider-runtime.js';
+import { providerRuntimeOrFallback, getTenantProviderRuntime } from '../../services/clinic-provider-runtime.js';
+import { generateEtaDraft, processEtaNotification, refreshEtaInvoiceStatus, resolveEtaNotificationTenant, submitEtaInvoice } from '../../services/eta-invoice-service.js';
 import { requestFawryPayment } from '../../services/fawry-payment-adapter.js';
 import { assertClinicProviderOperation } from '../../services/clinic-provider-capabilities.js';
 import { mapFawryStatus, moneyToCents, normalizeFawryCallback, verifyFawryV2Signature } from '../../services/payment-callbacks.js';
@@ -186,98 +187,39 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
   // ==================== ETA E-INVOICING ====================
 
   app.post('/api/v1/eta/invoices/generate', { preHandler: [authenticate, authorize('eta_invoicing.create')] }, async (request, reply) => {
-    const { tenantId, userId } = getCtx(request);
-    const body = z.object({
-      invoiceId: z.string().uuid(),
-      documentType: z.string().optional().default('I'),
-    }).parse(request.body);
-
-    const invoice = await db('invoices')
-      .join('patients', 'invoices.patient_id', 'patients.id')
-      .where('invoices.id', body.invoiceId)
-      .where('invoices.tenant_id', tenantId)
-      .select('invoices.*', 'patients.first_name', 'patients.last_name', 'patients.national_id')
-      .first();
-
-    if (!invoice) return sendError(reply, 'Invoice not found', 404);
-
-    const tenant = await db('tenants').where({ id: tenantId }).first();
-    if (!tenant?.tax_registration_number) return sendError(reply, 'Tenant tax registration not configured', 400);
-
-    // Generate ETA-compliant JSON
-    const etaJson = {
-      documentType: body.documentType,
-      transactionType: 'S',
-      dateTimeIssued: new Date(invoice.created_at).toISOString(),
-      taxpayerActivityCode: '8610', // Hospital activities
-      internalID: invoice.invoice_number,
-      purchaseOrderReference: null,
-      salesOrderReference: null,
-      payment: {
-        bankName: null,
-        bankAccountNumber: null,
-        term: 30,
-      },
-      invoiceLines: [{
-        description: 'Medical Services - Invoice ' + invoice.invoice_number,
-        itemType: 'GS1',
-        itemCode: '10000001',
-        unitType: 'EA',
-        quantity: 1,
-        internalCode: null,
-        salesTotal: Number(invoice.total),
-        total: Number(invoice.total),
-        valueDifference: 0,
-        totalTaxableFees: 0,
-        netTotal: Number(invoice.total),
-        itemsDiscount: 0,
-        discount: {
-          rate: Number(invoice.discount || 0) / Number(invoice.total) * 100 || 0,
-          amount: Number(invoice.discount || 0),
-        },
-        taxableItems: [{
-          taxType: 'T1', // Value Added Tax
-          amount: Number(invoice.tax || 0),
-          subType: 'S',
-          rate: 14, // Egypt VAT
-        }],
-      }],
-      totalDiscountAmount: Number(invoice.discount || 0),
-      totalSalesAmount: Number(invoice.total),
-      netAmount: Number(invoice.total) - Number(invoice.discount || 0),
-      taxTotalAmount: Number(invoice.tax || 0),
-      totalAmount: Number(invoice.total) + Number(invoice.tax || 0) - Number(invoice.discount || 0),
-      currency: 'EGP',
-      extraDiscountAmount: 0,
-      totalItemsDiscountAmount: 0,
-      signatures: [],
-    };
-
-    // Generate QR code data (TLV format)
-    const qrData = generateEtaQrTLV(
-      tenant.name || 'Healthcare Facility',
-      tenant.tax_registration_number,
-      new Date(invoice.created_at).toISOString(),
-      Number(etaJson.totalAmount),
-      Number(invoice.tax || 0),
-    );
-
-    const [etaInvoice] = await db('eta_invoices').insert({
-      tenant_id: tenantId,
-      invoice_id: body.invoiceId,
-      document_type: body.documentType,
-      transaction_type: 'S',
-      status: 'draft',
-      eta_json: JSON.stringify(etaJson),
-      qr_code_data: qrData,
-    }).returning('*');
-
-    return sendSuccess(reply, etaInvoice, 'ETA invoice generated', 201);
+        const { tenantId, userId } = getCtx(request);
+    const body = z.object({ invoiceId: z.string().uuid(), documentType: z.string().optional().default('I') }).parse(request.body);
+    const etaInvoice = await generateEtaDraft({ tenantId, invoiceId: body.invoiceId, documentType: body.documentType, actorId: userId });
+    return sendSuccess(reply, etaInvoice, 'ETA invoice draft generated', 201);
   });
 
   app.post('/api/v1/eta/invoices/:id/submit', { preHandler: [authenticate, authorize('eta_invoicing.manage')] }, async (request, reply) => {
     assertClinicProviderOperation('eta', 'eta.invoice.submit');
-    return sendError(reply, 'ETA invoice submission is not available until the verified ETA provider contract is configured.', 409);
+    const { tenantId, userId } = getCtx(request);
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const etaInvoice = await db('eta_invoices').where({ id, tenant_id: tenantId }).first();
+    if (!etaInvoice) return sendError(reply, 'ETA invoice not found', 404);
+    const result = await submitEtaInvoice(id, userId);
+    return sendSuccess(reply, result, 'ETA invoice submitted for asynchronous validation', 202);
+  });
+
+  app.get('/api/v1/eta/invoices/:id/status', { preHandler: [authenticate, authorize('eta_invoicing.view')] }, async (request, reply) => {
+    const { tenantId, userId } = getCtx(request);
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const etaInvoice = await db('eta_invoices').where({ id, tenant_id: tenantId }).first();
+    if (!etaInvoice) return sendError(reply, 'ETA invoice not found', 404);
+    const result = await refreshEtaInvoiceStatus(id, userId);
+    return sendSuccess(reply, result, 'ETA invoice status refreshed');
+  });
+
+  app.put('/api/v1/eta/notifications/documents', async (request, reply) => {
+    const authorization = String(request.headers.authorization || '');
+    const apiKey = authorization.startsWith('ApiKey ') ? authorization.slice(7).trim() : '';
+    const tenantId = await resolveEtaNotificationTenant(apiKey);
+    if (!tenantId) return sendError(reply, 'ETA notification authorization failed', 401);
+    const payload = z.object({ deliveryId: z.string().min(1), type: z.string().min(1), count: z.number().int().nonnegative().optional(), message: z.array(z.record(z.unknown())).default([]) }).parse(request.body);
+    await processEtaNotification({ tenantId, deliveryId: payload.deliveryId, type: payload.type, payload });
+    return sendSuccess(reply, { accepted: true }, 'ETA notification accepted');
   });
 
   app.get('/api/v1/eta/invoices', { preHandler: [authenticate, authorize('eta_invoicing.view')] }, async (request, reply) => {
@@ -651,7 +593,9 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
 
     const clinic = await loadClinicDocumentContext(tenantId, { branchId: invoice.branch_id || undefined });
     const sellerName = clinic.legalName || clinic.displayName;
-    const taxRegNo = (env as unknown as Record<string, unknown>).TAX_REGISTRATION_NUMBER as string || '000000000000000';
+    const etaRuntime = await getTenantProviderRuntime(tenantId, 'eta');
+    const taxRegNo = String(etaRuntime?.config.taxRegistrationNumber || '').trim();
+    if (!taxRegNo) return sendError(reply, 'ETA tax registration is not configured', 409);
     const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
     const total = Number(invoice.total);
     const vatTotal = Number(invoice.tax);

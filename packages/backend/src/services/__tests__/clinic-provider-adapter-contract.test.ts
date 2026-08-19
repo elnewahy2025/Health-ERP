@@ -26,13 +26,15 @@ describe('Clinic provider adapter contracts', () => {
     });
   });
 
-  it('keeps unsupported ETA business operations explicit', () => {
+  it('exposes the implemented ETA submission, status, and callback operations', () => {
     expect(getProviderAdapterOperation('eta', 'eta.invoice.submit')).toMatchObject({
       kind: 'runtime',
       capability: 'business_operation',
-      status: 'not_implemented',
+      status: 'implemented',
     });
-    expect(isProviderAdapterOperationImplemented('eta', 'eta.invoice.submit')).toBe(false);
+    expect(getProviderAdapterOperation('eta', 'eta.invoice.status')).toMatchObject({ status: 'implemented' });
+    expect(getProviderAdapterOperation('eta', 'eta.invoice.callback.verify')).toMatchObject({ kind: 'callback', status: 'implemented' });
+    expect(isProviderAdapterOperationImplemented('eta', 'eta.invoice.submit')).toBe(true);
   });
 
   it('classifies callback verification as a callback operation', () => {

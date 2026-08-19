@@ -31,10 +31,10 @@ export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     moduleKey: 'integrations',
     displayName: 'Egyptian Tax Authority',
     jurisdictionCode: 'EG',
-    configKeys: ['taxRegistrationNumber', 'invoiceSeries', 'activityCode', 'validationEndpointUrl'],
+    configKeys: ['taxRegistrationNumber', 'invoiceSeries', 'activityCode', 'identityEndpointUrl', 'systemApiEndpointUrl', 'documentTypeId', 'documentTypeVersionId', 'issuerBranchCode', 'currencyCode', 'taxTypeCode', 'taxRate', 'taxCalculationMode', 'validationEndpointUrl'],
     optionalConfigKeys: ['validationEndpointUrl'],
-    secretKeys: ['clientId', 'clientSecret', 'signingKey'],
-    requiredSecretKeys: ['clientId', 'clientSecret', 'signingKey'],
+    secretKeys: ['clientId', 'clientSecret', 'signingCertificate', 'signingPrivateKey', 'signingPrivateKeyPassphrase', 'notificationApiKey', 'signingKey'],
+    requiredSecretKeys: ['clientId', 'clientSecret', 'signingCertificate', 'signingPrivateKey'],
     moduleConfigurationKey: 'eta',
   },
   {

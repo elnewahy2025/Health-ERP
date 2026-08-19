@@ -53,6 +53,7 @@ import { registerDrBackupModule } from './modules/dr-backup/index.js';
 import { startBackupWorker, stopBackupWorker } from './services/backup-service.js';
 import { startExportWorker, stopExportWorker } from './services/export-service.js';
 import { startReportWorker, stopReportWorker } from './services/report-service.js';
+import { startEtaWorker, stopEtaWorker } from './services/eta-invoice-service.js';
 import { registerRegionsModule } from './modules/regions/index.js';
 import { registerPatientPortalModule } from './modules/patient-portal/index.js';
 import { registerOnlineBookingModule } from './modules/online-booking/index.js';
@@ -381,6 +382,7 @@ async function start() {
     startBackupWorker();
     startExportWorker();
     startReportWorker();
+    startEtaWorker();
 
     // Graceful shutdown
     const shutdown = async (signal: string) => {
@@ -389,6 +391,7 @@ async function start() {
         stopBackupWorker();
         stopExportWorker();
         stopReportWorker();
+        stopEtaWorker();
         await app.close();
         console.log('✓ Fastify server closed');
         await db.destroy();

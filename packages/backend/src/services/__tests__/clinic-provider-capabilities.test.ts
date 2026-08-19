@@ -9,11 +9,11 @@ describe('Clinic provider operation capabilities', () => {
     expect(hasClinicProviderOperation('twilio', 'twilio.voice.callback.verify')).toBe(true);
   });
 
-  it('rejects ETA vendor submission until a verified contract is implemented', () => {
-    expect(hasClinicProviderOperation('eta', 'eta.invoice.submit')).toBe(false);
-    expect(() => assertClinicProviderOperation('eta', 'eta.invoice.submit')).toThrowError(
-      'The eta provider contract does not support this operation yet.',
-    );
+  it('allows ETA submission and status operations through the verified provider boundary', () => {
+    expect(hasClinicProviderOperation('eta', 'eta.invoice.submit')).toBe(true);
+    expect(hasClinicProviderOperation('eta', 'eta.invoice.status')).toBe(true);
+    expect(hasClinicProviderOperation('eta', 'eta.invoice.callback.verify')).toBe(true);
+    expect(() => assertClinicProviderOperation('eta', 'eta.invoice.submit')).not.toThrow();
   });
 
   it('returns a safe unsupported error for unknown providers without tenant or secret data', () => {

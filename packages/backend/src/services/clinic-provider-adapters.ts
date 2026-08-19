@@ -70,10 +70,19 @@ const etaAdapter: ClinicProviderAdapter = {
   validate: (context) => {
     const missing = requiredValues(
       context,
-      ['taxRegistrationNumber', 'invoiceSeries', 'activityCode'],
-      ['clientId', 'clientSecret', 'signingKey'],
+      ['taxRegistrationNumber', 'invoiceSeries', 'activityCode', 'identityEndpointUrl', 'systemApiEndpointUrl', 'documentTypeId', 'documentTypeVersionId', 'issuerBranchCode', 'currencyCode', 'taxTypeCode', 'taxRate'],
+      ['clientId', 'clientSecret', 'signingCertificate', 'signingPrivateKey'],
     );
-    return missing.length > 0 ? missingResult('eta', missing) : readyResult('eta');
+    if (missing.length > 0) return missingResult('eta', missing);
+    const currencyCode = String(context.config.currencyCode).toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currencyCode)) return invalidResult('eta', 'currencyCode must be a three-letter ISO 4217 code');
+    const taxRate = Number(context.config.taxRate);
+    if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100) return invalidResult('eta', 'taxRate must be between 0 and 100');
+    for (const key of ['identityEndpointUrl', 'systemApiEndpointUrl']) {
+      const endpoint = validateProviderValidationEndpoint(context.config[key], context.environment);
+      if ('error' in endpoint) return invalidResult('eta', `${key}: ${endpoint.error}`);
+    }
+    return readyResult('eta');
   },
 };
 
