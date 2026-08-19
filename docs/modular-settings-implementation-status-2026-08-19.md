@@ -3,7 +3,7 @@
 **Project:** Health-ERP Clinic Management System  
 **Status date:** 19 August 2026  
 **Repository branch:** `main`  
-**Latest implementation commit:** `f2fe3aa`
+**Latest implementation commit:** `602a162`
 
 ## Executive status
 
@@ -34,6 +34,7 @@ Administrators can now complete regional configuration progressively and manage 
 | `bb31789` | Operational provider UX | Added a shared frontend provider-error classifier and actionable bilingual readiness messages for ETA submission and SMS test delivery. |
 | `fb4d3a8` | Billing provider actions | Added separate permission-gated Stripe checkout and Fawry payment-reference actions; kept internal payment recording separate and avoided frontend currency or payment URL defaults. |
 | `f2fe3aa` | External payment status visibility | Added nullable `provider_key` tracking, Fawry/Stripe callback isolation, a tenant-scoped nonsecret provider-payment history endpoint, and bilingual Billing status history. Internal cash/card records remain provider-neutral. |
+| `602a162` | Provider-payment access hardening | Corrected invoice scope lookup to use patient branch data, excluded soft-deleted invoices, added patient tenant predicates, implemented department-aware appointment checks, and added executable route-level isolation tests. |
 
 ## Database and security model
 
@@ -137,11 +138,11 @@ These guards do not replace RBAC. Existing route permissions remain mandatory: b
 
 The ETA invoicing page now distinguishes an unsupported ETA submission contract from ordinary submission failures and keeps the guidance visible after the toast disappears. The communications test-send page shows Twilio setup guidance when an SMS template cannot be delivered, while email templates retain their existing generic failure behavior. Both flows preserve their existing backend authorization and do not attempt to bypass provider capability guards.
 
-The billing page now exposes separate permission-gated Stripe checkout and Fawry payment-reference actions alongside the existing internal Record Payment action. Stripe receives the tenant-configured clinic currency only when available and otherwise lets the backend resolve it from clinic configuration. Fawry requires an entered patient phone number and reports the backend-created pending reference; the UI does not fabricate a redirect URL or payment link. Provider errors remain actionable through the shared frontend classifier. The payment modal loads a provider-payment history section when opened and refreshes it after a successful Fawry reference creation, showing only provider, reference, amount, timestamp, and a localized pending/completed/failed status badge. Internal cash/card recording remains a separate workflow and is not included in this provider history. The voice page currently opens device phone links rather than calling the backend voice endpoints, so it does not claim a provider readiness state it cannot observe.
+The billing page now exposes separate permission-gated Stripe checkout and Fawry payment-reference actions alongside the existing internal Record Payment action. Stripe receives the tenant-configured clinic currency only when available and otherwise lets the backend resolve it from clinic configuration. Fawry requires an entered patient phone number and reports the backend-created pending reference; the UI does not fabricate a redirect URL or payment link. Provider errors remain actionable through the shared frontend classifier. The payment modal loads a provider-payment history section when opened and refreshes it after a successful Fawry reference creation, showing only provider, reference, amount, timestamp, and a localized pending/completed/failed status badge. Internal cash/card recording remains a separate workflow and is not included in this provider history. The provider-history endpoint now resolves branch scope from the patient record, uses department-aware appointment checks for department grants, applies the authenticated tenant to invoice, patient, and transaction queries, and excludes soft-deleted invoices. The voice page currently opens device phone links rather than calling the backend voice endpoints, so it does not claim a provider readiness state it cannot observe.
 
 ## Validation results
 
-The provider-payment slice was validated successfully. Shared package build passed. Backend and frontend TypeScript checks passed. Backend tests passed with **34 passed test files, 1 skipped integration file, 247 tests passed, and 3 skipped tests**; the increase includes three focused provider-payment safety tests. Frontend tests passed with **13 test files and 49 tests passed**, including Billing provider-action/history assertions. `git diff --check` passed. The implementation is pushed in commit `f2fe3aa`; this documentation update is the next commit.
+The provider-payment slice and access hardening were validated successfully. Shared package build passed. Backend and frontend TypeScript checks passed. Backend tests passed with **35 passed test files, 1 skipped integration file, 253 tests passed, and 3 skipped tests**; this includes six executable provider-payment route tests covering permission denial, cross-tenant 404 behavior, branch scope, department scope, assigned-patient scope, and nonsecret response fields. Frontend tests passed with **13 test files and 49 tests passed**, including Billing provider-action/history assertions. `git diff --check` passed. The access-hardening implementation is committed in `602a162`; this documentation update is the next commit.
 
 The backend test run still prints existing non-failing warnings about Redis connection attempts in the isolated test environment and the audit test’s intentionally swallowed database-write failure. These warnings did not fail the suite and were not introduced by the modular settings work.
 
