@@ -22,6 +22,10 @@ const targets: Record<string, { env: string; testFile: string }> = {
     env: 'RUN_FASTIFY_LIFECYCLE_TESTS',
     testFile: 'src/services/__tests__/fastify-rls-lifecycle.integration.test.ts',
   },
+  pharmacy: {
+    env: 'RUN_PHARMACY_DB_TESTS',
+    testFile: 'src/modules/__tests__/pharmacy-safety.integration.test.ts',
+  },
 };
 const selected = targets[target];
 if (!selected) throw new Error(`Unknown PostgreSQL integration target: ${target}`);

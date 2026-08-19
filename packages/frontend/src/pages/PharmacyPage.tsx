@@ -161,7 +161,7 @@ interface Prescription {
     const confirmed = await confirmDialog({ title: 'Dispense prescription', message: 'Dispense this prescription now?', confirmLabel: 'Dispense', cancelLabel: 'Back', danger: true });
     if (!confirmed) return;
     try {
-      await api.post(`/pharmacy/prescriptions/${id}/dispense`, { items: [] });
+      await api.post(`/pharmacy/prescriptions/${id}/dispense`, { idempotencyKey: globalThis.crypto.randomUUID(), items: [] });
       toast.success('Prescription dispensed');
       const r = await api.get('/pharmacy/prescriptions');
       setPrescriptions(r.data.data);
@@ -174,7 +174,7 @@ interface Prescription {
     <div>
       <div className="page-header">
         <div><h1 className="page-title">{t('pharmacy.title')}</h1></div>
-        <Can permission="pharmacy.create" scope="branch">
+        <Can permission={tab === 'inventory' ? 'pharmacy.create' : 'pharmacy.prescribe'} scope="branch">
           <button onClick={() => tab === 'inventory' ? setShowNewDrugModal(true) : setShowNewRxModal(true)} className="btn-primary">
             {tab === 'inventory' ? <><Package className="w-4 h-4" />{t('pharmacy.addDrug')}</> : <><Plus className="w-4 h-4" />{t('pharmacy.newPrescription')}</>}
           </button>
@@ -226,7 +226,7 @@ interface Prescription {
                     <td>{p.items?.length || 0} items</td>
                     <td><span className={`badge ${p.status === 'dispensed' ? 'badge-success' : 'badge-info'}`}>{p.status}</span></td>
                     <td className="text-xs">{formatDateTime(p.createdAt)}</td>
-                    <td><Can permission="pharmacy.approve" scope="branch">{p.status !== 'dispensed' && <button onClick={() => handleDispense(p.id)} className="btn-ghost btn-sm text-green-600">{t('pharmacy.dispense')}</button>}</Can></td>
+                    <td><Can permission="pharmacy.dispense" scope="branch">{p.status !== 'dispensed' && <button onClick={() => handleDispense(p.id)} className="btn-ghost btn-sm text-green-600">{t('pharmacy.dispense')}</button>}</Can></td>
                   </tr>
                 ))}
             </tbody>
@@ -268,7 +268,7 @@ interface Prescription {
       <Modal open={showNewRxModal} onClose={() => { setShowNewRxModal(false); resetRxForm(); }} title={t('pharmacy.newPrescription')} size="xl"
         footer={<>
           <button onClick={() => { setShowNewRxModal(false); resetRxForm(); }} className="btn-secondary">{t('common.cancel')}</button>
-          <Can permission="pharmacy.create" scope="branch">
+          <Can permission="pharmacy.prescribe" scope="branch">
             <button type="submit" form="rx-form" disabled={saving} className="btn-primary">{saving && <Loader2 className="w-4 h-4 animate-spin" />}{t('common.save')}</button>
           </Can>
         </>}>

@@ -56,7 +56,10 @@ describe('Pharmacy authorization scopes', () => {
         { permission: 'pharmacy.view', scope: 'department' as const },
         { permission: 'pharmacy.create', scope: 'branch' as const },
         { permission: 'pharmacy.edit', scope: 'branch' as const },
+        { permission: 'pharmacy.prescribe', scope: 'branch' as const },
+        { permission: 'pharmacy.dispense', scope: 'branch' as const },
         { permission: 'pharmacy.approve', scope: 'branch' as const },
+        { permission: 'pharmacy.override', scope: 'branch' as const },
       ],
     } as any;
 
@@ -64,6 +67,9 @@ describe('Pharmacy authorization scopes', () => {
     expect(resolvePharmacyScope(principal, 'pharmacy.create')).toBe('branch');
     expect(resolvePharmacyScope(principal, 'pharmacy.edit')).toBe('branch');
     expect(resolvePharmacyScope(principal, 'pharmacy.approve')).toBe('branch');
+    expect(resolvePharmacyScope(principal, 'pharmacy.prescribe')).toBe('branch');
+    expect(resolvePharmacyScope(principal, 'pharmacy.dispense')).toBe('branch');
+    expect(resolvePharmacyScope(principal, 'pharmacy.override')).toBe('branch');
   });
 
   it('allows a module wildcard to resolve every pharmacy operation', async () => {
@@ -77,5 +83,8 @@ describe('Pharmacy authorization scopes', () => {
     expect(resolvePharmacyScope(principal, 'pharmacy.create')).toBe('branch');
     expect(resolvePharmacyScope(principal, 'pharmacy.edit')).toBe('branch');
     expect(resolvePharmacyScope(principal, 'pharmacy.approve')).toBe('branch');
+    expect(resolvePharmacyScope(principal, 'pharmacy.prescribe')).toBe('branch');
+    expect(resolvePharmacyScope(principal, 'pharmacy.dispense')).toBe('branch');
+    expect(resolvePharmacyScope(principal, 'pharmacy.override')).toBe('branch');
   });
 });

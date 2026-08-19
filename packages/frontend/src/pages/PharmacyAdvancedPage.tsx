@@ -75,46 +75,6 @@ interface PrescriptionItem {
   status: string;
 }
 
-/* ── Drug Interaction Database ──────────────────────────────────────── */
-
-const DRUG_INTERACTIONS: Record<string, string[]> = {
-  Warfarin: ['Aspirin', 'Ibuprofen', 'Diclofenac', 'Naproxen'],
-  Metformin: ['Alcohol', 'Contrast Dye'],
-  Lisinopril: ['Potassium Supplements', 'NSAIDs', 'Ibuprofen'],
-  Amlodipine: ['Simvastatin', 'Grapefruit'],
-  Atorvastatin: ['Clarithromycin', 'Itraconazole', 'Grapefruit'],
-  Omeprazole: ['Clopidogrel', 'Methotrexate'],
-  Aspirin: ['Warfarin', 'Ibuprofen', 'Methotrexate'],
-  Ibuprofen: ['Warfarin', 'Lithium', 'Methotrexate', 'Lisinopril'],
-  Metoprolol: ['Verapamil', 'Digoxin'],
-  Ciprofloxacin: ['Antacids', 'Iron Supplements', 'Dairy Products'],
-  Azithromycin: ['Warfarin', 'Digoxin'],
-  Diclofenac: ['Warfarin', 'Lithium', 'Methotrexate'],
-  Clopidogrel: ['Omeprazole', 'Esomeprazole'],
-};
-
-const COMMON_DRUGS: DrugInfo[] = [
-  { name: 'Amoxicillin', category: 'Antibiotic', form: 'Capsule 500mg' },
-  { name: 'Azithromycin', category: 'Antibiotic', form: 'Tablet 250mg' },
-  { name: 'Ciprofloxacin', category: 'Antibiotic', form: 'Tablet 500mg' },
-  { name: 'Metformin', category: 'Antidiabetic', form: 'Tablet 500mg' },
-  { name: 'Gliclazide', category: 'Antidiabetic', form: 'Tablet 80mg' },
-  { name: 'Amlodipine', category: 'Antihypertensive', form: 'Tablet 5mg' },
-  { name: 'Lisinopril', category: 'Antihypertensive', form: 'Tablet 10mg' },
-  { name: 'Atorvastatin', category: 'Statin', form: 'Tablet 20mg' },
-  { name: 'Omeprazole', category: 'PPI', form: 'Capsule 20mg' },
-  { name: 'Pantoprazole', category: 'PPI', form: 'Tablet 40mg' },
-  { name: 'Ibuprofen', category: 'NSAID', form: 'Tablet 400mg' },
-  { name: 'Diclofenac', category: 'NSAID', form: 'Tablet 50mg' },
-  { name: 'Aspirin', category: 'Antiplatelet', form: 'Tablet 81mg' },
-  { name: 'Clopidogrel', category: 'Antiplatelet', form: 'Tablet 75mg' },
-  { name: 'Warfarin', category: 'Anticoagulant', form: 'Tablet 5mg' },
-  { name: 'Levothyroxine', category: 'Thyroid', form: 'Tablet 50mcg' },
-  { name: 'Cetirizine', category: 'Antihistamine', form: 'Tablet 10mg' },
-  { name: 'Salbutamol', category: 'Bronchodilator', form: 'Inhaler' },
-  { name: 'Prednisolone', category: 'Corticosteroid', form: 'Tablet 5mg' },
-];
-
 /* ── Helpers ───────────────────────────────────────────────────────── */
 
 function getStatusVariant(status: string): 'success' | 'warning' | 'danger' | 'info' | 'gray' {
@@ -148,6 +108,7 @@ export default function PharmacyAdvancedPage() {
   /* ── Interaction state ── */
   const [selectedDrugs, setSelectedDrugs] = useState<string[]>([]);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
+  const [drugReference, setDrugReference] = useState<DrugInfo[]>([]);
   const [searchDrug, setSearchDrug] = useState('');
 
   /* ── Inventory state ── */
@@ -167,7 +128,7 @@ export default function PharmacyAdvancedPage() {
 
   /* ── Filtering ── */
 
-  const filteredDrugs = COMMON_DRUGS.filter((d) =>
+  const filteredDrugs = drugReference.filter((d) =>
     d.name.toLowerCase().includes(searchDrug.toLowerCase())
   );
 
@@ -193,58 +154,43 @@ export default function PharmacyAdvancedPage() {
     }
   }, [t]);
 
+  const fetchDrugReference = useCallback(async (): Promise<void> => {
+    try {
+      const { data } = await api.get('/pharmacy/medication-reference');
+      setDrugReference((data.data ?? []) as DrugInfo[]);
+    } catch {
+      toast.error(t('pharmAdv.loadInteractionsFailed'));
+    }
+  }, [t]);
+
   /* ── Initial load ── */
 
   useEffect(() => {
     let cancelled = false;
     const loadAll = async (): Promise<void> => {
       setLoading(true);
-      await Promise.allSettled([fetchInventory(), fetchPrescriptions()]);
+      await Promise.allSettled([fetchInventory(), fetchPrescriptions(), fetchDrugReference()]);
       if (!cancelled) setLoading(false);
     };
     void loadAll();
     return () => { cancelled = true; };
-  }, [fetchInventory, fetchPrescriptions]);
+  }, [fetchInventory, fetchPrescriptions, fetchDrugReference]);
 
   /* ── Drug interaction check ── */
 
-  const checkInteractions = useCallback((): void => {
-    const found: Interaction[] = [];
-    for (let i = 0; i < selectedDrugs.length; i++) {
-      for (let j = i + 1; j < selectedDrugs.length; j++) {
-        const d1 = selectedDrugs[i];
-        const d2 = selectedDrugs[j];
-        const interacts1 = DRUG_INTERACTIONS[d1]?.includes(d2);
-        const interacts2 = DRUG_INTERACTIONS[d2]?.includes(d1);
-        if (interacts1 || interacts2) {
-          found.push({
-            drug1: d1,
-            drug2: d2,
-            severity: 'major',
-            description: `${d1} and ${d2} have a known interaction. Consult physician before combining.`,
-          });
-        }
-      }
+  const checkInteractions = useCallback(async (): Promise<void> => {
+    if (selectedDrugs.length < 2) {
+      setInteractions([]);
+      return;
     }
-    const categories = selectedDrugs.map((d) => COMMON_DRUGS.find((dd) => dd.name === d)?.category);
-    if (categories.includes('NSAID') && categories.includes('Anticoagulant')) {
-      found.push({
-        drug1: 'NSAID',
-        drug2: 'Anticoagulant',
-        severity: 'critical',
-        description: 'NSAIDs increase bleeding risk when combined with anticoagulants!',
-      });
+    try {
+      const { data } = await api.post('/pharmacy/interactions/check', { drugNames: selectedDrugs });
+      setInteractions((data.data?.interactions ?? []) as Interaction[]);
+    } catch {
+      toast.error(t('pharmAdv.loadInteractionsFailed'));
+      setInteractions([]);
     }
-    if (categories.filter((c) => c === 'Antihypertensive').length > 1) {
-      found.push({
-        drug1: 'Antihypertensive',
-        drug2: 'Antihypertensive',
-        severity: 'moderate',
-        description: 'Multiple antihypertensives may cause hypotension. Monitor blood pressure.',
-      });
-    }
-    setInteractions(found);
-  }, [selectedDrugs]);
+  }, [selectedDrugs, t]);
 
   const toggleDrug = useCallback((name: string): void => {
     setSelectedDrugs((prev) =>
