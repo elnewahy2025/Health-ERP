@@ -1,0 +1,215 @@
+=== packages/backend/src/modules/ai-hub/index.ts ===
+255-      summary: {
+256-        totalCost: Number((totals as Record<string, unknown>)?.total_cost || 0),
+257-        totalTokens: Number((totals as Record<string, unknown>)?.total_tokens || 0),
+258-        totalRequests: Number((totals as Record<string, unknown>)?.total_requests || 0),
+259-      },
+260-    });
+261-  });
+262-
+263:  // ── Chat Completion (proxy stub) ──
+264-  app.post('/api/v1/ai/chat', { preHandler: [authenticate, authorize('ai_hub.create')] }, async (request, reply) => {
+265-    const tenantId = getTenantId(request);
+266-    const ctx = getCtx(request);
+267-    const body = request.body as Record<string, unknown>;
+268-    const [reqLog] = await db('ai_requests').insert({
+269-      tenant_id: tenantId, assistant_id: body.assistantId || null,
+270-      model_id: body.modelId || null, user_id: ctx.userId,
+271-      prompt: body.prompt || '', status: 'completed',
+=== packages/backend/src/modules/data-export/index.ts ===
+136-      id: j.id, module: j.module, format: j.format, status: j.status,
+137-      recordCount: j.record_count, fileSize: j.file_size,
+138-      filePath: j.file_path, fhirVersion: j.fhir_version,
+139-      error: j.error, trigger: j.trigger,
+140-      startedAt: j.started_at, completedAt: j.completed_at, createdAt: j.created_at,
+141-    })));
+142-  });
+143-
+144:  // ── HL7 FHIR Export stub ──
+145-  app.get('/api/v1/export/fhir/:resourceType', { preHandler: [authenticate, authorize('data_export.view')] }, async (request, reply) => {
+146-    const { resourceType } = request.params as { resourceType: string };
+147-    const { tenantSlug } = request.query as { tenantSlug?: string };
+148-    if (!tenantSlug) return reply.status(400).send({ success: false, error: 'tenantSlug required' });
+149-    const tenant = await db('tenants').where({ slug: tenantSlug }).first();
+150-    if (!tenant) return reply.status(404).send({ success: false, error: 'Tenant not found' });
+151-
+152-    return sendSuccess(reply, {
+153-      resourceType: 'Bundle',
+154-      type: 'searchset',
+155-      entry: [],
+156-      total: 0,
+157-      _info: `FHIR ${resourceType} export for ${tenantSlug}. Configure actual data mapping for production use.`,
+158-    });
+159-  });
+160-
+161:  // ── Download endpoint stub ──
+162-  app.get('/api/v1/export/download/:jobId', { preHandler: [authenticate, authorize('data_export.export')] }, async (request, reply) => {
+163-    const tenantId = getTenantId(request);
+164-    const { jobId } = request.params as { jobId: string };
+165-    const job = await db('export_jobs').where({ id: jobId, tenant_id: tenantId }).first();
+166-    if (!job) return reply.status(404).send({ success: false, error: 'Export job not found' });
+167-    if (job.status !== 'completed') return reply.status(400).send({ success: false, error: 'Export not ready' });
+168-    return reply.header('Content-Type', 'application/json').send({
+169-      success: true, data: {
+=== packages/backend/src/modules/dr-backup/index.ts ===
+74-      tenant_id: tenantId, config_id: configId,
+75-      type: body.type || 'full', status: 'running', trigger: 'manual',
+76-      started_at: new Date()
+77-    }).returning('*');
+78-    // In production, this would trigger an async backup job
+79-    setTimeout(async () => {
+80-      await db('backup_executions').where({ id: b.id }).update({
+81-        status: 'completed', size_bytes: crypto.randomInt(1000000, 1000000000),
+82:        checksum: 'simulated-' + Date.now().toString(36), completed_at: new Date()
+83-      });
+84-      if (configId) {
+85-        await db('backup_configs').where({ id: configId, tenant_id: tenantId }).update({ last_backup_at: new Date() });
+86-      }
+87-    }, 100);
+88-    return sendSuccess(reply, { id: b.id, status: 'running' }, 'Backup started', 201);
+89-  });
+90-
+=== packages/backend/src/modules/reports/index.ts ===
+144-      tenant_id: tenantId, report_id: id, status: 'pending',
+145-      format: body.format || 'csv', trigger: 'manual', created_by: ctx.userId
+146-    }).returning('*');
+147-    // In production, this would trigger an async report generation job
+148-    await db('report_executions').where({ id: exec.id }).update({ status: 'completed', started_at: new Date(), completed_at: new Date(), row_count: 0 });
+149-    return sendSuccess(reply, { id: exec.id, status: 'completed' }, 'Report execution started. Results will be available shortly.', 201);
+150-  });
+151-
+152:  // ── Export endpoint stub ──
+153-  app.get('/api/v1/reports/export/:id/:format', { preHandler: [authenticate, authorize('reports.export')] }, async (request, reply) => {
+154-    const { id, format } = request.params as { id: string; format: string };
+155-    const tenantId = getTenantId(request);
+156-    const principal = getCtx(request).principal;
+157-    const exec = await applyScopePolicy('reports', db('report_executions').join('report_definitions', 'report_executions.report_id', 'report_definitions.id').where({ 'report_executions.id': id, 'report_executions.tenant_id': tenantId }), principal, resolveReportScope(principal, 'reports.export')).first();
+158-    if (!exec) return reply.status(404).send({ success: false, error: 'Execution not found' });
+159-    if (exec.status !== 'completed') return reply.status(400).send({ success: false, error: 'Report not ready' });
+160-    // In production, stream the generated file
+=== packages/backend/src/modules/financial-deepening/index.ts ===
+610-      notes: 'InstaPay transfer initiated',
+611-    }).returning('*');
+612-
+613-    try { await logAudit({ tenantId, userId, action: 'payment.instapay_created', entityType: 'payment', entityId: paymentTx.id, metadata: { amount, referenceNumber } }); } catch {}
+614-
+615-    return sendSuccess(reply, {
+616-      paymentTransactionId: paymentTx.id,
+617-      referenceNumber,
+618:      walletId: walletId || 'PENDING_CONFIG',
+619-      amount,
+620-      status: 'pending',
+621-      message: 'InstaPay details generated. Customer should transfer to the wallet and include the reference number.',
+622-    }, 'InstaPay payment created', 201);
+623-  });
+624-
+625-  // ==================== ETA QR CODE ====================
+626-
+=== packages/backend/src/services/clinic-provider-contracts.ts ===
+1-export type ProviderContractCapability =
+2-  | 'structural_validation'
+3-  | 'endpoint_reachability'
+4-  | 'vendor_authentication'
+5-  | 'business_operation';
+6-
+7:export type ProviderContractCapabilityStatus = 'implemented' | 'not_implemented' | 'not_verified' | 'not_applicable';
+8-
+9-export interface ProviderContractCapabilityView {
+10-  status: ProviderContractCapabilityStatus;
+11-  operationKeys: readonly string[];
+12-}
+13-
+14-export interface ClinicProviderContract {
+15-  providerKey: string;
+--
+30-} as const;
+31-
+32-const unverifiedVendorAuthentication = {
+33-  status: 'not_verified',
+34-  operationKeys: ['provider.vendor.authenticate'],
+35-} as const;
+36-
+37-const unsupportedBusinessOperation = {
+38:  status: 'not_implemented',
+39-  operationKeys: [],
+40-} as const;
+41-
+42-export const CLINIC_PROVIDER_CONTRACTS: Readonly<Record<string, ClinicProviderContract>> = {
+43-  eta: {
+44-    providerKey: 'eta',
+45-    contractVersion: 1,
+46-    supportedTestModes: ['structural', 'live'],
+47-    capabilities: {
+48-      structural_validation: structuralCapability,
+49-      endpoint_reachability: endpointCapability,
+50-      vendor_authentication: unverifiedVendorAuthentication,
+51-      business_operation: {
+52:        status: 'not_implemented',
+53-        operationKeys: ['eta.invoice.submit', 'eta.invoice.status'],
+54-      },
+55-    },
+56-    runtimeOperationKeys: [],
+57-  },
+58-  fawry: {
+59-    providerKey: 'fawry',
+60-    contractVersion: 1,
+=== packages/backend/src/services/chat.ts ===
+128-    .where('expires_at', '>', new Date())
+129-    .first();
+130-  if (session?.patient_id) {
+131-    const patient = await db('patients').where({ id: session.patient_id }).whereNull('deleted_at').first();
+132-    if (patient) {
+133-      return { kind: 'patient', id: String(patient.id), tenantId: String(patient.tenant_id), role: 'patient' };
+134-    }
+135-  }
+136:  return null;
+137-}
+138-
+139-export function registerChatWsHandlers(app: FastifyInstance): void {
+140-  const env = getEnv();
+141-
+142-  if ((app as unknown as Record<string, unknown>).websocket) {
+143-    ((app as unknown as Record<string, unknown>).websocket as (...args: unknown[]) => void)('/api/v1/chat/ws', { options: { maxPayload: 131072 } }, async (socket: WsSocket, req: { url: string }) => {
+144-      const url = new URL(req.url, 'http://localhost');
+=== packages/backend/src/services/voice.ts ===
+34-  calls: {
+35-    create(options: Record<string, unknown>): Promise<TwilioCallResult>;
+36-  };
+37-}
+38-
+39-function getTwilioClient(runtime: TenantProviderRuntime | null): TwilioClient | null {
+40-  const accountSid = runtime?.secrets.account_sid;
+41-  const authToken = runtime?.secrets.auth_token;
+42:  if (!accountSid || !authToken) return null;
+43-  try {
+44-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+45-    const twilio = require('twilio');
+46-    return twilio(accountSid, authToken) as TwilioClient;
+47-  } catch { /* not installed */ }
+48:  return null;
+49-}
+50-
+51-export async function makeVoiceCall(options: VoiceCallOptions): Promise<{
+52-  success: boolean;
+53-  callSid?: string;
+54-  error?: string;
+55-}> {
+56-  assertClinicProviderOperation('twilio', 'twilio.voice.call');
+=== packages/backend/src/services/whatsapp.ts ===
+40-    errors?: Array<{ code: number; title: string; message: string; error_data?: { details: string } }>;
+41-  };
+42-}
+43-
+44-let whatsappClient: Record<string, unknown> | null = null;
+45-
+46-async function getAccessToken(): Promise<string | null> {
+47-  const env = getEnv();
+48:  if (!env.WHATSAPP_API_TOKEN) return null;
+49-  return env.WHATSAPP_API_TOKEN;
+50-}
+51-
+52-async function getPhoneNumberId(): Promise<string | null> {
+53-  const env = getEnv();
+54-  return env.WHATSAPP_PHONE_NUMBER_ID || null;
+55-}
+56-

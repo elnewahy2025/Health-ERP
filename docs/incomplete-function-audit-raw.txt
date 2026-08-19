@@ -1,0 +1,290 @@
+=== explicit markers ===
+packages/backend/src/core/versioning/middleware.ts:72:      message: `API version '${version}' is not supported. Supported versions: ${SUPPORTED_VERSIONS.join(', ')}`,
+packages/backend/src/modules/ai-hub/index.ts:263:  // ── Chat Completion (proxy stub) ──
+packages/backend/src/modules/data-export/index.ts:144:  // ── HL7 FHIR Export stub ──
+packages/backend/src/modules/data-export/index.ts:161:  // ── Download endpoint stub ──
+packages/backend/src/modules/dr-backup/index.ts:82:        checksum: 'simulated-' + Date.now().toString(36), completed_at: new Date()
+packages/backend/src/modules/financial-deepening/index.ts:618:      walletId: walletId || 'PENDING_CONFIG',
+packages/backend/src/modules/reports/index.ts:152:  // ── Export endpoint stub ──
+packages/backend/src/services/__tests__/clinic-provider-configuration.test.ts:94:    expect(financial).not.toContain('// For now, simulate successful submission');
+packages/backend/src/services/__tests__/clinic-provider-live-validation.test.ts:23:  vi.unstubAllGlobals();
+packages/backend/src/services/__tests__/clinic-provider-live-validation.test.ts:41:    vi.stubGlobal('fetch', fetchMock);
+packages/backend/src/services/__tests__/clinic-provider-live-validation.test.ts:55:    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+packages/backend/src/services/__tests__/clinic-provider-live-validation.test.ts:74:    vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => new Promise<never>((_resolve, reject) => {
+packages/backend/src/services/__tests__/clinic-provider-capabilities.test.ts:27:        code: 'PROVIDER_OPERATION_NOT_SUPPORTED',
+packages/backend/src/services/__tests__/clinic-provider-adapter-contract.test.ts:33:      status: 'not_implemented',
+packages/backend/src/services/__tests__/fawry-payment-adapter.test.ts:39:  vi.unstubAllGlobals();
+packages/backend/src/services/__tests__/fawry-payment-adapter.test.ts:78:    vi.stubGlobal('fetch', fetchMock);
+packages/backend/src/services/__tests__/fawry-payment-adapter.test.ts:98:    vi.stubGlobal('fetch', fetchMock);
+packages/backend/src/services/clinic-provider-contracts.ts:7:export type ProviderContractCapabilityStatus = 'implemented' | 'not_implemented' | 'not_verified' | 'not_applicable';
+packages/backend/src/services/clinic-provider-contracts.ts:38:  status: 'not_implemented',
+packages/backend/src/services/clinic-provider-contracts.ts:52:        status: 'not_implemented',
+packages/backend/src/services/clinic-provider-adapter-contract.ts:12:  'implemented' | 'not_implemented' | 'not_verified' | 'not_applicable'
+packages/backend/src/utils/__tests__/html-sanitizer.test.ts:23:  it('preserves variable placeholders', () => {
+packages/frontend/src/__tests__/providerErrors.test.ts:11:          code: 'PROVIDER_OPERATION_NOT_SUPPORTED',
+packages/frontend/src/components/layout/Header.tsx:111:              placeholder={t('common.search') + '...'}
+packages/frontend/src/components/layout/QuickSearch.tsx:80:              placeholder="Search patients, doctors, invoices, inventory..."
+packages/frontend/src/components/layout/QuickSearch.tsx:81:              className="flex-1 bg-transparent border-none outline-none text-sm placeholder-gray-400 dark:text-gray-200"
+packages/frontend/src/components/layout/Sidebar.tsx:482:              placeholder={t('sidebar.search')}
+packages/frontend/src/components/layout/Sidebar.tsx:485:              className="w-full pl-8 pr-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 placeholder-gray-400 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100 dark:placeholder-gray-500"
+packages/frontend/src/components/ui/FileUpload.tsx:93:          <input className="input" placeholder="Document title" value={title} onChange={e => setTitle(e.target.value)} />
+packages/frontend/src/components/ui/FileUpload.tsx:104:          <textarea className="input min-h-[60px]" placeholder="Description (optional)" value={description} onChange={e => setDescription(e.target.value)} />
+packages/frontend/src/components/ui/PatientSearchField.tsx:17:  placeholder?: string;
+packages/frontend/src/components/ui/PatientSearchField.tsx:26:  placeholder = 'Search patient by name, MRN, or phone...',
+packages/frontend/src/components/ui/PatientSearchField.tsx:95:          placeholder={selectedPatient ? `${selectedPatient.name} (${selectedPatient.mrn})` : placeholder}
+packages/frontend/src/components/ui/Select.tsx:8:  placeholder?: string;
+packages/frontend/src/components/ui/Select.tsx:12:  ({ label, error, options, placeholder, className, id, ...props }, ref) => {
+packages/frontend/src/components/ui/Select.tsx:31:          {placeholder && <option value="">{placeholder}</option>}
+packages/frontend/src/components/ui/confirmDialog.tsx:70:              placeholder={options.inputPlaceholder}
+packages/frontend/src/lib/api/clinic-configuration.ts:118:    capabilities: Record<string, { status: 'implemented' | 'not_implemented' | 'not_verified' | 'not_applicable'; operationKeys: string[] }>;
+packages/frontend/src/lib/provider-errors.ts:41:  if (code === 'PROVIDER_OPERATION_NOT_SUPPORTED' || normalizedMessage.includes('provider contract does not support')) {
+packages/frontend/src/pages/AdvancedReportingPage.tsx:526:            placeholder={t('advRep.emailPlaceholder')}
+packages/frontend/src/pages/AiHubPage.tsx:278:            placeholder={
+packages/frontend/src/pages/AiHubPage.tsx:601:            placeholder="openai, anthropic, google..."
+packages/frontend/src/pages/AiHubPage.tsx:613:            placeholder="https://api.openai.com/v1"
+packages/frontend/src/pages/ApiKeysPage.tsx:247:              placeholder={t('apiKeys.keyName')}
+packages/frontend/src/pages/AppointmentsPage.tsx:190:              placeholder={t('common.filter')}
+packages/frontend/src/pages/AppointmentsPage.tsx:272:              placeholder={t('appointment.selectDoctor')}
+packages/frontend/src/pages/AppointmentsPage.tsx:277:              placeholder={t('appointment.selectBranch')}
+packages/frontend/src/pages/AuditLogsAdvancedPage.tsx:192:              placeholder={t('auditAdv.searchPlaceholder')}
+packages/frontend/src/pages/AutomationPage.tsx:227:                  placeholder={t('automation.searchPlaceholder')}
+packages/frontend/src/pages/AutomationPage.tsx:431:        placeholder={t('automation.ruleNamePlaceholder')}
+packages/frontend/src/pages/AutomationPage.tsx:469:          placeholder={t('automation.descriptionPlaceholder')}
+packages/frontend/src/pages/BarcodesPage.tsx:167:          <Input placeholder={t('barcodes.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-md" />
+packages/frontend/src/pages/BarcodesPage.tsx:327:      <Input label={t('barcodes.name')} placeholder={t('barcodes.templateNamePlaceholder')} value={name} onChange={(e) => setName(e.target.value)} error={nameError} />
+packages/frontend/src/pages/BarcodesPage.tsx:416:        <Input label={t('barcodes.referenceId')} placeholder={t('barcodes.referenceIdPlaceholder')} value={referenceId} onChange={(e) => setReferenceId(e.target.value)} />
+packages/frontend/src/pages/BarcodesPage.tsx:459:        placeholder={t('barcodes.scanDataPlaceholder')}
+packages/frontend/src/pages/BarcodesPage.tsx:475:        <Input label={t('barcodes.location')} placeholder={t('barcodes.locationPlaceholder')} value={location} onChange={(e) => setLocation(e.target.value)} />
+packages/frontend/src/pages/BiPage.tsx:300:              placeholder={t('bi.searchPlaceholder')}
+packages/frontend/src/pages/BillingPage.tsx:523:          placeholder={t('common.filter')}
+packages/frontend/src/pages/BillingPage.tsx:713:                      placeholder={t('billing.description')}
+packages/frontend/src/pages/BillingPage.tsx:721:                      placeholder={t('billing.code')}
+packages/frontend/src/pages/BillingPage.tsx:729:                      placeholder={t('billing.quantity')}
+packages/frontend/src/pages/BillingPage.tsx:740:                      placeholder={t('billing.unitPrice')}
+packages/frontend/src/pages/BillingPage.tsx:874:                placeholder={t('billing.fawryPhonePlaceholder')}
+packages/frontend/src/pages/BillingPage.tsx:880:                placeholder={t('billing.fawryEmailPlaceholder')}
+packages/frontend/src/pages/BulkImportPage.tsx:203:                      placeholder={t('bulkImport.pastePlaceholder')}
+packages/frontend/src/pages/ChatPage.tsx:280:                placeholder={t('chat.searchPlaceholder')}
+packages/frontend/src/pages/ChatPage.tsx:391:                      placeholder={t('chat.typeMessage')}
+packages/frontend/src/pages/ChatPage.tsx:444:            placeholder={t('chat.convTitlePlaceholder')}
+packages/frontend/src/pages/ChatPage.tsx:455:                placeholder={t('chat.participantIdsPlaceholder')}
+packages/frontend/src/pages/ClinicalAIPage.tsx:197:                  placeholder={t('ai.patientIdPlaceholder')}
+packages/frontend/src/pages/ClinicalAIPage.tsx:218:                    placeholder={t('ai.rawNotesPlaceholder')}
+packages/frontend/src/pages/ClinicalAIPage.tsx:298:                  placeholder={t('ai.patientIdPlaceholder')}
+packages/frontend/src/pages/ClinicalAIPage.tsx:309:                    placeholder={t('ai.symptomsPlaceholder')}
+packages/frontend/src/pages/CommunicationsPage.tsx:229:                  placeholder={t('comms.chooseTemplate')}
+packages/frontend/src/pages/CommunicationsPage.tsx:233:                  placeholder={t('comms.recipientPlaceholder')}
+packages/frontend/src/pages/CompliancePage.tsx:90:          <Input placeholder={t('compliance.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
+packages/frontend/src/pages/CrmPage.tsx:165:          <Input placeholder={t('crm.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
+packages/frontend/src/pages/DeveloperPortalPage.tsx:391:                    placeholder={t('devPortal.searchEndpoints')}
+packages/frontend/src/pages/DeveloperPortalPage.tsx:490:            placeholder={t('devPortal.keyNamePlaceholder')}
+packages/frontend/src/pages/DeveloperPortalPage.tsx:547:            placeholder={t('devPortal.webhookUrlPlaceholder')}
+packages/frontend/src/pages/DeveloperPortalPage.tsx:553:            placeholder={t('devPortal.webhookEventsPlaceholder')}
+packages/frontend/src/pages/DmsPage.tsx:131:            placeholder={t('dms.searchPlaceholder')}
+packages/frontend/src/pages/EtaInvoicingPage.tsx:233:                placeholder={t('eta.invoiceIdPlaceholder')}
+packages/frontend/src/pages/ExpenseTrackingPage.tsx:387:                      placeholder={t('expense.descriptionPlaceholder')}
+packages/frontend/src/pages/ForgotPasswordPage.tsx:67:            <input className="input" placeholder="your-org" value={tenantSlug}
+packages/frontend/src/pages/ForgotPasswordPage.tsx:72:            <input type="email" className="input" placeholder="you@example.com" value={email}
+packages/frontend/src/pages/FormsPage.tsx:152:          <Input placeholder={t('forms.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
+packages/frontend/src/pages/HomeVisitsPage.tsx:106:        <Input type="search" placeholder={`${t('common.search')} visits...`} value={search} onChange={e => setSearch(e.target.value)} />
+packages/frontend/src/pages/HomeVisitsPage.tsx:159:            <textarea className={`input ${formErrors.address ? 'border-red-500' : ''}`} rows={2} placeholder="Full address for the visit..."
+packages/frontend/src/pages/HomeVisitsPage.tsx:166:            <textarea className="input" rows={2} placeholder="Special instructions..." value={newVisit.notes}
+packages/frontend/src/pages/HrPage.tsx:257:            placeholder={t('common.search')}
+packages/frontend/src/pages/HrPage.tsx:434:            error={leaveErrors.employeeId} placeholder={t('hr.employees')} />
+packages/frontend/src/pages/InsuranceClaimsLifecyclePage.tsx:394:                  placeholder={t('insClaims.search')}
+packages/frontend/src/pages/InsuranceClaimsLifecyclePage.tsx:482:                      placeholder={t('insClaims.notesPlaceholder')}
+packages/frontend/src/pages/InsurancePage.tsx:257:          placeholder={t('insurance.searchPlaceholder', { type: tab === 'companies' ? t('insurance.companies') : t('insurance.claims') })}
+packages/frontend/src/pages/InsurancePage.tsx:464:            placeholder={t('insurance.selectCompany')}
+packages/frontend/src/pages/IntegrationsPage.tsx:177:          placeholder={t('intg.searchPlaceholder')}
+packages/frontend/src/pages/InventoryPage.tsx:361:          placeholder={t('inventory.searchPlaceholder', {
+packages/frontend/src/pages/InventoryPage.tsx:494:              error={itemErrors.warehouseId} placeholder={t('inventory.warehouseRequired')} />
+packages/frontend/src/pages/InventoryPage.tsx:573:            placeholder={t('inventory.warehouseRequired')} />
+packages/frontend/src/pages/InventoryPage.tsx:601:                placeholder={t('inventory.selectItem')}
+packages/frontend/src/pages/KioskCheckinPage.tsx:129:                  placeholder={t('kiosk.nationalIdPlaceholder')}
+packages/frontend/src/pages/LaboratoryPage.tsx:135:        <Input type="search" placeholder={`${t('common.search')} orders...`} value={search} onChange={e => setSearch(e.target.value)} />
+packages/frontend/src/pages/LaboratoryPage.tsx:186:              <input type="text" className="input pl-10" placeholder={t('lab.searchTests')}
+packages/frontend/src/pages/LoginPage.tsx:70:              placeholder="000000" maxLength={6} value={mfaCode}
+packages/frontend/src/pages/LoginPage.tsx:96:            <input className="input" placeholder={t('auth.tenantSlugPlaceholder')} value={tenantSlug}
+packages/frontend/src/pages/LoginPage.tsx:101:            <input type="email" className="input" placeholder="admin@example.com"
+packages/frontend/src/pages/LoginPage.tsx:108:                placeholder="••••••••" value={password}
+packages/frontend/src/pages/MultiBranchPage.tsx:261:          <Input placeholder={t('branches.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
+packages/frontend/src/pages/NotificationTemplatesPage.tsx:204:                        placeholder={t('notifTmpl.templateBody')}
+packages/frontend/src/pages/NotificationTemplatesPage.tsx:246:                            placeholder={t('notifTmpl.sendTestTo')}
+packages/frontend/src/pages/NotificationTemplatesPage.tsx:295:            placeholder="appointment.reminder"
+packages/frontend/src/pages/NotificationTemplatesPage.tsx:329:              placeholder={t('notifTmpl.templateBody')}
+packages/frontend/src/pages/NursingPage.tsx:165:          <Input label={`${t('nursing.title_')} *`} placeholder="e.g. Administer IV antibiotics" value={newTask.title}
+packages/frontend/src/pages/NursingPage.tsx:171:            <textarea className="input" rows={2} placeholder="Task details..." value={newTask.description}
+packages/frontend/src/pages/OnlineBookingPage.tsx:216:                    placeholder={t('booking.orgCodePlaceholder')}
+packages/frontend/src/pages/OnlineBookingPage.tsx:232:                        placeholder={t('booking.chooseDoctor')}
+packages/frontend/src/pages/OnlineBookingPage.tsx:287:                        placeholder={t('booking.fullName')}
+packages/frontend/src/pages/OnlineBookingPage.tsx:293:                        placeholder={t('booking.phone')}
+packages/frontend/src/pages/OnlineBookingPage.tsx:299:                        placeholder={t('booking.emailOptional')}
+packages/frontend/src/pages/OnlineBookingPage.tsx:304:                        placeholder={t('booking.reasonOptional')}
+packages/frontend/src/pages/PatientDetailPage.tsx:255:                  <Input label={`${t('patient.phone')} *`} placeholder="e.g., +1234567890" value={form.phone}
+packages/frontend/src/pages/PatientDetailPage.tsx:267:                    placeholder={t('common.filter')}
+packages/frontend/src/pages/PatientDetailPage.tsx:269:                  <Input label={`${t('patient.nationalId')} *`} placeholder="National ID or clinic identifier" maxLength={32}
+packages/frontend/src/pages/PatientMessagesPage.tsx:222:                      placeholder={t('messages.typePlaceholder')}
+packages/frontend/src/pages/PatientMobileAppPage.tsx:195:                placeholder={t('patientApp.mobilePlaceholder')}
+packages/frontend/src/pages/PatientMobileAppPage.tsx:215:                placeholder={t('patientApp.otpPlaceholder')}
+packages/frontend/src/pages/PatientSelfServicePage.tsx:727:                              placeholder={t('selfService.patientNamePlaceholder')}
+packages/frontend/src/pages/PatientSelfServicePage.tsx:734:                              placeholder={t('selfService.patientPhonePlaceholder')}
+packages/frontend/src/pages/PatientSelfServicePage.tsx:741:                              placeholder={t('selfService.patientEmailPlaceholder')}
+packages/frontend/src/pages/PatientSelfServicePage.tsx:782:                              placeholder={t('selfService.reasonPlaceholder')}
+packages/frontend/src/pages/PatientsPage.tsx:201:            placeholder={`${t('common.search')} by name, MRN, phone...`}
+packages/frontend/src/pages/PatientsPage.tsx:301:            <Input label={`${t('patient.phone')} *`} placeholder="e.g., +1234567890" value={newPatient.phone}
+packages/frontend/src/pages/PatientsPage.tsx:313:              placeholder={t('common.filter')}
+packages/frontend/src/pages/PatientsPage.tsx:315:            <Input label={`${t('patient.nationalId')} *`} placeholder="National ID or clinic identifier" maxLength={32}
+packages/frontend/src/pages/PharmacyAdvancedPage.tsx:417:                        placeholder={t('pharmAdv.searchDrug')}
+packages/frontend/src/pages/PharmacyPage.tsx:190:        <Input type="search" placeholder={`${t('common.search')}...`} value={search} onChange={e => setSearch(e.target.value)} />
+packages/frontend/src/pages/PharmacyPage.tsx:253:            <Input label={t('pharmacy.strength')} placeholder="e.g. 500mg" value={drugForm.strength} onChange={e => setDrugForm(prev => ({ ...prev, strength: e.target.value }))} />
+packages/frontend/src/pages/PharmacyPage.tsx:284:              <Input label={t('pharmacy.dosage')} placeholder="e.g. 500mg" value={drugItem.dosage} onChange={e => setDrugItem(prev => ({ ...prev, dosage: e.target.value }))} />
+packages/frontend/src/pages/PharmacyPage.tsx:289:              <Input label={t('pharmacy.duration')} placeholder="e.g. 7 days" value={drugItem.duration} onChange={e => setDrugItem(prev => ({ ...prev, duration: e.target.value }))} />
+packages/frontend/src/pages/PharmacyPage.tsx:294:              <Input label={t('pharmacy.instructions')} placeholder="e.g. Take with food" value={drugItem.instructions} onChange={e => setDrugItem(prev => ({ ...prev, instructions: e.target.value }))} />
+packages/frontend/src/pages/PostVisitSurveyPage.tsx:185:                      placeholder={t('survey.feedbackPlaceholder')}
+packages/frontend/src/pages/PostVisitSurveyPage.tsx:239:                placeholder={t('survey.commentsPlaceholder')}
+packages/frontend/src/pages/PredictiveAnalyticsPage.tsx:378:                placeholder={t('pred.patientIdPlaceholder')}
+packages/frontend/src/pages/PrintTemplatesPage.tsx:127:            placeholder={t('printTemplates.searchPlaceholder')}
+packages/frontend/src/pages/PrintTemplatesPage.tsx:223:            placeholder="invoice_default"
+packages/frontend/src/pages/PrintTemplatesPage.tsx:240:              placeholder="invoice"
+packages/frontend/src/pages/PrintTemplatesPage.tsx:263:              placeholder="<h1>{{patientName}}</h1>"
+packages/frontend/src/pages/PublicPortalPage.tsx:337:              placeholder="••••••"
+packages/frontend/src/pages/PublicPortalPage.tsx:381:                <input className="input" value={orgCode} onChange={(e) => setOrgCode(e.target.value)} placeholder={t('portal.orgCodePlaceholder')} />
+packages/frontend/src/pages/PublicPortalPage.tsx:400:                      placeholder="5xxxxxxxx"
+packages/frontend/src/pages/PublicPortalPage.tsx:428:                      placeholder="14 digits"
+packages/frontend/src/pages/RadiologyPage.tsx:94:        <Input type="search" placeholder={`${t('common.search')} orders...`} value={search} onChange={e => setSearch(e.target.value)} />
+packages/frontend/src/pages/RadiologyPage.tsx:142:              placeholder="Select study type"
+packages/frontend/src/pages/RadiologyPage.tsx:144:            <Input label={t('radiology.bodyPart')} placeholder="e.g. Chest, Abdomen, Knee..."
+packages/frontend/src/pages/RadiologyPage.tsx:159:            <textarea className="input" rows={3} placeholder="Reason for study, symptoms, relevant history..."
+packages/frontend/src/pages/ReferralsPage.tsx:91:        <Input type="search" placeholder={`${t('common.search')} referrals...`} value={search} onChange={e => setSearch(e.target.value)} />
+packages/frontend/src/pages/ReferralsPage.tsx:141:            <textarea className={`input ${formErrors.reason ? 'border-red-500' : ''}`} rows={2} placeholder="Reason for referral..."
+packages/frontend/src/pages/ReferralsPage.tsx:148:            <textarea className="input" rows={3} placeholder="Relevant history, diagnoses, medications..."
+packages/frontend/src/pages/RegisterPage.tsx:83:                placeholder="My Clinic"
+packages/frontend/src/pages/RegisterPage.tsx:94:                placeholder="my-clinic"
+packages/frontend/src/pages/RegisterPage.tsx:107:                placeholder="John Doe"
+packages/frontend/src/pages/RegisterPage.tsx:118:                placeholder="admin@clinic.com"
+packages/frontend/src/pages/RegisterPage.tsx:129:                placeholder="Min 8 characters"
+packages/frontend/src/pages/ReportsPage.tsx:312:            placeholder={t('reports.searchPlaceholder')}
+packages/frontend/src/pages/ReportsPage.tsx:675:            placeholder="0 8 * * 1"
+packages/frontend/src/pages/ReportsPage.tsx:683:            placeholder="email1@example.com, email2@example.com"
+packages/frontend/src/pages/ResetPasswordPage.tsx:63:                placeholder="Min 8 characters" value={password}
+packages/frontend/src/pages/ResetPasswordPage.tsx:73:            <input type="password" className="input" placeholder="Repeat password"
+packages/frontend/src/pages/SecuritySettingsPage.tsx:205:                  placeholder="000000"
+packages/frontend/src/pages/SecuritySettingsPage.tsx:226:                  placeholder="000000"
+packages/frontend/src/pages/SettingsPage.tsx:521:                  <Input id="clinic-settings-land-phone" label={t('settings.landPhone')} value={clinic.landPhone} onChange={e => setClinic(p => ({ ...p, landPhone: e.target.value }))} placeholder="Local landline format" />
+packages/frontend/src/pages/SettingsPage.tsx:522:                  <Input id="clinic-settings-whatsapp-phone" label={t('settings.whatsappPhone')} value={clinic.whatsappPhone} onChange={e => setClinic(p => ({ ...p, whatsappPhone: e.target.value }))} placeholder="+1234567890" />
+packages/frontend/src/pages/SettingsPage.tsx:532:                  <div className="sm:col-span-2"><Input id="clinic-settings-maps-url" label={t('settings.mapsUrl')} value={clinic.googleMapsLocation} onChange={e => setClinic(p => ({ ...p, googleMapsLocation: e.target.value }))} placeholder="https://maps.google.com/..." /></div>
+packages/frontend/src/pages/SettingsPage.tsx:538:                <Input id="clinic-settings-logo-url" label={t('settings.logoUrl')} value={clinic.logoUrl} onChange={e => setClinic(p => ({ ...p, logoUrl: e.target.value }))} placeholder="https://..." />
+packages/frontend/src/pages/SettingsPage.tsx:550:                  <Input id="clinic-settings-currency" label={t('settings.currency')} value={clinic.currency} maxLength={3} onChange={e => setClinic(p => ({ ...p, currency: e.target.value.toUpperCase() }))} placeholder={DEFAULT_CLINIC_CURRENCY} />
+packages/frontend/src/pages/SettingsPage.tsx:551:                  <Input id="clinic-settings-timezone" label={t('settings.timezone')} value={clinic.timezone} error={timezoneInvalid ? t('settings.invalidTimezone') : undefined} onChange={e => setClinic(p => ({ ...p, timezone: e.target.value }))} placeholder="Area/City" />
+packages/frontend/src/pages/SettingsPage.tsx:604:                  placeholder={t('settings.selectScopeTarget')}
+packages/frontend/src/pages/SettingsPage.tsx:831:                                    : capability.status === 'not_implemented'
+packages/frontend/src/pages/SystemMonitorPage.tsx:311:                placeholder={t('monitor.filterPlaceholder')}
+packages/frontend/src/pages/TelemedicinePage.tsx:143:            placeholder={`${t('common.search')} sessions...`}
+packages/frontend/src/pages/TelemedicinePage.tsx:237:            placeholder="https://..."
+packages/frontend/src/pages/UsersPage.tsx:175:                placeholder="Search by name, email, or phone"
+packages/frontend/src/pages/UsersPage.tsx:182:              placeholder="All statuses"
+packages/frontend/src/pages/UsersPage.tsx:194:              placeholder="All types"
+packages/frontend/src/pages/VoiceCallsPage.tsx:328:                    placeholder={t('voice.toNumberPlaceholder')}
+packages/frontend/src/pages/WhatsAppPage.tsx:343:                    placeholder={t('whatsapp.toPlaceholder')}
+packages/frontend/src/pages/WhatsAppPage.tsx:364:                        placeholder={t('whatsapp.messagePlaceholder')}
+packages/frontend/src/pages/WhatsAppPage.tsx:374:                        placeholder={t('whatsapp.templateNamePlaceholder')}
+packages/frontend/src/pages/WhatsAppPage.tsx:381:                        placeholder={t('whatsapp.templateParamsPlaceholder')}
+packages/frontend/src/pages/WhatsAppPage.tsx:480:            placeholder={t('whatsapp.toPlaceholder')}
+packages/frontend/src/pages/WhatsAppPage.tsx:501:                placeholder={t('whatsapp.messagePlaceholder')}
+packages/frontend/src/pages/WhatsAppPage.tsx:511:                placeholder={t('whatsapp.templateNamePlaceholder')}
+packages/frontend/src/pages/WhatsAppPage.tsx:518:                placeholder={t('whatsapp.templateParamsPlaceholder')}
+packages/frontend/src/pages/WhatsAppTemplatesPage.tsx:206:            placeholder={t('waTmpl.templateNamePlaceholder')}
+packages/frontend/src/pages/WhatsAppTemplatesPage.tsx:239:              placeholder={t('waTmpl.bodyPlaceholder')}
+packages/frontend/src/pages/WhatsAppTemplatesPage.tsx:247:            placeholder={t('waTmpl.variablesPlaceholder')}
+packages/frontend/src/pages/WhiteLabelPage.tsx:362:                  placeholder={t('wl.domainPlaceholder')}
+packages/frontend/src/pages/WorkflowPage.tsx:149:          <Input placeholder={t('workflow.searchPlaceholder')} value={search} onChange={(e) => setSearch(e.target.value)} />
+packages/frontend/src/pages/EmergencyAccessPage.tsx:148:              placeholder={t('emergencyAccess.searchPatient')}
+packages/frontend/src/pages/EmergencyAccessPage.tsx:158:            placeholder={t('emergencyAccess.reasonPlaceholder')}
+packages/shared/src/errors/index.ts:60:      'PROVIDER_OPERATION_NOT_SUPPORTED',
+=== empty/stub-like returns ===
+packages/backend/src/core/redis.ts:12:    if (times > 3) return null;
+packages/backend/src/modules/ai-intelligence/index.ts:399:  if (history.length === 0) return [];
+packages/backend/src/modules/auth/auth.controller.ts:35:      return [];
+packages/backend/src/modules/auth/auth.controller.ts:38:  return [];
+packages/backend/src/modules/db-types.ts:23:  if (val == null) return undefined;
+packages/backend/src/modules/inventory/inventory.repository.ts:139:    if (result === 0) return undefined;
+packages/backend/src/modules/inventory/inventory.repository.ts:146:    if (!item) return undefined;
+packages/backend/src/modules/patient/patient.repository.ts:82:  if (!patient) return null;
+packages/backend/src/modules/patient/patient.repository.ts:378:        return null;
+packages/backend/src/modules/pharmacy/index.ts:36:  if (scope !== 'branch' && scope !== 'branches') return null;
+packages/backend/src/modules/reports/index.ts:26:      if (typeof v === 'string') { try { const p = JSON.parse(v); return Array.isArray(p) ? p : []; } catch { return []; } }
+packages/backend/src/modules/reports/index.ts:27:      return [];
+packages/backend/src/services/authorization.ts:89:  if (!user) return null;
+packages/backend/src/services/authorization.ts:147:  if (!row) return null;
+packages/backend/src/services/authorization.ts:164:  if (!membership) return null;
+packages/backend/src/services/authorization.ts:173:  if (context.status.toUpperCase() !== 'ACTIVE') return null;
+packages/backend/src/services/authorization.ts:175:  if (!user || String(user.status).toLowerCase() !== 'active') return null;
+packages/backend/src/services/chat.ts:136:  return null;
+packages/backend/src/services/chat.ts:260:  if (!room) return [];
+packages/backend/src/services/pdf.ts:126:    if (!invoice) return null;
+packages/backend/src/services/pdf.ts:171:    return null;
+packages/backend/src/services/pdf.ts:185:    if (!rx) return null;
+packages/backend/src/services/pdf.ts:209:    return null;
+packages/backend/src/services/pdf.ts:222:    if (!order) return null;
+packages/backend/src/services/pdf.ts:245:    return null;
+packages/backend/src/services/refresh-token.ts:67:    return null;
+packages/backend/src/services/refresh-token.ts:74:    return null;
+packages/backend/src/services/storage.ts:135:  return null;
+packages/backend/src/services/voice.ts:42:  if (!accountSid || !authToken) return null;
+packages/backend/src/services/voice.ts:48:  return null;
+packages/backend/src/services/whatsapp.ts:48:  if (!env.WHATSAPP_API_TOKEN) return null;
+packages/backend/src/services/clinic-modules.ts:80:      return [];
+packages/backend/src/services/clinic-modules.ts:83:  return [];
+packages/backend/src/services/clinic-provider-configuration.ts:270:  if (!row) return null;
+packages/backend/src/services/clinic-provider-runtime.ts:38:  if (!connection) return null;
+packages/backend/src/services/clinic-provider-runtime.ts:89:  if (Object.keys(fallback.config || {}).length === 0 && Object.keys(fallback.secrets || {}).length === 0) return null;
+packages/backend/src/services/clinic-provider-adapters.ts:135:  if (!adapter || !adapter.contract) return null;
+packages/backend/src/services/payment-callbacks.ts:23:  return null;
+packages/backend/src/services/payment-callbacks.ts:28:  if (amount === null || amount < 0) return null;
+packages/backend/src/services/payment-callbacks.ts:42:  if (!fawryReference || !merchantReference || orderAmount === null || paymentAmount === null || !status || !messageSignature) return null;
+packages/backend/src/services/payment-callbacks.ts:96:      return null;
+packages/backend/src/services/clinic-provider-adapter-contract.ts:94:  if (!contract) return null;
+packages/frontend/src/App.tsx:120:  return undefined;
+packages/frontend/src/components/layout/Breadcrumbs.tsx:12:  if (segments.length === 0) return null;
+packages/frontend/src/components/layout/Breadcrumbs.tsx:15:  if (!rootKey) return null;
+packages/frontend/src/components/layout/QuickSearch.tsx:65:  if (!open) return null;
+packages/frontend/src/components/layout/Sidebar.tsx:215:  if (!permission) return undefined;
+packages/frontend/src/components/ui/Modal.tsx:37:  if (!open) return null;
+packages/frontend/src/components/auth/Authorization.tsx:31:  if (isLoading) return null;
+packages/frontend/src/components/clinic/ClinicSetupChecklist.tsx:53:  if (state.failed) return null;
+packages/frontend/src/config/nav-labels.ts:84:  return undefined;
+packages/frontend/src/hooks/useFormValidation.ts:57:    if (!touched[field]) return undefined;
+packages/frontend/src/lib/validators.ts:107:  return null;
+packages/frontend/src/lib/provider-errors.ts:55:  return null;
+packages/frontend/src/pages/AuditLogsAdvancedPage.tsx:149:      return {};
+packages/frontend/src/pages/DataImportPage.tsx:54:  if (lines.length < 2) return [];
+packages/frontend/src/pages/OnlineBookingPage.tsx:120:    return undefined;
+packages/frontend/src/pages/PatientDetailPage.tsx:79:        return null;
+packages/frontend/src/pages/PatientDetailPage.tsx:84:        return null;
+packages/frontend/src/pages/PatientDetailPage.tsx:88:        return null;
+packages/frontend/src/pages/PatientDetailPage.tsx:91:        return null;
+packages/frontend/src/pages/PatientDetailPage.tsx:95:        return null;
+packages/frontend/src/pages/PatientDetailPage.tsx:98:        return null;
+packages/frontend/src/pages/PatientDetailPage.tsx:102:        return null;
+packages/frontend/src/pages/PatientDetailPage.tsx:104:        return null;
+packages/frontend/src/pages/PatientDetailPage.tsx:155:    if (!touchedFields[field]) return undefined;
+packages/frontend/src/pages/PatientsPage.tsx:66:        return null;
+packages/frontend/src/pages/PatientsPage.tsx:71:        return null;
+packages/frontend/src/pages/PatientsPage.tsx:75:        return null;
+packages/frontend/src/pages/PatientsPage.tsx:78:        return null;
+packages/frontend/src/pages/PatientsPage.tsx:82:        return null;
+packages/frontend/src/pages/PatientsPage.tsx:85:        return null;
+packages/frontend/src/pages/PatientsPage.tsx:89:        return null;
+packages/frontend/src/pages/PatientsPage.tsx:91:        return null;
+packages/frontend/src/pages/PatientsPage.tsx:178:    if (!touchedFields[field]) return undefined;
+packages/frontend/src/stores/authStore.tsx:143:    return {};
+packages/shared/src/authz/index.ts:150:  if (!actions) return [];
+packages/shared/src/authz/index.ts:626:  if (!entry) return null;
+packages/shared/src/authz/index.ts:629:  if (!grants) return null;
+packages/shared/src/authz/index.ts:640:  if (!template) return null;
+packages/shared/src/config/clinic-working-hours.ts:31:    return undefined;
+packages/shared/src/config/clinic-working-hours.ts:54:  if (!Array.isArray(raw)) return [];
+packages/shared/src/config/clinic-working-hours.ts:67:  if (raw === undefined || raw === null || raw === '') return [];
+packages/shared/src/config/clinic-working-hours.ts:112:  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+packages/shared/src/config/clinic-working-hours.ts:114:  if (Number.isNaN(parsed.getTime())) return null;
+packages/shared/src/utils/formatters.ts:22:  if (!value) return null;
