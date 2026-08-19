@@ -332,6 +332,39 @@ export async function assignedPatientIds(principal: Principal): Promise<string[]
   return rows.map((r) => String(r.patient_id));
 }
 
+/** True when a tenant-scoped appointment links the patient to a doctor in the principal's department. */
+export async function patientBelongsToPrincipalDepartment(principal: Principal, patientId: string): Promise<boolean> {
+  if (!principal.departmentId) return false;
+  const row = await db('appointments as appointments')
+    .join('users as doctors', 'appointments.doctor_id', 'doctors.id')
+    .where({
+      'appointments.tenant_id': principal.tenantId,
+      'appointments.patient_id': patientId,
+      'doctors.tenant_id': principal.tenantId,
+      'doctors.department_id': principal.departmentId,
+    })
+    .select('appointments.id')
+    .first();
+  return Boolean(row);
+}
+
+/** True when an appointment's doctor belongs to the principal's department in the same tenant. */
+export async function appointmentBelongsToPrincipalDepartment(
+  principal: Principal,
+  appointment: { tenant_id: string; doctor_id?: string | null },
+): Promise<boolean> {
+  if (principal.tenantId !== appointment.tenant_id || !principal.departmentId || !appointment.doctor_id) return false;
+  const row = await db('users')
+    .where({
+      id: appointment.doctor_id,
+      tenant_id: principal.tenantId,
+      department_id: principal.departmentId,
+    })
+    .select('id')
+    .first();
+  return Boolean(row);
+}
+
 /**
  * Pure scope check for a single patient record (no DB access). Returns true
  * when the principal's `patients.view` grant scope covers this patient's
@@ -410,6 +443,7 @@ export async function canAccessPatient(
       return false;
     }
   }
+  if (hasPermission(principal, 'patients.view', 'department') && await patientBelongsToPrincipalDepartment(principal, patient.id)) return true;
   if (patientAccessByScope(principal, patient)) return true;
   if (await hasEmergencyAccess(principal, patient.id)) return true;
   return false;

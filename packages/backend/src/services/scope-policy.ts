@@ -4,11 +4,49 @@ import { scopeQuery, type Principal } from './authorization.js';
 
 type ScopePolicy = (qb: Knex.QueryBuilder, principal: Principal, scope: PermissionScope) => Knex.QueryBuilder;
 
+/**
+ * Patient department scope is derived from the department of a doctor with an
+ * appointment for the patient. `patients.department_id` is not part of the
+ * schema, so every patient-linked policy must use this relationship instead.
+ */
+function applyDoctorDepartmentScope(
+  qb: Knex.QueryBuilder,
+  principal: Principal,
+  doctorColumn: string,
+): Knex.QueryBuilder {
+  if (!principal.departmentId) return qb.whereRaw('1 = 0');
+  return qb.whereExists(function doctorDepartmentScope() {
+    this.select(1)
+      .from('users as scope_doctors')
+      .whereRaw('scope_doctors.id = ??', [doctorColumn])
+      .andWhere('scope_doctors.tenant_id', principal.tenantId)
+      .andWhere('scope_doctors.department_id', principal.departmentId);
+  });
+}
+
+function applyPatientDepartmentScope(
+  qb: Knex.QueryBuilder,
+  principal: Principal,
+  patientColumn: string,
+): Knex.QueryBuilder {
+  if (!principal.departmentId) return qb.whereRaw('1 = 0');
+  return qb.whereExists(function patientDepartmentScope() {
+    this.select(1)
+      .from('appointments as scope_appointments')
+      .join('users as scope_doctors', 'scope_appointments.doctor_id', 'scope_doctors.id')
+      .whereRaw('scope_appointments.patient_id = ??', [patientColumn])
+      .andWhere('scope_appointments.tenant_id', principal.tenantId)
+      .andWhere('scope_doctors.tenant_id', principal.tenantId)
+      .andWhere('scope_doctors.department_id', principal.departmentId);
+  });
+}
+
 const tenantOnly = (qb: Knex.QueryBuilder, principal: Principal, scope: PermissionScope) =>
   scopeQuery(qb, principal, { scope, tenantColumn: 'tenant_id' });
 
 const patientsPolicy: ScopePolicy = (qb, principal, scope) => {
-  const constrained = scopeQuery(qb, principal, { scope, tenantColumn: 'tenant_id', branchColumn: 'branch_id', departmentColumn: 'department_id' });
+  const constrained = scopeQuery(qb, principal, { scope, tenantColumn: 'tenant_id', branchColumn: 'branch_id' });
+  if (scope === 'department') return applyPatientDepartmentScope(constrained, principal, 'patients.id');
   if (scope === 'assigned_patients') {
     return constrained.whereExists(function assignedPatients() {
       this.select(1)
@@ -26,8 +64,8 @@ const emrPolicy: ScopePolicy = (qb, principal, scope) => {
     scope,
     tenantColumn: 'emr_records.tenant_id',
     branchColumn: 'patients.branch_id',
-    departmentColumn: 'patients.department_id',
   });
+  if (scope === 'department') return applyPatientDepartmentScope(constrained, principal, 'emr_records.patient_id');
   if (scope === 'assigned_patients') {
     return constrained.whereExists(function assignedEmrPatients() {
       this.select(1)
@@ -42,6 +80,7 @@ const emrPolicy: ScopePolicy = (qb, principal, scope) => {
 
 const appointmentsPolicy: ScopePolicy = (qb, principal, scope) => {
   const constrained = scopeQuery(qb, principal, { scope, tenantColumn: 'tenant_id', branchColumn: 'branch_id' });
+  if (scope === 'department') return applyDoctorDepartmentScope(constrained, principal, 'doctor_id');
   if (scope === 'assigned_patients') return constrained.andWhere('doctor_id', principal.id);
   return constrained;
 };
@@ -57,8 +96,8 @@ const complianceConsentPolicy: ScopePolicy = (qb, principal, scope) => {
     scope,
     tenantColumn: 'data_consent_logs.tenant_id',
     branchColumn: 'patients.branch_id',
-    departmentColumn: 'patients.department_id',
   });
+  if (scope === 'department') return applyPatientDepartmentScope(constrained, principal, 'data_consent_logs.patient_id');
   if (scope === 'assigned_patients') {
     return constrained.whereExists(function assignedConsentPatients() {
       this.select(1)
@@ -115,8 +154,8 @@ const pharmacyPrescriptionPolicy: ScopePolicy = (qb, principal, scope) => {
     scope,
     tenantColumn: 'pharmacy_prescriptions.tenant_id',
     branchColumn: 'patients.branch_id',
-    departmentColumn: 'patients.department_id',
   });
+  if (scope === 'department') return applyPatientDepartmentScope(constrained, principal, 'pharmacy_prescriptions.patient_id');
   if (scope === 'assigned_patients') {
     return constrained.whereExists(function assignedPharmacyPatients() {
       this.select(1)
@@ -134,8 +173,8 @@ const laboratoryPolicy: ScopePolicy = (qb, principal, scope) => {
     scope,
     tenantColumn: 'lab_orders.tenant_id',
     branchColumn: 'patients.branch_id',
-    departmentColumn: 'patients.department_id',
   });
+  if (scope === 'department') return applyPatientDepartmentScope(constrained, principal, 'lab_orders.patient_id');
   if (scope === 'assigned_patients') {
     return constrained.whereExists(function assignedLabPatients() {
       this.select(1)
@@ -153,8 +192,8 @@ const radiologyPolicy: ScopePolicy = (qb, principal, scope) => {
     scope,
     tenantColumn: 'radiology_orders.tenant_id',
     branchColumn: 'patients.branch_id',
-    departmentColumn: 'patients.department_id',
   });
+  if (scope === 'department') return applyPatientDepartmentScope(constrained, principal, 'radiology_orders.patient_id');
   if (scope === 'assigned_patients') {
     return constrained.whereExists(function assignedRadiologyPatients() {
       this.select(1)
@@ -193,8 +232,8 @@ const nursingPolicy: ScopePolicy = (qb, principal, scope) => {
     scope,
     tenantColumn: 'nursing_tasks.tenant_id',
     branchColumn: 'patients.branch_id',
-    departmentColumn: 'patients.department_id',
   });
+  if (scope === 'department') return applyPatientDepartmentScope(constrained, principal, 'nursing_tasks.patient_id');
   if (scope === 'assigned_patients') {
     return constrained.andWhere('nursing_tasks.assigned_to', principal.id);
   }
@@ -240,8 +279,8 @@ const insuranceClaimsPolicy: ScopePolicy = (qb, principal, scope) => {
     scope,
     tenantColumn: 'insurance_claims.tenant_id',
     branchColumn: 'patients.branch_id',
-    departmentColumn: 'patients.department_id',
   });
+  if (scope === 'department') return applyPatientDepartmentScope(constrained, principal, 'insurance_claims.patient_id');
   if (scope === 'assigned_patients') {
     return constrained.whereExists(function assignedInsurancePatients() {
       this.select(1)
@@ -259,8 +298,8 @@ const billingPolicy: ScopePolicy = (qb, principal, scope) => {
     scope,
     tenantColumn: 'invoices.tenant_id',
     branchColumn: 'patients.branch_id',
-    departmentColumn: 'patients.department_id',
   });
+  if (scope === 'department') return applyPatientDepartmentScope(constrained, principal, 'invoices.patient_id');
   if (scope === 'assigned_patients') {
     return constrained.whereExists(function assignedBillingPatients() {
       this.select(1)

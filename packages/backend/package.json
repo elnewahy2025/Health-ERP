@@ -10,6 +10,7 @@
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:integration": "RUN_AUTHZ_DB_TESTS=true vitest run src/services/__tests__/authorization.integration.test.ts",
+    "test:billing-integration": "RUN_BILLING_DB_TESTS=true vitest run src/modules/__tests__/billing-provider-payments.integration.test.ts",
     "test:watch": "vitest",
     "migrate": "npx tsx src/core/migrate.ts",
     "migrate:make": "knex migrate:make --knexfile knexfile.ts",

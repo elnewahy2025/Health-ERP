@@ -28,8 +28,11 @@ async function resolvePatientListScope(principal: Principal): Promise<{
   if (hasPermission(principal, 'patients.view', 'branch') || hasPermission(principal, 'patients.view', 'branches')) {
     return { branchIds: principal.branches, scope: principal.branches.length > 1 ? 'branches' : 'branch' };
   }
-  if (hasPermission(principal, 'patients.view', 'assigned_patients') || hasPermission(principal, 'patients.view', 'department')) {
+  if (hasPermission(principal, 'patients.view', 'assigned_patients')) {
     return { patientIds: await assignedPatientIds(principal), scope: 'assigned_patients' };
+  }
+  if (hasPermission(principal, 'patients.view', 'department')) {
+    return { scope: 'department' };
   }
   return { patientIds: [], scope: 'self' };
 }

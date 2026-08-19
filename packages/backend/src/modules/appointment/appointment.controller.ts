@@ -19,6 +19,7 @@ import { logAudit } from '../../services/audit.js';
 import {
   hasPermission,
   assignedPatientIds,
+  appointmentBelongsToPrincipalDepartment,
   type Principal,
 } from '../../services/authorization.js';
 import { ForbiddenError } from '@healthcare/shared/errors';
@@ -79,8 +80,11 @@ async function resolveAppointmentListScope(principal: Principal): Promise<{ bran
   if (hasPermission(principal, 'appointments.view', 'branch') || hasPermission(principal, 'appointments.view', 'branches')) {
     return { branchIds: principal.branches, scope: principal.branches.length > 1 ? 'branches' : 'branch' };
   }
-  if (hasPermission(principal, 'appointments.view', 'assigned_patients') || hasPermission(principal, 'appointments.view', 'department')) {
+  if (hasPermission(principal, 'appointments.view', 'assigned_patients')) {
     return { patientIds: await assignedPatientIds(principal), scope: 'assigned_patients' };
+  }
+  if (hasPermission(principal, 'appointments.view', 'department')) {
+    return { scope: 'department' };
   }
   return { patientIds: [], scope: 'self' };
 }
@@ -94,6 +98,7 @@ async function assertAppointmentAccess(
   if ((hasPermission(principal, 'appointments.view', 'branch') || hasPermission(principal, 'appointments.view', 'branches')) && appointment.branch_id) {
     if (principal.branches.includes(String(appointment.branch_id))) return;
   }
+  if (hasPermission(principal, 'appointments.view', 'department') && await appointmentBelongsToPrincipalDepartment(principal, appointment)) return;
   if (hasPermission(principal, 'appointments.view', 'assigned_patients')) {
     if (appointment.doctor_id === principal.id) return;
     const ids = await assignedPatientIds(principal);

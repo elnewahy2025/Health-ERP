@@ -7,7 +7,7 @@ import { createEmrSchema, paginationSchema } from '../../utils/validation.js';
 import { PatientNotFoundError, ForbiddenError } from '@healthcare/shared/errors';
 import { calculateBMI } from '@healthcare/shared/utils';
 import { authenticate } from '../auth-guard.js';
-import { authorize, hasPermission, assignedPatientIds, canAccessPatient, type Principal } from '../../services/authorization.js';
+import { authorize, hasPermission, assignedPatientIds, canAccessPatient, patientBelongsToPrincipalDepartment, type Principal } from '../../services/authorization.js';
 import { applyScopePolicy } from '../../services/scope-policy.js';
 import type { PermissionScope } from '@healthcare/shared/authz';
 import { logAudit } from '../../services/audit.js';
@@ -22,8 +22,11 @@ export async function registerEmrModule(app: FastifyInstance) {
     if (hasPermission(principal, 'emr.view', 'branch') || hasPermission(principal, 'emr.view', 'branches')) {
       return { branchIds: principal.branches, scope: principal.branches.length > 1 ? 'branches' : 'branch' };
     }
-    if (hasPermission(principal, 'emr.view', 'assigned_patients') || hasPermission(principal, 'emr.view', 'department')) {
+    if (hasPermission(principal, 'emr.view', 'assigned_patients')) {
       return { patientIds: await assignedPatientIds(principal), scope: 'assigned_patients' };
+    }
+    if (hasPermission(principal, 'emr.view', 'department')) {
+      return { scope: 'department' };
     }
     return { patientIds: [], scope: 'self' };
   }
@@ -34,7 +37,8 @@ export async function registerEmrModule(app: FastifyInstance) {
     if ((hasPermission(principal, 'emr.view', 'branch') || hasPermission(principal, 'emr.view', 'branches')) && record.branch_id) {
       if (principal.branches.includes(String(record.branch_id))) return;
     }
-    if (hasPermission(principal, 'emr.view', 'assigned_patients') || hasPermission(principal, 'emr.view', 'department')) {
+    if (hasPermission(principal, 'emr.view', 'department') && await patientBelongsToPrincipalDepartment(principal, record.patient_id)) return;
+    if (hasPermission(principal, 'emr.view', 'assigned_patients')) {
       if (record.doctor_id === principal.id) return;
       const ids = await assignedPatientIds(principal);
       if (ids.includes(record.patient_id)) return;

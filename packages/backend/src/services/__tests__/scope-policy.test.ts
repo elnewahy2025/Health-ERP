@@ -8,6 +8,7 @@ class FakeQuery {
 
   select(...args: unknown[]) { this.calls.push({ method: 'select', args }); return this; }
   from(...args: unknown[]) { this.calls.push({ method: 'from', args }); return this; }
+  join(...args: unknown[]) { this.calls.push({ method: 'join', args }); return this; }
   whereRaw(...args: unknown[]) { this.calls.push({ method: 'whereRaw', args }); return this; }
   andWhere(...args: unknown[]) {
     if (typeof args[0] === 'function') {
@@ -69,6 +70,32 @@ describe('scope-policy registry', () => {
     const query = new FakeQuery();
     applyScopePolicy('emr', query as any, principal([{ permission: 'emr.view', scope: 'assigned_patients' }]), 'assigned_patients');
     expect(query.calls.some((call) => call.method === 'whereExists')).toBe(true);
+  });
+
+  it('applies department scope through appointment doctors for patient-linked records', () => {
+    for (const [module, permission] of [['patients', 'patients.view'], ['billing', 'billing.view'], ['nursing', 'nursing.view']] as const) {
+      const query = new FakeQuery();
+      applyScopePolicy(module, query as any, principal([{ permission, scope: 'department' }]), 'department');
+      const nested = query.calls.find((call) => call.method === 'whereExists')?.args[0] as Array<{ method: string; args: unknown[] }>;
+      expect(nested).toContainEqual({ method: 'join', args: ['users as scope_doctors', 'scope_appointments.doctor_id', 'scope_doctors.id'] });
+      expect(nested).toContainEqual({ method: 'andWhere', args: ['scope_doctors.department_id', 'department-1'] });
+      expect(JSON.stringify(query.calls)).not.toContain('patients.department_id');
+    }
+  });
+
+  it('applies department scope through the appointment doctor relationship', () => {
+    const query = new FakeQuery();
+    applyScopePolicy('appointments', query as any, principal([{ permission: 'appointments.view', scope: 'department' }]), 'department');
+    expect(query.calls).toEqual([
+      { method: 'andWhere', args: ['tenant_id', 'tenant-1'] },
+      { method: 'whereExists', args: [[
+        { method: 'select', args: [1] },
+        { method: 'from', args: ['users as scope_doctors'] },
+        { method: 'whereRaw', args: ['scope_doctors.id = ??', ['doctor_id']] },
+        { method: 'andWhere', args: ['scope_doctors.tenant_id', 'tenant-1'] },
+        { method: 'andWhere', args: ['scope_doctors.department_id', 'department-1'] },
+      ]] },
+    ]);
   });
 });
 
@@ -179,7 +206,15 @@ describe('granular operational role scopes', () => {
     applyScopePolicy('nursing', departmentQuery as any, principal([{ permission: 'nursing.edit', scope: 'department' }]), 'department');
     expect(departmentQuery.calls).toEqual([
       { method: 'andWhere', args: ['nursing_tasks.tenant_id', 'tenant-1'] },
-      { method: 'andWhere', args: ['patients.department_id', 'department-1'] },
+      { method: 'whereExists', args: [[
+        { method: 'select', args: [1] },
+        { method: 'from', args: ['appointments as scope_appointments'] },
+        { method: 'join', args: ['users as scope_doctors', 'scope_appointments.doctor_id', 'scope_doctors.id'] },
+        { method: 'whereRaw', args: ['scope_appointments.patient_id = ??', ['nursing_tasks.patient_id']] },
+        { method: 'andWhere', args: ['scope_appointments.tenant_id', 'tenant-1'] },
+        { method: 'andWhere', args: ['scope_doctors.tenant_id', 'tenant-1'] },
+        { method: 'andWhere', args: ['scope_doctors.department_id', 'department-1'] },
+      ]] },
     ]);
 
     const branchQuery = new FakeQuery();
