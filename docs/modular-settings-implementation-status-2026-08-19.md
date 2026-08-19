@@ -3,7 +3,7 @@
 **Project:** Health-ERP Clinic Management System  
 **Status date:** 19 August 2026  
 **Repository branch:** `main`  
-**Latest implementation commit:** `c8f4016`
+**Latest implementation commit:** `fb45fa6`
 
 ## Executive status
 
@@ -30,6 +30,7 @@ Administrators can now complete regional configuration progressively and manage 
 | `b4199f2` | Opt-in live-validation controls | Added migration 054, provider-configurable validation mode, live opt-in, timeout, endpoint URL, safe endpoint allowlisting, bilingual controls, and deterministic probe tests. |
 | `5e4272e` | Backward-compatible policy persistence | Preserved existing validation policy values when older clients save provider configuration and mapped persisted live/structural failures accurately. |
 | `c8f4016` | Versioned provider contracts | Exposed contract version and capability states for ETA, Fawry, Stripe, and Twilio; distinguishes implemented checks from unverified authentication and unsupported business operations. |
+| `fb45fa6` | Provider-operation guards | Added formal guards for Fawry, Stripe, SMS, and Twilio operations, and replaced the simulated ETA submission approval with an explicit safe unsupported response. |
 
 ## Database and security model
 
@@ -120,9 +121,15 @@ The provider test endpoint now delegates to a provider adapter registry. Structu
 
 This is deliberately not presented as a fabricated vendor handshake. The current live probe sends no provider credentials and does not claim that ETA, Fawry, Stripe, or Twilio authentication or business APIs are valid. Vendor-specific handshakes remain a separate adapter step requiring the exact vendor endpoint, signing algorithm, certificate requirements, timeout, retry, and response-sanitization contract. Decryption failures are returned as a generic safe invalid result. Twilio accepts one configured sender option for voice or messaging while preserving optional legacy secret fields, and Fawry requires an administrator-entered three-letter `currencyCode` without inserting `EGP` as a clinic default.
 
+## Provider-operation guards
+
+Provider operation call sites now use the registered capability contract before executing. Fawry creation and callback verification, Stripe checkout and confirmation, Twilio SMS, outbound voice, conference calls, and voice callback verification are registered as supported runtime operations. ETA invoice QR generation remains a local clinic operation, but ETA invoice submission is not registered as a vendor operation and now returns HTTP 409 with `PROVIDER_OPERATION_NOT_SUPPORTED` instead of generating a fake approval UUID.
+
+These guards do not replace RBAC. Existing route permissions remain mandatory: billing permissions protect payments, `voice_calls.create` protects voice creation, `eta_invoicing.manage` protects ETA submission, and settings permissions protect provider configuration. The guard is an additional provider-contract boundary, not a frontend-only gate.
+
 ## Validation results
 
-The final validation completed successfully. Backend lint passed. Backend tests passed with **32 passed test files, 1 skipped integration file, 241 tests passed, and 3 skipped tests**. Frontend tests passed with **11 test files and 43 tests passed**. Backend and frontend production builds passed, and `git diff --check` passed. Validation was run against implementation commit `c8f4016`; the documentation update is committed separately.
+The final validation completed successfully. Backend lint passed. Backend tests passed with **33 passed test files, 1 skipped integration file, 244 tests passed, and 3 skipped tests**. Frontend tests passed with **11 test files and 43 tests passed**. Backend and frontend production builds passed, and `git diff --check` passed. Validation was run against implementation commit `fb45fa6`; the documentation update is committed separately.
 
 The backend test run still prints existing non-failing warnings about Redis connection attempts in the isolated test environment and the audit test’s intentionally swallowed database-write failure. These warnings did not fail the suite and were not introduced by the modular settings work.
 
