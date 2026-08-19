@@ -5,6 +5,7 @@ import { listEffectiveClinicConfiguration } from './clinic-configuration.js';
 import { db } from '../core/database.js';
 import { logAudit } from './audit.js';
 import { providerRuntimeOrFallback } from './clinic-provider-runtime.js';
+import { assertClinicProviderOperation } from './clinic-provider-capabilities.js';
 
 const DEFAULT_CURRENCY = String(clinicConfigurationDefinition('clinic.finance.currency')?.defaultValue || '');
 
@@ -98,6 +99,7 @@ export function generateEtaQrCode( sellerName: string, taxRegistrationNumber: st
 export async function createStripePayment(invoiceId: string, amount: number, currency: string, tenantId: string): Promise<PaymentResult> {
   const env = getEnv();
   try {
+    assertClinicProviderOperation('stripe', 'stripe.checkout.create');
     const runtime = await providerRuntimeOrFallback(tenantId, 'stripe', {
       secrets: { secretKey: env.STRIPE_SECRET_KEY || '' },
     });
@@ -143,6 +145,7 @@ export async function confirmStripePayment(sessionId: string): Promise<boolean> 
   const env = getEnv();
   try {
     const payment = await db('payment_transactions').where({ reference: sessionId }).select('tenant_id').first() as { tenant_id?: string } | undefined;
+    assertClinicProviderOperation('stripe', 'stripe.payment.confirm');
     const runtime = await providerRuntimeOrFallback(payment?.tenant_id, 'stripe', {
       secrets: { secretKey: env.STRIPE_SECRET_KEY || '' },
     });

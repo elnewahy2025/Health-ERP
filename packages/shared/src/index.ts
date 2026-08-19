@@ -105,6 +105,7 @@ export {
   ValidationError,
   ForbiddenError,
   ConflictError,
+  ProviderOperationNotSupportedError,
   TenantNotFoundError,
   PatientNotFoundError,
   AppointmentNotFoundError,

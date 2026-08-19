@@ -13,6 +13,7 @@ import { applyScopePolicy } from '../../services/scope-policy.js';
 import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 import { ForbiddenError } from '@healthcare/shared/errors';
 import { providerRuntimeOrFallback } from '../../services/clinic-provider-runtime.js';
+import { assertClinicProviderOperation } from '../../services/clinic-provider-capabilities.js';
 
 export async function registerFinancialDeepeningModule(app: FastifyInstance) {
   const env = getEnv();
@@ -273,33 +274,8 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
   });
 
   app.post('/api/v1/eta/invoices/:id/submit', { preHandler: [authenticate, authorize('eta_invoicing.manage')] }, async (request, reply) => {
-    const { tenantId } = getCtx(request);
-    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-
-    const etaInvoice = await db('eta_invoices').where({ id, tenant_id: tenantId }).first();
-    if (!etaInvoice) return sendError(reply, 'ETA invoice not found', 404);
-
-    // In production, this would POST to ETA API
-    // For now, simulate successful submission
-    const etaUuid = `ETA-${Date.now()}-${crypto.randomBytes(6).toString("hex").toUpperCase()}`;
-    const etaInvoiceNumber = `ETA-${new Date().getFullYear()}-${String(crypto.randomInt(1, 100000)).padStart(5, '0')}`;
-
-    await db('eta_invoices').where({ id }).update({
-      status: 'approved',
-      eta_uuid: etaUuid,
-      eta_invoice_number: etaInvoiceNumber,
-      eta_response: JSON.stringify({ status: 'approved', uuid: etaUuid }),
-      submitted_at: db.fn.now(),
-      approved_at: db.fn.now(),
-    });
-
-    // Update payment_transaction eta_status
-    if (etaInvoice.invoice_id) {
-      await db('payment_transactions').where({ invoice_id: etaInvoice.invoice_id }).update({ eta_status: 'approved' });
-    }
-
-    await logAudit({ tenantId, action: 'eta.submit', entityType: 'eta_invoice', entityId: id });
-    return sendSuccess(reply, { id, etaUuid, etaInvoiceNumber }, 'ETA invoice submitted successfully');
+    assertClinicProviderOperation('eta', 'eta.invoice.submit');
+    return sendError(reply, 'ETA invoice submission is not available until the verified ETA provider contract is configured.', 409);
   });
 
   app.get('/api/v1/eta/invoices', { preHandler: [authenticate, authorize('eta_invoicing.view')] }, async (request, reply) => {
@@ -433,6 +409,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
   // ==================== ENHANCED PAYMENT ROUTES (Fawry/InstaPay) ====================
 
   app.post('/api/v1/payments/fawry/callback', async (request, reply) => {
+    assertClinicProviderOperation('fawry', 'fawry.payment.callback.verify');
     const body = request.body as Record<string, unknown>;
     const fawryRef = body.fawryRef || body.referenceNumber || body.merchantRefNumber;
     const storedPayment = fawryRef
@@ -474,6 +451,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
   app.post('/api/v1/payments/fawry/create', {
     preHandler: [authenticate, authorize('billing.create')],
   }, async (request, reply) => {
+    assertClinicProviderOperation('fawry', 'fawry.payment.create');
     const tenantId = getTenantId(request);
     const { userId } = getCtx(request);
     const { invoiceId, amount, customerPhone, customerName, customerEmail } = z.object({

@@ -52,6 +52,17 @@ export class ConflictError extends AppError {
   }
 }
 
+export class ProviderOperationNotSupportedError extends AppError {
+  constructor(providerKey: string, operationKey: string) {
+    super(
+      `The ${providerKey} provider contract does not support this operation yet.`,
+      409,
+      'PROVIDER_OPERATION_NOT_SUPPORTED',
+      { providerKey, operationKey },
+    );
+  }
+}
+
 export class TenantNotFoundError extends NotFoundError {
   constructor(slug?: string) {
     super('Tenant', slug);

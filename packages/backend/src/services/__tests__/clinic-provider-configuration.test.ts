@@ -87,5 +87,13 @@ describe('Clinic provider configuration foundation', () => {
     expect(source('src/modules/financial-deepening/index.ts')).toContain("providerRuntimeOrFallback(tenantId, 'fawry'");
     expect(service).toContain('validation_timeout_ms');
     expect(source('src/modules/clinic-settings/index.ts')).toContain("validationMode: z.enum(['structural', 'live'])");
+    const financial = source('src/modules/financial-deepening/index.ts');
+    expect(financial).toContain("assertClinicProviderOperation('eta', 'eta.invoice.submit')");
+    expect(financial).toContain("assertClinicProviderOperation('fawry', 'fawry.payment.create')");
+    expect(financial).toContain("assertClinicProviderOperation('fawry', 'fawry.payment.callback.verify')");
+    expect(financial).not.toContain('// For now, simulate successful submission');
+    expect(source('src/services/payment.ts')).toContain("assertClinicProviderOperation('stripe', 'stripe.checkout.create')");
+    expect(source('src/services/sms.ts')).toContain("assertClinicProviderOperation('twilio', 'twilio.sms.send')");
+    expect(source('src/services/voice.ts')).toContain("assertClinicProviderOperation('twilio', 'twilio.voice.call')");
   });
 });

@@ -2,6 +2,7 @@ import { getEnv } from '@healthcare/shared/config';
 import { db } from '../core/database.js';
 import { loadClinicNotificationContext } from './notification.js';
 import { providerRuntimeOrFallback, type TenantProviderRuntime } from './clinic-provider-runtime.js';
+import { assertClinicProviderOperation } from './clinic-provider-capabilities.js';
 
 interface VoiceCallOptions {
   tenantId: string;
@@ -52,6 +53,7 @@ export async function makeVoiceCall(options: VoiceCallOptions): Promise<{
   callSid?: string;
   error?: string;
 }> {
+  assertClinicProviderOperation('twilio', 'twilio.voice.call');
   const env = getEnv();
   let fromNumber = options.fromNumber || env.TWILIO_PHONE_NUMBER || '+10000000000';
   try {
@@ -128,6 +130,7 @@ export async function createConferenceCall(options: ConferenceOptions): Promise<
   roomSid?: string;
   error?: string;
 }> {
+  assertClinicProviderOperation('twilio', 'twilio.voice.call');
   const env = getEnv();
   try {
     const runtime = await providerRuntimeOrFallback(options.tenantId, 'twilio', {

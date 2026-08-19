@@ -1,5 +1,6 @@
 import { getEnv } from '@healthcare/shared/config';
 import { providerRuntimeOrFallback } from './clinic-provider-runtime.js';
+import { assertClinicProviderOperation } from './clinic-provider-capabilities.js';
 
 interface SmsOptions {
   tenantId?: string;
@@ -8,6 +9,7 @@ interface SmsOptions {
 }
 
 export async function sendSms(options: SmsOptions): Promise<boolean> {
+  assertClinicProviderOperation('twilio', 'twilio.sms.send');
   const env = getEnv();
   const runtime = await providerRuntimeOrFallback(options.tenantId, 'twilio', {
     secrets: {

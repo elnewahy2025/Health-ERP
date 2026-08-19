@@ -13,6 +13,7 @@ import {
 } from '../../services/chat.js';
 import { getEnv } from '@healthcare/shared/config';
 import { providerRuntimeOrFallback } from '../../services/clinic-provider-runtime.js';
+import { assertClinicProviderOperation } from '../../services/clinic-provider-capabilities.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
 import type { ChatPrincipal } from '../../services/chat.js';
@@ -298,6 +299,7 @@ export async function registerAdvancedCommunicationModule(app: FastifyInstance) 
   // Voice call status callback (from Twilio) — validated via signature
   app.post('/api/v1/voice/status', async (request, reply) => {
     try {
+      assertClinicProviderOperation('twilio', 'twilio.voice.callback.verify');
       const twilioSignature = request.headers['x-twilio-signature'] as string | undefined;
       const twilioUrl = `${env.APP_URL || 'http://localhost:3000'}/api/v1/voice/status`;
       const callbackBody = request.body as Record<string, unknown>;
