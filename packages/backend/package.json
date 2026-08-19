@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:integration": "tsx scripts/run-postgres-integration.ts authorization",
     "test:billing-integration": "tsx scripts/run-postgres-integration.ts billing",
+    "test:rls-integration": "tsx scripts/run-postgres-integration.ts rls",
     "test:watch": "vitest",
     "migrate": "npx tsx src/core/migrate.ts",
     "migrate:make": "knex migrate:make --knexfile knexfile.ts",

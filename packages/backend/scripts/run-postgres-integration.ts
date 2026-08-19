@@ -14,6 +14,10 @@ const targets: Record<string, { env: string; testFile: string }> = {
     env: 'RUN_BILLING_DB_TESTS',
     testFile: 'src/modules/__tests__/billing-provider-payments.integration.test.ts',
   },
+  rls: {
+    env: 'RUN_RLS_DB_TESTS',
+    testFile: 'src/services/__tests__/rls.integration.test.ts',
+  },
 };
 const selected = targets[target];
 if (!selected) throw new Error(`Unknown PostgreSQL integration target: ${target}`);
@@ -24,8 +28,8 @@ const migrationDb = knex({
     host: process.env.DB_HOST || '127.0.0.1',
     port: Number(process.env.DB_PORT || 5432),
     database: process.env.DB_NAME || 'healthcare_test',
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'postgres',
+    user: process.env.DB_MIGRATION_USER || process.env.DB_USER || 'postgres',
+    password: process.env.DB_MIGRATION_PASSWORD || process.env.DB_PASSWORD || 'postgres',
     ...(process.env.DB_SSL === 'true' ? { ssl: { rejectUnauthorized: false } } : {}),
   },
   migrations: {

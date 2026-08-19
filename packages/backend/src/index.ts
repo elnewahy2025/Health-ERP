@@ -20,7 +20,7 @@ import { registerEmrModule } from './modules/emr/index.js';
 import { registerBillingModule } from './modules/billing/index.js';
 import { registerCommonModule } from './modules/common/index.js';
 import { errorHandler } from './core/error-handler.js';
-import { db } from './core/database.js';
+import { db, beginRequestTenantTransaction, enterRequestTenantTransaction, finishRequestTenantTransaction } from './core/database.js';
 import { redis } from './core/redis.js';
 import { loadUserPrincipal, loadUserPrincipalByMembership, uniquePermissionKeys } from './services/authorization.js';
 import { findActiveSessionById } from './modules/auth/auth.repository.js';
@@ -124,6 +124,18 @@ async function buildApp() {
   app.addHook("onRequest", (request, reply, done) => { httpLogger(request.raw, reply.raw); done(); });
   app.addHook("onRequest", apiVersioningHook);
   app.addHook("onRequest", csrfValidation);
+  app.addHook('onResponse', async (request) => {
+    const req = request as FastifyRequest & { __tenantTransactionActive?: boolean };
+    if (!req.__tenantTransactionActive) return;
+    req.__tenantTransactionActive = false;
+    await finishRequestTenantTransaction(true);
+  });
+  app.addHook('onError', async (request) => {
+    const req = request as FastifyRequest & { __tenantTransactionActive?: boolean };
+    if (!req.__tenantTransactionActive) return;
+    req.__tenantTransactionActive = false;
+    await finishRequestTenantTransaction(false);
+  });
   await app.register(helmet, {
   contentSecurityPolicy: {
     directives: {
@@ -177,6 +189,14 @@ async function buildApp() {
         reply.status(401).send({ success: false, error: 'Session is no longer active' });
         return;
       }
+    }
+    try {
+      const requestTransaction = await beginRequestTenantTransaction(tenantId);
+      enterRequestTenantTransaction(requestTransaction);
+      req.__tenantTransactionActive = true;
+    } catch {
+      reply.status(503).send({ success: false, error: 'Database tenant context unavailable' });
+      return;
     }
     req.tenantId = tenantId;
     req.ctx = {
