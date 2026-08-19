@@ -428,7 +428,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
 
     if (fawryRef && status === 'PAID') {
       await db('payment_transactions')
-        .where({ fawry_reference: fawryRef })
+        .where({ provider_key: 'fawry', reference: String(fawryRef) })
         .update({ status: 'completed' });
     }
     return reply.status(200).send({ status: 'OK' });
@@ -479,6 +479,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
       invoice_id: invoiceId,
       amount,
       method: 'fawry',
+      provider_key: 'fawry',
       reference: referenceNumber,
       status: 'pending',
       notes: `Fawry payment for ${customerName} (${customerPhone})`,

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { billingApi, paymentApi, egyptPaymentApi } from '../lib/api';
 import type { Invoice, InvoiceItem, InvoiceStatus, PaymentMethod } from '@healthcare/shared/types';
+import type { ProviderPaymentTransaction } from '../lib/api/billing';
 import { Modal, Input, Select, PatientSearchField, Button, Badge, EmptyState, PageLoader } from '../components/ui';
 import { Plus, Trash2, DollarSign, FileText, TrendingUp, AlertTriangle, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { sanitizeNumber } from '../lib/sanitize';
@@ -188,6 +189,8 @@ export default function BillingPage() {
   const [providerNotice, setProviderNotice] = useState<string | null>(null);
   const [fawryPhone, setFawryPhone] = useState('');
   const [fawryEmail, setFawryEmail] = useState('');
+  const [providerPayments, setProviderPayments] = useState<ProviderPaymentTransaction[]>([]);
+  const [providerPaymentsLoading, setProviderPaymentsLoading] = useState(false);
 
   const [newInvoice, setNewInvoice] = useState<InvoiceForm>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
@@ -333,6 +336,7 @@ export default function BillingPage() {
         const message = t('billing.fawryPaymentInitiated', { reference: result.referenceNumber });
         setProviderNotice(message);
         toast.success(message);
+        void refreshProviderPayments(selectedInvoice.id);
       } else {
         const message = t('billing.providerPaymentFailed');
         setProviderNotice(message);
@@ -352,13 +356,26 @@ export default function BillingPage() {
     }
   };
 
+  const refreshProviderPayments = async (invoiceId: string) => {
+    setProviderPaymentsLoading(true);
+    try {
+      setProviderPayments(await billingApi.providerPayments(invoiceId));
+    } catch {
+      setProviderPayments([]);
+    } finally {
+      setProviderPaymentsLoading(false);
+    }
+  };
+
   const openPayModal = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
     setPaymentForm(INITIAL_PAYMENT);
     setProviderNotice(null);
     setFawryPhone(invoice.patientPhone || '');
     setFawryEmail(invoice.patientEmail || '');
+    setProviderPayments([]);
     setShowPayModal(true);
+    void refreshProviderPayments(invoice.id);
   };
 
   const closeNewModal = () => {
@@ -375,6 +392,8 @@ export default function BillingPage() {
     setProviderNotice(null);
     setFawryPhone('');
     setFawryEmail('');
+    setProviderPayments([]);
+    setProviderPaymentsLoading(false);
   };
 
   const addItem = () => {
@@ -860,6 +879,40 @@ export default function BillingPage() {
                 onChange={(e) => setFawryEmail(e.target.value)}
                 placeholder={t('billing.fawryEmailPlaceholder')}
               />
+            </div>
+
+            <div className="rounded-lg border border-[var(--border)] p-3 space-y-2">
+              <p className="font-medium text-[var(--text-primary)]">{t('billing.providerPaymentHistory')}</p>
+              {providerPaymentsLoading ? (
+                <p className="text-xs text-muted-txt">{t('common.loading')}</p>
+              ) : providerPayments.length === 0 ? (
+                <p className="text-xs text-muted-txt">{t('billing.noProviderPayments')}</p>
+              ) : (
+                providerPayments.map((payment) => {
+                  const statusVariant = payment.status === 'completed'
+                    ? 'success'
+                    : payment.status === 'failed'
+                      ? 'danger'
+                      : payment.status === 'pending'
+                        ? 'warning'
+                        : 'gray';
+                  const statusLabel = payment.status === 'completed'
+                    ? t('billing.providerStatusCompleted')
+                    : payment.status === 'failed'
+                      ? t('billing.providerStatusFailed')
+                      : payment.status === 'pending'
+                        ? t('billing.providerStatusPending')
+                        : payment.status;
+                  return (
+                    <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span className="text-[var(--text-primary)]">
+                        {payment.providerKey.toUpperCase()} · {payment.reference || '—'}
+                      </span>
+                      <Badge variant={statusVariant}>{statusLabel}</Badge>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
             <Select

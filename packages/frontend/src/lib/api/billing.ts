@@ -28,11 +28,23 @@ export interface PayInvoicePayload {
   notes?: string;
 }
 
+export interface ProviderPaymentTransaction {
+  id: string;
+  providerKey: string;
+  status: 'pending' | 'completed' | 'failed' | string;
+  amount: number;
+  reference: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+}
+
 export const billingApi = {
   list: (params?: BillingListParams) =>
     apiClient.get('/invoices', { params }).then((r) => r.data),
   get: (id: string) =>
     apiClient.get(`/invoices/${id}`).then((r) => r.data.data),
+  providerPayments: (id: string): Promise<ProviderPaymentTransaction[]> =>
+    apiClient.get(`/invoices/${id}/provider-payments`).then((r) => r.data.data),
   create: (data: CreateInvoicePayload) =>
     apiClient.post('/invoices', data).then((r) => r.data.data),
   pay: (id: string, data: PayInvoicePayload) =>

@@ -87,6 +87,35 @@ export async function registerBillingModule(app: FastifyInstance) {
     return sendPaginated(reply, invoices.map(mapInvoice), Number(total?.count || 0), query.page, query.limit);
   });
 
+  // Get nonsecret external-provider payment history for an invoice
+  app.get('/api/v1/invoices/:invoiceId/provider-payments', {
+    preHandler: [authenticate, authorize('billing.view')],
+  }, async (request, reply) => {
+    const { invoiceId } = request.params as { invoiceId: string };
+    const tenantId = getTenantId(request);
+    const invoice = await db('invoices')
+      .where({ id: invoiceId, tenant_id: tenantId })
+      .select('id', 'tenant_id', 'patient_id', 'branch_id')
+      .first();
+    if (!invoice) return reply.status(404).send({ success: false, error: 'Invoice not found' });
+    await assertInvoiceAccess(getCtx(request).principal, invoice);
+
+    const transactions = await db('payment_transactions')
+      .where({ tenant_id: tenantId, invoice_id: invoiceId })
+      .whereNotNull('provider_key')
+      .select('id', 'provider_key', 'status', 'amount', 'reference', 'created_at', 'updated_at')
+      .orderBy('created_at', 'desc');
+    return sendSuccess(reply, transactions.map((transaction) => ({
+      id: transaction.id,
+      providerKey: transaction.provider_key,
+      status: transaction.status,
+      amount: Number(transaction.amount),
+      reference: transaction.reference || null,
+      createdAt: transaction.created_at,
+      updatedAt: transaction.updated_at,
+    })));
+  });
+
   // Get single invoice
   app.get('/api/v1/invoices/:invoiceId', {
     preHandler: [authenticate, authorize('billing.view')],

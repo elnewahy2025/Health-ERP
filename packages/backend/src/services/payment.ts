@@ -132,7 +132,7 @@ export async function createStripePayment(invoiceId: string, amount: number, cur
       success_url: `${env.APP_URL}/billing?payment=success&invoice=${invoiceId}`,
       cancel_url: `${env.APP_URL}/billing?payment=cancelled&invoice=${invoiceId}`,
     });
-    await db('payment_transactions').insert({ tenant_id: tenantId, invoice_id: invoiceId, amount, method: 'online', reference: session.id, notes: 'Stripe checkout', status: 'pending' });
+    await db('payment_transactions').insert({ tenant_id: tenantId, invoice_id: invoiceId, amount, method: 'online', provider_key: 'stripe', reference: session.id, notes: 'Stripe checkout', status: 'pending' });
     await logAudit({ tenantId, action: 'payment.stripe.create', entityType: 'invoice', entityId: invoiceId, metadata: { amount, currency } });
     return { success: true, paymentId: session.id, redirectUrl: session.url };
   } catch (err: any) {
@@ -144,7 +144,7 @@ export async function createStripePayment(invoiceId: string, amount: number, cur
 export async function confirmStripePayment(sessionId: string): Promise<boolean> {
   const env = getEnv();
   try {
-    const payment = await db('payment_transactions').where({ reference: sessionId }).select('tenant_id').first() as { tenant_id?: string } | undefined;
+    const payment = await db('payment_transactions').where({ provider_key: 'stripe', reference: sessionId }).select('tenant_id').first() as { tenant_id?: string } | undefined;
     assertClinicProviderOperation('stripe', 'stripe.payment.confirm');
     const runtime = await providerRuntimeOrFallback(payment?.tenant_id, 'stripe', {
       secrets: { secretKey: env.STRIPE_SECRET_KEY || '' },
@@ -162,7 +162,7 @@ export async function confirmStripePayment(sessionId: string): Promise<boolean> 
     const newPaid = Number(invoice.paid) + amountPaid;
     const newDue = Number(invoice.total) - newPaid;
     await db('invoices').where({ id: invoiceId }).update({ paid: newPaid, due: Math.max(0, newDue), status: newDue <= 0 ? 'paid' : 'partial', payment_method: 'online', paid_at: new Date() });
-    await db('payment_transactions').where({ reference: sessionId }).update({ status: 'completed' });
+    await db('payment_transactions').where({ provider_key: 'stripe', reference: sessionId }).update({ status: 'completed' });
     await logAudit({ tenantId, action: 'payment.stripe.confirm', entityType: 'invoice', entityId: invoiceId });
     return true;
   } catch (err: any) {

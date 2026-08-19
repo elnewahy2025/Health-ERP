@@ -16,6 +16,8 @@ describe('billing provider action contracts', () => {
     expect(page).toContain('paymentApi.createStripeSession');
     expect(page).toContain('egyptPaymentApi.fawry');
     expect(page).toContain('billingApi.pay(selectedInvoice.id');
+    expect(page).toContain('billingApi.providerPayments(invoiceId)');
+    expect(page).toContain('billing.providerPaymentHistory');
     expect(page).toContain('<Can permission="billing.create">');
     expect(page).toContain('<Can permission="billing.approve">');
   });
