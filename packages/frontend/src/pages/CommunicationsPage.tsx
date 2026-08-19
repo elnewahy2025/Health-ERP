@@ -7,6 +7,7 @@ import {
 } from '../components/ui';
 import { apiClient as api } from '../lib/api';
 import { sanitizeString } from '../lib/sanitize';
+import { getProviderErrorInfo } from '../lib/provider-errors';
 import { formatDateTime } from '../lib/format';
 
 type CommsTab = 'send' | 'history' | 'stats';
@@ -57,6 +58,7 @@ export default function CommunicationsPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [recipient, setRecipient] = useState('');
   const [sentMessage, setSentMessage] = useState('');
+  const [providerNotice, setProviderNotice] = useState<string | null>(null);
   const [recipientError, setRecipientError] = useState('');
 
   const loadData = useCallback(async () => {
@@ -141,6 +143,7 @@ export default function CommunicationsPage() {
       return;
     }
     setRecipientError('');
+    setProviderNotice(null);
     setSending(true);
     setSentMessage('');
     try {
@@ -148,21 +151,34 @@ export default function CommunicationsPage() {
         recipient: sanitizeString(recipient),
       });
       const result = r.data?.data as { sent?: boolean; message?: string } | undefined;
+      const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
       if (result?.sent) {
         setSentMessage(t('comms.sent'));
         toast.success(t('comms.sendSuccess'));
+      } else if (selectedTemplate?.channel === 'sms') {
+        const message = t('comms.smsProviderSetupRequired');
+        setProviderNotice(message);
+        setSentMessage(t('comms.sendFailed'));
+        toast.error(message);
       } else {
         setSentMessage(t('comms.sendFailed'));
         toast.error(t('comms.sendError'));
       }
       await loadData();
-    } catch {
+    } catch (error: unknown) {
+      const providerError = getProviderErrorInfo(error);
+      if (providerError?.kind === 'not_ready' || providerError?.kind === 'disabled' || providerError?.kind === 'unsupported_operation') {
+        const message = t('comms.smsProviderSetupRequired');
+        setProviderNotice(message);
+        toast.error(message);
+      } else {
+        toast.error(t('comms.sendError'));
+      }
       setSentMessage(t('comms.sendFailed'));
-      toast.error(t('comms.sendError'));
     } finally {
       setSending(false);
     }
-  }, [selectedTemplateId, recipient, validateRecipient, t, loadData]);
+  }, [selectedTemplateId, recipient, templates, validateRecipient, t, loadData]);
 
   const templateOptions = templates.map((tpl) => ({
     value: tpl.id,
@@ -199,6 +215,11 @@ export default function CommunicationsPage() {
           <Card>
             <CardBody>
               <h2 className="text-lg font-semibold mb-4">{t('comms.sendCommunication')}</h2>
+              {providerNotice && (
+                <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="alert">
+                  {providerNotice}
+                </div>
+              )}
               <div className="space-y-4">
                 <Select
                   label={t('comms.template')}

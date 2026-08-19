@@ -10,6 +10,7 @@ import {
 import { apiClient as api } from '../lib/api';
 import { escapeHtml } from '../lib/sanitize';
 import { formatDate } from '../lib/format';
+import { getProviderErrorInfo } from '../lib/provider-errors';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -56,6 +57,7 @@ export default function EtaInvoicingPage() {
   /* ── Generate form ── */
   const [invoiceIdInput, setInvoiceIdInput] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [providerNotice, setProviderNotice] = useState<string | null>(null);
 
   /* ── Data fetching ── */
 
@@ -109,12 +111,24 @@ export default function EtaInvoicingPage() {
   /* ── Submit handler ── */
 
   const handleSubmit = useCallback(async (id: string): Promise<void> => {
+    setProviderNotice(null);
     try {
       await api.post(`/eta/invoices/${id}/submit`);
       toast.success(t('eta.submitSuccess'));
       void fetchInvoices();
-    } catch {
-      toast.error(t('eta.submitFailed'));
+    } catch (error: unknown) {
+      const providerError = getProviderErrorInfo(error);
+      if (providerError?.kind === 'unsupported_operation') {
+        const message = t('eta.submitUnsupported');
+        setProviderNotice(message);
+        toast.error(message);
+      } else if (providerError?.kind === 'not_ready' || providerError?.kind === 'disabled') {
+        const message = t('eta.providerSetupRequired');
+        setProviderNotice(message);
+        toast.error(message);
+      } else {
+        toast.error(t('eta.submitFailed'));
+      }
     }
   }, [t, fetchInvoices]);
 
@@ -231,6 +245,13 @@ export default function EtaInvoicingPage() {
           </div>
         </CardBody>
       </Card>
+
+      {providerNotice && (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" role="alert">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{providerNotice}</span>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
