@@ -42,7 +42,7 @@ export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     moduleKey: 'integrations',
     displayName: 'Fawry',
     jurisdictionCode: 'EG',
-    configKeys: ['merchantCode', 'merchantReferencePrefix', 'currencyCode', 'validationEndpointUrl'],
+    configKeys: ['merchantCode', 'merchantReferencePrefix', 'currencyCode', 'language', 'paymentEndpointUrl', 'validationEndpointUrl'],
     optionalConfigKeys: ['validationEndpointUrl'],
     secretKeys: ['secureKey', 'hashKey'],
     requiredSecretKeys: ['secureKey'],

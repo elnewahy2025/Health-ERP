@@ -13,6 +13,7 @@ import { applyScopePolicy } from '../../services/scope-policy.js';
 import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 import { ForbiddenError } from '@healthcare/shared/errors';
 import { providerRuntimeOrFallback } from '../../services/clinic-provider-runtime.js';
+import { requestFawryPayment } from '../../services/fawry-payment-adapter.js';
 import { assertClinicProviderOperation } from '../../services/clinic-provider-capabilities.js';
 import { mapFawryStatus, moneyToCents, normalizeFawryCallback, verifyFawryV2Signature } from '../../services/payment-callbacks.js';
 
@@ -509,7 +510,7 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
       amount: z.number().positive(),
       customerPhone: z.string().min(10),
       customerName: z.string().min(1),
-      customerEmail: z.string().email().optional(),
+      customerEmail: z.string().email(),
     }).parse(request.body);
 
     const invoice = await db('invoices').where({ id: invoiceId, tenant_id: tenantId }).whereNull('deleted_at').first();
@@ -522,13 +523,40 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     }
 
     const runtime = await providerRuntimeOrFallback(tenantId, 'fawry', {
-      config: { merchantCode: env.FAWRY_MERCHANT_CODE || '' },
+      config: {
+        merchantCode: env.FAWRY_MERCHANT_CODE || '',
+        merchantReferencePrefix: '',
+        currencyCode: '',
+        paymentEndpointUrl: '',
+      },
       secrets: { secureKey: env.FAWRY_SECURITY_KEY || '' },
     });
     if (runtime?.status === 'disabled') return sendError(reply, 'Fawry is disabled for this clinic.', 409);
-    const merchantCode = String(runtime?.config.merchantCode || '');
-    if (!merchantCode) return sendError(reply, 'Fawry is not ready for this clinic. Complete the provider setup in Settings > Integrations.', 409);
-    const referenceNumber = `FW-${Date.now()}-${crypto.randomInt(1000, 9999)}`;
+
+    const merchantCode = String(runtime?.config.merchantCode || '').trim();
+    const merchantReferencePrefix = String(runtime?.config.merchantReferencePrefix || '').trim();
+    if (!merchantCode || !merchantReferencePrefix || !runtime?.config.currencyCode || !runtime?.config.paymentEndpointUrl) {
+      return sendError(reply, 'Fawry is not ready for this clinic. Complete the provider setup in Settings > Integrations.', 409);
+    }
+
+    const merchantReference = `${merchantReferencePrefix}-${invoice.invoice_number}-${Date.now()}`;
+    const charge = await requestFawryPayment(runtime, {
+      merchantReference,
+      amount,
+      customerPhone,
+      customerName,
+      customerEmail,
+      description: `Invoice ${invoice.invoice_number}`,
+      itemId: invoice.invoice_number,
+      language: String(runtime.config.language) as 'ar-eg' | 'en-gb',
+    });
+    if (!charge.ok) {
+      const statusCode = charge.status === 'connection_failed' ? 502 : 409;
+      const message = charge.status === 'connection_failed'
+        ? 'Fawry payment service is temporarily unavailable.'
+        : 'Fawry rejected the payment request or the provider setup is incomplete.';
+      return sendError(reply, message, statusCode);
+    }
 
     const [paymentTx] = await db('payment_transactions').insert({
       tenant_id: tenantId,
@@ -536,24 +564,25 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
       amount,
       method: 'fawry',
       provider_key: 'fawry',
-      reference: referenceNumber,
+      reference: merchantReference,
+      provider_reference: charge.referenceNumber,
       status: 'pending',
       updated_at: new Date(),
-      notes: `Fawry payment for ${customerName} (${customerPhone})`,
+      notes: 'Fawry payment reference created',
     }).returning('*');
 
-    try { await logAudit({ tenantId, userId, action: 'payment.fawry_created', entityType: 'invoice', entityId: invoiceId, metadata: { amount, customerPhone, referenceNumber } }); } catch {}
+    try { await logAudit({ tenantId, userId, action: 'payment.fawry_created', entityType: 'invoice', entityId: invoiceId, metadata: { amount, merchantReference, providerReference: charge.referenceNumber } }); } catch {}
 
     return sendSuccess(reply, {
       paymentTransactionId: paymentTx.id,
-      referenceNumber,
+      referenceNumber: charge.referenceNumber,
+      merchantReference,
       merchantCode,
       amount,
-      customerPhone,
-      customerName,
       invoiceNumber: invoice.invoice_number,
+      providerStatus: charge.providerStatus,
       status: 'pending',
-      message: 'Fawry payment initiated. Customer should complete payment at Fawry outlet or online.',
+      message: 'Fawry payment initiated. Customer should complete payment at the provider.',
     }, 'Fawry payment created', 201);
   });
 

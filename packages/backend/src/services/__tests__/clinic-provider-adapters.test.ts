@@ -34,12 +34,41 @@ describe('Clinic provider structural adapters', () => {
       validationMode: 'structural',
       liveValidationEnabled: false,
       validationTimeoutMs: 5000,
-      config: { merchantCode: 'merchant', merchantReferencePrefix: 'INV', currencyCode: 'EGP_TOO_LONG' },
+      config: {
+        merchantCode: 'merchant',
+        merchantReferencePrefix: 'INV',
+        currencyCode: 'EGP_TOO_LONG',
+        language: 'en-gb',
+        paymentEndpointUrl: 'https://payments.example.test/fawry',
+      },
       secrets: { secureKey: 'secret-value' },
     });
     expect(invalid.status).toBe('invalid');
     expect(invalid.code).toBe('fawry_configuration_invalid');
     expect(JSON.stringify(invalid)).not.toContain('secret-value');
+  });
+
+  it('accepts a complete Fawry configuration without exposing its secure key', () => {
+    const adapter = getClinicProviderAdapter('fawry');
+    const result = adapter!.validate({
+      tenantId: 'tenant-1',
+      providerKey: 'fawry',
+      environment: 'sandbox',
+      status: 'configured',
+      validationMode: 'structural',
+      liveValidationEnabled: false,
+      validationTimeoutMs: 5000,
+      config: {
+        merchantCode: 'merchant',
+        merchantReferencePrefix: 'INV',
+        currencyCode: 'EGP',
+        language: 'en-gb',
+        paymentEndpointUrl: 'https://payments.example.test/fawry',
+      },
+      secrets: { secureKey: 'secret-value' },
+    });
+    expect(result.status).toBe('ready');
+    expect(JSON.stringify(result)).not.toContain('secret-value');
   });
 
   it('accepts Twilio with one sender option and does not require optional legacy fields', () => {

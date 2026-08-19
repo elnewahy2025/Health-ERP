@@ -37,29 +37,6 @@ interface PaymentResult {
   error?: string;
 }
 
-// Generate Fawry payment reference
-export function generateFawryPayment(invoiceId: string, amount: number, customerPhone: string, customerName: string, customerEmail: string): PaymentResult {
-  const env = getEnv();
-  if (!env.FAWRY_MERCHANT_CODE) {
-    return { success: false, error: 'Fawry is not configured. Add FAWRY_MERCHANT_CODE to environment.' };
-  }
-
-  const merchantCode = env.FAWRY_MERCHANT_CODE;
-  const merchantRef = `INV-${invoiceId.substring(0, 8)}-${Date.now()}`;
-  const securityKey = env.FAWRY_SECURITY_KEY || '';
-
-  // In production, this would call Fawry API
-  // For now, generate the payment reference that would be sent to Fawry
-  const paymentRef = `FR-${Date.now()}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
-
-  return {
-    success: true,
-    paymentId: paymentRef,
-    reference: merchantRef,
-    redirectUrl: `https://atfawry.com/ECommercePlugin/pay?merchantCode=${merchantCode}&merchantRefNumber=${merchantRef}&amount=${amount}&currencyCode=EGP&description=Invoice%20Payment&customerEmail=${encodeURIComponent(customerEmail)}&customerPhone=${encodeURIComponent(customerPhone)}`,
-  };
-}
-
 // Generate InstaPay payment link (Egypt's instant payment network)
 export function generateInstaPayPayment(amount: number, merchantWallet: string): PaymentResult {
   const env = getEnv();

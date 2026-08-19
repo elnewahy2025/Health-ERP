@@ -154,14 +154,14 @@ export async function registerBillingModule(app: FastifyInstance) {
     const transactions = await db('payment_transactions')
       .where({ tenant_id: tenantId, invoice_id: invoiceId })
       .whereNotNull('provider_key')
-      .select('id', 'provider_key', 'status', 'amount', 'reference', 'created_at', 'updated_at')
+      .select('id', 'provider_key', 'status', 'amount', 'reference', 'provider_reference', 'created_at', 'updated_at')
       .orderBy('created_at', 'desc');
     return sendSuccess(reply, transactions.map((transaction) => ({
       id: transaction.id,
       providerKey: transaction.provider_key,
       status: transaction.status,
       amount: Number(transaction.amount),
-      reference: transaction.reference || null,
+      reference: transaction.provider_reference || transaction.reference || null,
       createdAt: transaction.created_at,
       updatedAt: transaction.updated_at,
     })));

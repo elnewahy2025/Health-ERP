@@ -82,10 +82,17 @@ const fawryAdapter: ClinicProviderAdapter = {
   contract: getClinicProviderContract('fawry')!,
   adapterContract: getProviderAdapterContract('fawry')!,
   validate: (context) => {
-    const missing = requiredValues(context, ['merchantCode', 'merchantReferencePrefix', 'currencyCode'], ['secureKey']);
+    const missing = requiredValues(
+      context,
+      ['merchantCode', 'merchantReferencePrefix', 'currencyCode', 'language', 'paymentEndpointUrl'],
+      ['secureKey'],
+    );
     if (missing.length > 0) return missingResult('fawry', missing);
     const currencyCode = String(context.config.currencyCode).toUpperCase();
-    if (currencyCode.length !== 3) return invalidResult('fawry', 'currencyCode must be a three-letter provider currency code');
+    if (!/^[A-Z]{3}$/.test(currencyCode)) return invalidResult('fawry', 'currencyCode must be a three-letter provider currency code');
+    if (!['ar-eg', 'en-gb'].includes(String(context.config.language))) return invalidResult('fawry', 'language must be ar-eg or en-gb');
+    const endpoint = validateProviderValidationEndpoint(context.config.paymentEndpointUrl, context.environment);
+    if ('error' in endpoint) return invalidResult('fawry', endpoint.error);
     return readyResult('fawry');
   },
 };

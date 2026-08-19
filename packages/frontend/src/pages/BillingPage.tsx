@@ -316,7 +316,7 @@ export default function BillingPage() {
 
   const handleFawryPayment = async () => {
     if (!selectedInvoice) return;
-    if (!selectedInvoice.patientName?.trim() || !fawryPhone.trim()) {
+    if (!selectedInvoice.patientName?.trim() || !fawryPhone.trim() || !fawryEmail.trim()) {
       const message = t('billing.fawryContactRequired');
       setProviderNotice(message);
       toast.error(message);
@@ -874,7 +874,7 @@ export default function BillingPage() {
                 placeholder={t('billing.fawryPhonePlaceholder')}
               />
               <Input
-                label={t('billing.fawryEmailOptional')}
+                label={t('billing.fawryEmailRequired')}
                 value={fawryEmail}
                 onChange={(e) => setFawryEmail(e.target.value)}
                 placeholder={t('billing.fawryEmailPlaceholder')}
