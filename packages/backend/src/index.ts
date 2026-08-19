@@ -78,6 +78,8 @@ import { registerAdvancedCommunicationModule } from './modules/advanced-communic
 import { registerFinancialDeepeningModule } from './modules/financial-deepening/index.js';
 import { registerAiIntelligenceModule } from './modules/ai-intelligence/index.js';
 import { registerHealthModule } from './modules/health/index.js';
+import { getVersionIdentity, markWorkerStarted, markWorkerStopped, type ReadinessWorkerName } from './services/health-readiness.js';
+import { randomUUID } from 'node:crypto';
 import { initSentry } from './services/sentry.js';
 import { registerPatientExperienceModule } from './modules/patient-experience/index.js';
 import { registerPdfModule } from './modules/pdf-generator/index.js';
@@ -90,7 +92,7 @@ import { registerEmergencyAccessModule } from './modules/emergency-access/index.
 import { registerMedicalContentModule } from './modules/medical-content/index.js';
 import { registerMultiBranchModule } from './modules/multi-branch/index.js';
 import { registerClinicSettingsModule } from './modules/clinic-settings/index.js';
-import { startReminderService } from './services/reminder.service.js';
+import { startReminderService, stopReminderService } from './services/reminder.service.js';
 import { loggerOptions } from "./utils/logger.js";
 import pino from "pino";
 import pinoHttp from "pino-http";
@@ -103,6 +105,11 @@ initSentry();
 export async function buildApp() {
   const app = Fastify({
     logger: loggerOptions,
+    genReqId: (request) => {
+      const incoming = request.headers['x-request-id'];
+      if (typeof incoming === 'string' && /^[A-Za-z0-9._:-]{1,128}$/.test(incoming)) return incoming;
+      return randomUUID();
+    },
   });
 
   // Preserve the exact JSON bytes for signed provider callbacks while keeping
@@ -122,8 +129,16 @@ export async function buildApp() {
   await app.register(cookie, { secret: env.CSRF_SECRET || 'csrf-secret', hook: 'onRequest' });
   await app.register(cors, { origin: env.CORS_ORIGIN, credentials: true });
   // Pino HTTP middleware for structured request logging with redaction
-  const httpLogger = pinoHttp({ logger: pino(loggerOptions), redact: ["req.headers.authorization", "req.body.token", "req.body.password", "req.body.refreshToken"] });
-  app.addHook("onRequest", (request, reply, done) => { httpLogger(request.raw, reply.raw); done(); });
+  const httpLogger = pinoHttp({
+    logger: pino(loggerOptions),
+    redact: ["req.headers.authorization", "req.body.token", "req.body.password", "req.body.refreshToken"],
+    customProps: (request) => ({ requestId: request.id }),
+  });
+  app.addHook("onRequest", (request, reply, done) => {
+    reply.header('X-Request-ID', String(request.id));
+    httpLogger(request.raw, reply.raw);
+    done();
+  });
   app.addHook("onRequest", apiVersioningHook);
   app.addHook("onRequest", csrfValidation);
   app.addHook('onRequest', async () => {
@@ -255,10 +270,12 @@ export async function buildApp() {
   app.setErrorHandler(errorHandler);
 
   // Health check
-  app.get('/health', async () => ({
+  app.get('/health', async (request) => ({
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    ...getVersionIdentity(),
+    requestId: String(request.id),
   }));
 
   // Register modules
@@ -379,22 +396,31 @@ async function start() {
     console.log(`✓ Server running on http://${env.HOST}:${env.PORT}`);
     console.log(`✓ API Docs at http://localhost:${env.PORT}/docs`);
     
-    startReminderService();
-    startBackupWorker();
-    startExportWorker();
-    startReportWorker();
-    startEtaWorker();
-    startAutomationWorker();
+    const startWorker = (name: ReadinessWorkerName, start: () => void) => {
+      start();
+      markWorkerStarted(name);
+    };
+    startWorker('reminders', startReminderService);
+    startWorker('backup', startBackupWorker);
+    startWorker('export', startExportWorker);
+    startWorker('reports', startReportWorker);
+    startWorker('eta', startEtaWorker);
+    startWorker('automation', startAutomationWorker);
 
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       console.log('\n✓ ' + signal + ' received. Shutting down gracefully...');
       try {
-        stopBackupWorker();
-        stopExportWorker();
-        stopReportWorker();
-        stopEtaWorker();
-        stopAutomationWorker();
+        const stopWorker = (name: ReadinessWorkerName, stop: () => void) => {
+          stop();
+          markWorkerStopped(name);
+        };
+        stopWorker('reminders', stopReminderService);
+        stopWorker('backup', stopBackupWorker);
+        stopWorker('export', stopExportWorker);
+        stopWorker('reports', stopReportWorker);
+        stopWorker('eta', stopEtaWorker);
+        stopWorker('automation', stopAutomationWorker);
         await app.close();
         console.log('✓ Fastify server closed');
         await db.destroy();

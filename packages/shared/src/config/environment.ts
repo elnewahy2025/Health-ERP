@@ -72,6 +72,7 @@ export interface Environment {
 
   SENTRY_DSN?: string;
   APP_VERSION?: string;
+  APP_COMMIT_SHA?: string;
   BACKUP_S3_BUCKET?: string;
   BACKUP_ENCRYPTION_KEY?: string;
   BACKUP_RETENTION?: string;
@@ -150,6 +151,7 @@ export function getEnv(): Environment {
     WHATSAPP_WEBHOOK_VERIFY_TOKEN: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
     SENTRY_DSN: process.env.SENTRY_DSN,
     APP_VERSION: process.env.APP_VERSION || '1.0.0',
+    APP_COMMIT_SHA: process.env.APP_COMMIT_SHA || process.env.GIT_COMMIT_SHA,
     BACKUP_S3_BUCKET: process.env.BACKUP_S3_BUCKET,
     BACKUP_ENCRYPTION_KEY: process.env.BACKUP_ENCRYPTION_KEY,
     BACKUP_RETENTION: process.env.BACKUP_RETENTION || '7',
