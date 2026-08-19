@@ -132,10 +132,10 @@ export async function buildApp() {
   const httpLogger = pinoHttp({
     logger: pino(loggerOptions),
     redact: ["req.headers.authorization", "req.body.token", "req.body.password", "req.body.refreshToken"],
-    customProps: (request) => ({ requestId: request.id }),
   });
   app.addHook("onRequest", (request, reply, done) => {
     reply.header('X-Request-ID', String(request.id));
+    request.raw.headers['x-request-id'] = String(request.id);
     httpLogger(request.raw, reply.raw);
     done();
   });

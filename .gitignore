@@ -35,6 +35,11 @@ npm-debug.log*
 # Test coverage
 coverage/
 
+# Playwright E2E artifacts and disposable auth state
+test-results/
+playwright-report/
+e2e/.auth/
+
 # Database backups
 /backups/
 

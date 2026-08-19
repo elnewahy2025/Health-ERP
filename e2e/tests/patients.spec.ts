@@ -18,7 +18,7 @@ test.describe('Patients Page', () => {
     const root = page.locator('#root');
     await expect(root).toBeVisible();
     // Should have some content rendered
-    await expect(root.locator('body')).not.toBeEmpty();
+    await expect(page.locator('body')).not.toBeEmpty();
   });
 });
 

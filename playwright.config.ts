@@ -4,6 +4,7 @@ const CI = !!process.env.CI;
 
 export default defineConfig({
   testDir: './e2e/tests',
+  globalSetup: './e2e/global-setup.ts',
   fullyParallel: true,
   forbidOnly: CI,
   retries: CI ? 2 : 0,
@@ -20,6 +21,7 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: CI ? 'on-first-retry' : 'off',
+    storageState: process.env.E2E_ENABLE_AUTHENTICATED === 'true' ? 'e2e/.auth/tenant-a.json' : undefined,
   },
 
   projects: [

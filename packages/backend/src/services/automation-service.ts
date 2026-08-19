@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
-import { parseExpression } from 'cron-parser';
+import cronParser from 'cron-parser';
+
+const { parseExpression } = cronParser;
 import { z } from 'zod';
 import { db } from '../core/database.js';
 import { logAudit } from './audit.js';

@@ -30,10 +30,26 @@ test.describe('API Health', () => {
 
   test('API version header is echoed in response', async ({ request }) => {
     const response = await request.get(`${API_BASE}/api/v1/health`, {
-      headers: { 'X-API-Version': 'v1' },
+      headers: { 'X-API-Version': 'v1', 'X-Request-ID': 'e2e-health-request' },
     });
     expect(response.ok()).toBeTruthy();
     expect(response.headers()['x-api-version-resolved']).toBe('v1');
+    expect(response.headers()['x-request-id']).toBe('e2e-health-request');
+    const body = await response.json();
+    expect(body.requestId).toBe('e2e-health-request');
+  });
+
+  test('explicit liveness and readiness aliases return truthful status contracts', async ({ request }) => {
+    const live = await request.get(`${API_BASE}/api/v1/health/live`);
+    expect(live.ok()).toBeTruthy();
+    expect((await live.json()).alive).toBe(true);
+
+    const ready = await request.get(`${API_BASE}/api/v1/health/ready`);
+    expect([200, 503]).toContain(ready.status());
+    const body = await ready.json();
+    expect(typeof body.ready).toBe('boolean');
+    expect(body).toHaveProperty('services');
+    expect(ready.headers()['x-request-id']).toBeTruthy();
   });
 
   test('health endpoint responds within 5 seconds', async ({ request }) => {
