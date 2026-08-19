@@ -32,14 +32,14 @@ export function moneyToCents(value: unknown): number | null {
 export function normalizeFawryCallback(body: Record<string, unknown>): NormalizedFawryCallback | null {
   const fawryReference = asString(body.fawryRefNumber ?? body.fawryRef ?? body.referenceNumber ?? body.FawryRefNo);
   const merchantReference = asString(body.merchantRefNumber ?? body.merchantRefNum ?? body.MerchnatRefNo);
-  const orderAmount = asOptionalNumber(body.orderAmount ?? body.amount ?? body.Amount ?? body.paymentAmount);
-  const paymentAmount = asOptionalNumber(body.paymentAmount ?? body.amount ?? body.Amount);
+  const orderAmount = asOptionalNumber(body.orderAmount);
+  const paymentAmount = asOptionalNumber(body.paymentAmount);
   const status = asString(body.orderStatus ?? body.status ?? body.paymentStatus ?? body.OrderStatus).toUpperCase();
   const paymentMethod = asString(body.paymentMethod ?? body.PaymentMethod);
   const paymentReference = asString(body.paymentRefrenceNumber ?? body.paymentReferenceNumber ?? body.paymentReference);
   const messageSignature = asString(body.messageSignature ?? body.signature ?? body['Message Signature']);
 
-  if (!fawryReference || !merchantReference || orderAmount === null || !status || !messageSignature) return null;
+  if (!fawryReference || !merchantReference || orderAmount === null || paymentAmount === null || !status || !messageSignature) return null;
   return {
     fawryReference,
     merchantReference,
@@ -63,11 +63,11 @@ function safeEqualHex(left: string, right: string): boolean {
 }
 
 export function verifyFawryV2Signature(callback: NormalizedFawryCallback, secureKey: string): boolean {
-  if (!secureKey) return false;
+  if (!secureKey || callback.paymentAmount === null) return false;
   const canonical = [
     callback.fawryReference,
     callback.merchantReference,
-    callback.paymentAmount === null ? callback.orderAmount.toFixed(2) : callback.paymentAmount.toFixed(2),
+    callback.paymentAmount.toFixed(2),
     callback.orderAmount.toFixed(2),
     callback.status,
     callback.paymentMethod,
