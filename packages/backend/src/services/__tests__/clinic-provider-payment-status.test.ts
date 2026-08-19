@@ -27,6 +27,9 @@ describe('provider payment status safety', () => {
     expect(paymentService).toContain("provider_key: 'stripe'");
     expect(financialModule).toContain("provider_key: 'fawry'");
     expect(billingModule).toContain(".whereNotNull('provider_key')");
+    expect(billingModule).toContain(".join('patients', 'invoices.patient_id', 'patients.id')");
+    expect(billingModule).toContain(".whereNull('invoices.deleted_at')");
+    expect(billingModule).toContain("'patients.branch_id as patient_branch_id'");
     expect(billingModule).toContain("authorize('billing.view')");
   });
 
@@ -38,5 +41,6 @@ describe('provider payment status safety', () => {
     expect(financialModule).toContain("where({ provider_key: 'fawry', reference: String(fawryRef) })");
     expect(billingModule).toContain("select('id', 'provider_key', 'status', 'amount', 'reference', 'created_at', 'updated_at')");
     expect(billingModule).not.toContain('encrypted_value');
+    expect(billingModule).not.toContain("select('id', 'tenant_id', 'patient_id', 'branch_id')");
   });
 });

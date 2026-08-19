@@ -31,17 +31,52 @@ export async function registerBillingModule(app: FastifyInstance) {
     return { patientIds: [], scope: 'self' };
   }
 
-  async function assertInvoiceAccess(principal: Principal, invoice: { tenant_id: string; patient_id: string; branch_id?: string | null }): Promise<void> {
+  type InvoiceAccessContext = {
+    tenant_id: string;
+    patient_id: string;
+    patient_branch_id?: string | null;
+  };
+
+  async function assertInvoiceAccess(principal: Principal, invoice: InvoiceAccessContext): Promise<void> {
     if (principal.tenantId !== invoice.tenant_id) throw new ForbiddenError('You do not have access to this invoice');
     if (hasPermission(principal, 'billing.view', 'tenant') || hasPermission(principal, 'billing.view', 'system')) return;
-    if ((hasPermission(principal, 'billing.view', 'branch') || hasPermission(principal, 'billing.view', 'branches')) && invoice.branch_id) {
-      if (principal.branches.includes(String(invoice.branch_id))) return;
+
+    if (hasPermission(principal, 'billing.view', 'branch') || hasPermission(principal, 'billing.view', 'branches')) {
+      if (invoice.patient_branch_id && principal.branches.includes(String(invoice.patient_branch_id))) return;
     }
-    if (hasPermission(principal, 'billing.view', 'assigned_patients') || hasPermission(principal, 'billing.view', 'department')) {
+
+    if (hasPermission(principal, 'billing.view', 'department') && principal.departmentId) {
+      const departmentAppointment = await db('appointments as appointments')
+        .join('users as doctors', 'appointments.doctor_id', 'doctors.id')
+        .where({
+          'appointments.tenant_id': principal.tenantId,
+          'appointments.patient_id': invoice.patient_id,
+          'doctors.tenant_id': principal.tenantId,
+          'doctors.department_id': principal.departmentId,
+        })
+        .select('appointments.id')
+        .first();
+      if (departmentAppointment) return;
+    }
+
+    if (hasPermission(principal, 'billing.view', 'assigned_patients')) {
       const ids = await assignedPatientIds(principal);
       if (ids.includes(invoice.patient_id)) return;
     }
+
     throw new ForbiddenError('You do not have access to this invoice');
+  }
+
+  async function loadInvoiceAccessContext(invoice: { tenant_id: string; patient_id: string; patient_branch_id?: string | null }): Promise<InvoiceAccessContext> {
+    if (invoice.patient_branch_id !== undefined) return invoice;
+    const patient = await db('patients')
+      .where({ id: invoice.patient_id, tenant_id: invoice.tenant_id })
+      .select('branch_id')
+      .first();
+    return {
+      ...invoice,
+      patient_branch_id: invoice.patient_branch_id ?? patient?.branch_id ?? null,
+    };
   }
 
   // List invoices
@@ -94,11 +129,26 @@ export async function registerBillingModule(app: FastifyInstance) {
     const { invoiceId } = request.params as { invoiceId: string };
     const tenantId = getTenantId(request);
     const invoice = await db('invoices')
-      .where({ id: invoiceId, tenant_id: tenantId })
-      .select('id', 'tenant_id', 'patient_id', 'branch_id')
+      .join('patients', 'invoices.patient_id', 'patients.id')
+      .where({
+        'invoices.id': invoiceId,
+        'invoices.tenant_id': tenantId,
+        'patients.tenant_id': tenantId,
+      })
+      .whereNull('invoices.deleted_at')
+      .select(
+        'invoices.id',
+        'invoices.tenant_id',
+        'invoices.patient_id',
+        'patients.branch_id as patient_branch_id',
+      )
       .first();
     if (!invoice) return reply.status(404).send({ success: false, error: 'Invoice not found' });
-    await assertInvoiceAccess(getCtx(request).principal, invoice);
+    await assertInvoiceAccess(getCtx(request).principal, {
+      tenant_id: invoice.tenant_id,
+      patient_id: invoice.patient_id,
+      patient_branch_id: invoice.patient_branch_id,
+    });
 
     const transactions = await db('payment_transactions')
       .where({ tenant_id: tenantId, invoice_id: invoiceId })
@@ -147,7 +197,7 @@ export async function registerBillingModule(app: FastifyInstance) {
     await assertInvoiceAccess(getCtx(request).principal, {
       tenant_id: invoice.tenant_id,
       patient_id: invoice.patient_id,
-      branch_id: invoice.patient_branch_id,
+      patient_branch_id: invoice.patient_branch_id,
     });
 
     const { userId } = getCtx(request);
@@ -220,7 +270,7 @@ export async function registerBillingModule(app: FastifyInstance) {
     if (!invoice) {
       return reply.status(404).send({ success: false, error: 'Invoice not found' });
     }
-    await assertInvoiceAccess(getCtx(request).principal, invoice);
+    await assertInvoiceAccess(getCtx(request).principal, await loadInvoiceAccessContext(invoice));
 
     const newPaid = Number(invoice.paid) + body.amount;
     const newDue = Number(invoice.total) - newPaid;
