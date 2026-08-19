@@ -9,7 +9,7 @@ import { getEnv } from '@healthcare/shared/config';
 import { clinicConfigurationDefinition } from '@healthcare/shared/config/clinic-configuration';
 import { generateInvoiceNumber } from '@healthcare/shared/utils';
 import { authenticate } from '../auth-guard.js';
-import { authorize, hasPermission, assignedPatientIds, canAccessPatient, type Principal } from '../../services/authorization.js';
+import { authorize, hasPermission, effectivePermissionScope, assignedPatientIds, canAccessPatient, type Principal } from '../../services/authorization.js';
 import { applyScopePolicy } from '../../services/scope-policy.js';
 import type { PermissionScope } from '@healthcare/shared/authz';
 import { logAudit } from '../../services/audit.js';
@@ -23,18 +23,13 @@ import { confirmStripePayment } from '../../services/payment.js';
 export async function registerBillingModule(app: FastifyInstance) {
   /** Scope for invoice lists: tenant-wide, branch-wide, or assigned patients. */
   async function resolveBillingListScope(principal: Principal): Promise<{ branchIds?: string[]; patientIds?: string[]; scope: PermissionScope }> {
-    if (hasPermission(principal, 'billing.view', 'system') || hasPermission(principal, 'billing.view', 'tenant')) {
-      return { scope: hasPermission(principal, 'billing.view', 'system') ? 'system' : 'tenant' };
-    }
-    if (hasPermission(principal, 'billing.view', 'branch') || hasPermission(principal, 'billing.view', 'branches')) {
+    const scope = effectivePermissionScope(principal, 'billing.view');
+    if (scope === 'system' || scope === 'tenant') return { scope };
+    if (scope === 'branch' || scope === 'branches') {
       return { branchIds: principal.branches, scope: principal.branches.length > 1 ? 'branches' : 'branch' };
     }
-    if (hasPermission(principal, 'billing.view', 'assigned_patients')) {
-      return { patientIds: await assignedPatientIds(principal), scope: 'assigned_patients' };
-    }
-    if (hasPermission(principal, 'billing.view', 'department')) {
-      return { scope: 'department' };
-    }
+    if (scope === 'department') return { scope };
+    if (scope === 'assigned_patients') return { patientIds: await assignedPatientIds(principal), scope };
     return { patientIds: [], scope: 'self' };
   }
 
@@ -46,13 +41,12 @@ export async function registerBillingModule(app: FastifyInstance) {
 
   async function assertInvoiceAccess(principal: Principal, invoice: InvoiceAccessContext): Promise<void> {
     if (principal.tenantId !== invoice.tenant_id) throw new ForbiddenError('You do not have access to this invoice');
-    if (hasPermission(principal, 'billing.view', 'tenant') || hasPermission(principal, 'billing.view', 'system')) return;
+    const scope = effectivePermissionScope(principal, 'billing.view');
+    if (scope === 'tenant' || scope === 'system') return;
 
-    if (hasPermission(principal, 'billing.view', 'branch') || hasPermission(principal, 'billing.view', 'branches')) {
-      if (invoice.patient_branch_id && principal.branches.includes(String(invoice.patient_branch_id))) return;
-    }
+    if ((scope === 'branch' || scope === 'branches') && invoice.patient_branch_id && principal.branches.includes(String(invoice.patient_branch_id))) return;
 
-    if (hasPermission(principal, 'billing.view', 'department') && principal.departmentId) {
+    if (scope === 'department' && principal.departmentId) {
       const departmentAppointment = await db('appointments as appointments')
         .join('users as doctors', 'appointments.doctor_id', 'doctors.id')
         .where({
@@ -66,7 +60,7 @@ export async function registerBillingModule(app: FastifyInstance) {
       if (departmentAppointment) return;
     }
 
-    if (hasPermission(principal, 'billing.view', 'assigned_patients')) {
+    if (scope === 'assigned_patients') {
       const ids = await assignedPatientIds(principal);
       if (ids.includes(invoice.patient_id)) return;
     }

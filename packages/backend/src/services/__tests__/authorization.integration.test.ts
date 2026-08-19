@@ -49,7 +49,6 @@ function branchPrincipal(tenantId: string, branches: string[], grants: Principal
 
 describeDatabase('authorization PostgreSQL integration security suite', () => {
   beforeAll(async () => {
-    await db.migrate.latest();
     await db.transaction(async (trx) => {
       await trx('user_permissions').whereIn('user_id', [IDS.user, IDS.foreignUser]).delete();
       await trx('user_roles').whereIn('user_id', [IDS.user, IDS.foreignUser]).delete();
@@ -178,7 +177,7 @@ describeDatabase('authorization PostgreSQL integration security suite', () => {
       principal!,
       { scope: 'branch', branchColumn: 'branch_id' },
     );
-    await expect(rows).resolves.toEqual([{ id: IDS.patientA, branch_id: IDS.branchA }]);
+    expect(rows).toEqual([{ id: IDS.patientA, branch_id: IDS.branchA }]);
     expect(patientAccessByScope(principal!, { id: IDS.patientB, tenant_id: IDS.tenantA, branch_id: IDS.branchB })).toBe(false);
   });
 

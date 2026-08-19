@@ -1,8 +1,12 @@
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Principal } from '../../services/authorization.js';
 import { errorHandler } from '../../core/error-handler.js';
 import { db } from '../../core/database.js';
+
+vi.mock('../../services/clinic-modules.js', () => ({
+  enforceClinicModuleForPermission: vi.fn().mockResolvedValue(undefined),
+}));
 
 const { registerBillingModule } = await import('../billing/index.js');
 
@@ -46,7 +50,6 @@ describeDatabase('provider-payment PostgreSQL integration security suite', () =>
   let currentPrincipal = principal([{ permission: 'billing.view', scope: 'tenant' }]);
 
   beforeAll(async () => {
-    await db.migrate.latest();
     await db.transaction(async (trx) => {
       await trx('payment_transactions').whereIn('id', [IDS.providerPayment, IDS.internalPayment]).delete();
       await trx('invoices').whereIn('id', [IDS.invoiceA, IDS.invoiceB, IDS.invoiceForeign]).delete();

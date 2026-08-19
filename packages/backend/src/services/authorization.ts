@@ -218,6 +218,19 @@ function authorizationRank(grant: Grant): number {
   return 100;
 }
 
+export function effectivePermissionScope(principal: Principal, permission: string): PermissionScope | null {
+  const canonicalPermission = normalizeLegacyPermission(permission);
+  const candidates = [...(principal.grants || []), ...(principal.denials || [])]
+    .filter((grant) => permissionKeyMatches(grant.permission, canonicalPermission))
+    .sort((left, right) => {
+      const rankDifference = authorizationRank(right) - authorizationRank(left);
+      if (rankDifference !== 0) return rankDifference;
+      return permissionSpecificity(right.permission, canonicalPermission) - permissionSpecificity(left.permission, canonicalPermission);
+    });
+  const effective = candidates[0];
+  return effective && effective.effect !== 'DENY' ? effective.scope : null;
+}
+
 export function hasPermission(
   principal: Principal,
   permission: string,

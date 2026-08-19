@@ -3,6 +3,7 @@ import type { Principal } from '../authorization.js';
 import {
   scopeCovers,
   hasPermission,
+  effectivePermissionScope,
   anyPermission,
   uniquePermissionKeys,
   patientAccessByScope,
@@ -121,6 +122,19 @@ describe('hasPermission', () => {
   it('denies unknown permissions and empty grants', () => {
     expect(hasPermission(principal([]), 'patients.view')).toBe(false);
     expect(hasPermission(principal([]), 'patients.view', 'tenant')).toBe(false);
+  });
+});
+
+describe('effectivePermissionScope', () => {
+  it('returns the highest effective grant scope without falling through to narrower scopes', () => {
+    const p = principal([{ permission: 'billing.view', scope: 'branch' }]);
+    expect(effectivePermissionScope(p, 'billing.view')).toBe('branch');
+  });
+
+  it('returns null when the highest-ranked matching grant is denied', () => {
+    const p = principal([{ permission: 'billing.view', scope: 'tenant' }]);
+    p.denials = [{ permission: 'billing.view', scope: 'tenant', effect: 'DENY', source: 'user' }];
+    expect(effectivePermissionScope(p, 'billing.view')).toBeNull();
   });
 });
 
