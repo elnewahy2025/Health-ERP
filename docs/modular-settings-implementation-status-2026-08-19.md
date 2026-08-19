@@ -3,7 +3,7 @@
 **Project:** Health-ERP Clinic Management System  
 **Status date:** 19 August 2026  
 **Repository branch:** `main`  
-**Latest implementation commit:** `fb45fa6`
+**Latest implementation commit:** `bb31789`
 
 ## Executive status
 
@@ -31,6 +31,7 @@ Administrators can now complete regional configuration progressively and manage 
 | `5e4272e` | Backward-compatible policy persistence | Preserved existing validation policy values when older clients save provider configuration and mapped persisted live/structural failures accurately. |
 | `c8f4016` | Versioned provider contracts | Exposed contract version and capability states for ETA, Fawry, Stripe, and Twilio; distinguishes implemented checks from unverified authentication and unsupported business operations. |
 | `fb45fa6` | Provider-operation guards | Added formal guards for Fawry, Stripe, SMS, and Twilio operations, and replaced the simulated ETA submission approval with an explicit safe unsupported response. |
+| `bb31789` | Operational provider UX | Added a shared frontend provider-error classifier and actionable bilingual readiness messages for ETA submission and SMS test delivery. |
 
 ## Database and security model
 
@@ -127,9 +128,15 @@ Provider operation call sites now use the registered capability contract before 
 
 These guards do not replace RBAC. Existing route permissions remain mandatory: billing permissions protect payments, `voice_calls.create` protects voice creation, `eta_invoicing.manage` protects ETA submission, and settings permissions protect provider configuration. The guard is an additional provider-contract boundary, not a frontend-only gate.
 
+## Operational provider UX
+
+The ETA invoicing page now distinguishes an unsupported ETA submission contract from ordinary submission failures and keeps the guidance visible after the toast disappears. The communications test-send page shows Twilio setup guidance when an SMS template cannot be delivered, while email templates retain their existing generic failure behavior. Both flows preserve their existing backend authorization and do not attempt to bypass provider capability guards.
+
+The billing page was intentionally not changed in this slice because its current payment modal records internal payments and does not invoke the Stripe or Fawry provider endpoints. The voice page currently opens device phone links rather than calling the backend voice endpoints, so it does not claim a provider readiness state it cannot observe.
+
 ## Validation results
 
-The final validation completed successfully. Backend lint passed. Backend tests passed with **33 passed test files, 1 skipped integration file, 244 tests passed, and 3 skipped tests**. Frontend tests passed with **11 test files and 43 tests passed**. Backend and frontend production builds passed, and `git diff --check` passed. Validation was run against implementation commit `fb45fa6`; the documentation update is committed separately.
+The final validation completed successfully. Backend lint passed. Backend tests passed with **33 passed test files, 1 skipped integration file, 244 tests passed, and 3 skipped tests**. Frontend tests passed with **12 test files and 46 tests passed**. Backend and frontend production builds passed, and `git diff --check` passed. Validation was run against implementation commit `bb31789`; the documentation update is committed separately.
 
 The backend test run still prints existing non-failing warnings about Redis connection attempts in the isolated test environment and the audit test’s intentionally swallowed database-write failure. These warnings did not fail the suite and were not introduced by the modular settings work.
 
