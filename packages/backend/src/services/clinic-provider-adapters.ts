@@ -1,6 +1,7 @@
 import { isIP } from 'node:net';
 import { getTenantProviderRuntime, type TenantProviderRuntime } from './clinic-provider-runtime.js';
 import { getClinicProviderContract, type ClinicProviderContract } from './clinic-provider-contracts.js';
+import { getProviderAdapterContract, type ProviderAdapterContract } from './clinic-provider-adapter-contract.js';
 
 export type ProviderAdapterStatus = 'ready' | 'setup_required' | 'invalid' | 'disabled' | 'connection_failed' | 'unsupported';
 export type ProviderAdapterTestMode = 'structural' | 'live';
@@ -20,6 +21,7 @@ export interface ProviderAdapterContext extends TenantProviderRuntime {
 export interface ClinicProviderAdapter {
   providerKey: string;
   contract: ClinicProviderContract;
+  adapterContract: ProviderAdapterContract;
   validate(context: ProviderAdapterContext): ProviderAdapterResult;
 }
 
@@ -64,6 +66,7 @@ function requiredValues(context: ProviderAdapterContext, configKeys: string[], s
 const etaAdapter: ClinicProviderAdapter = {
   providerKey: 'eta',
   contract: getClinicProviderContract('eta')!,
+  adapterContract: getProviderAdapterContract('eta')!,
   validate: (context) => {
     const missing = requiredValues(
       context,
@@ -77,6 +80,7 @@ const etaAdapter: ClinicProviderAdapter = {
 const fawryAdapter: ClinicProviderAdapter = {
   providerKey: 'fawry',
   contract: getClinicProviderContract('fawry')!,
+  adapterContract: getProviderAdapterContract('fawry')!,
   validate: (context) => {
     const missing = requiredValues(context, ['merchantCode', 'merchantReferencePrefix', 'currencyCode'], ['secureKey']);
     if (missing.length > 0) return missingResult('fawry', missing);
@@ -89,6 +93,7 @@ const fawryAdapter: ClinicProviderAdapter = {
 const stripeAdapter: ClinicProviderAdapter = {
   providerKey: 'stripe',
   contract: getClinicProviderContract('stripe')!,
+  adapterContract: getProviderAdapterContract('stripe')!,
   validate: (context) => {
     const missing = requiredValues(context, [], ['secretKey']);
     return missing.length > 0 ? missingResult('stripe', missing) : readyResult('stripe');
@@ -98,6 +103,7 @@ const stripeAdapter: ClinicProviderAdapter = {
 const twilioAdapter: ClinicProviderAdapter = {
   providerKey: 'twilio',
   contract: getClinicProviderContract('twilio')!,
+  adapterContract: getProviderAdapterContract('twilio')!,
   validate: (context) => {
     const missing = requiredValues(context, [], ['account_sid', 'auth_token']);
     const hasSender = Boolean(

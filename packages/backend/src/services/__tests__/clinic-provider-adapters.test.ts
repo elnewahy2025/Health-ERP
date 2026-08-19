@@ -6,6 +6,7 @@ describe('Clinic provider structural adapters', () => {
   it('requires all ETA configuration and signing credentials', () => {
     const adapter = getClinicProviderAdapter('eta');
     expect(adapter).not.toBeNull();
+    expect(adapter?.adapterContract).toMatchObject({ providerKey: 'eta', contractVersion: 1 });
     const result = adapter!.validate({
       tenantId: 'tenant-1',
       providerKey: 'eta',
