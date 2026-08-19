@@ -3,7 +3,7 @@
 **Project:** Health-ERP Clinic Management System  
 **Status date:** 19 August 2026  
 **Repository branch:** `main`  
-**Latest implementation commit:** `fb4d3a8`
+**Latest implementation commit:** `f2fe3aa`
 
 ## Executive status
 
@@ -33,10 +33,11 @@ Administrators can now complete regional configuration progressively and manage 
 | `fb45fa6` | Provider-operation guards | Added formal guards for Fawry, Stripe, SMS, and Twilio operations, and replaced the simulated ETA submission approval with an explicit safe unsupported response. |
 | `bb31789` | Operational provider UX | Added a shared frontend provider-error classifier and actionable bilingual readiness messages for ETA submission and SMS test delivery. |
 | `fb4d3a8` | Billing provider actions | Added separate permission-gated Stripe checkout and Fawry payment-reference actions; kept internal payment recording separate and avoided frontend currency or payment URL defaults. |
+| `f2fe3aa` | External payment status visibility | Added nullable `provider_key` tracking, Fawry/Stripe callback isolation, a tenant-scoped nonsecret provider-payment history endpoint, and bilingual Billing status history. Internal cash/card records remain provider-neutral. |
 
 ## Database and security model
 
-Migrations `053_modular_clinic_settings.ts` and `054_provider_live_validation_policy.ts` create or extend the following structures with `hasTable` and `hasColumn` guards:
+Migrations `053_modular_clinic_settings.ts`, `054_provider_live_validation_policy.ts`, and `055_payment_provider_status.ts` create or extend the following structures with `hasTable` and `hasColumn` guards:
 
 | Table or extension | Purpose |
 |---|---|
@@ -45,6 +46,7 @@ Migrations `053_modular_clinic_settings.ts` and `054_provider_live_validation_po
 | `tenant_provider_connections` | Tenant-wide provider connection metadata: provider, environment, status, nonsecret configuration, validation status, and error metadata. |
 | `clinic_integration_secrets` extensions | Connection linkage, secret version, active state, rotation metadata, expiry, and last-used metadata. Existing encrypted secrets are preserved. |
 | `audit_logs` extensions | Module, provider, scope, and request context fields for future audit correlation. |
+| `payment_transactions` extension | Migration 055 adds nullable `provider_key`, indexes it, and backfills existing Fawry and Stripe rows. Internal cash/card transactions remain `NULL`. |
 
 Existing tenants receive an incomplete generic regional profile. Existing integration secrets are linked to tenant provider connection records when possible. The migration `down()` function does not delete tenant configuration, provider links, secrets, or audit history.
 
@@ -76,6 +78,7 @@ All routes below use the existing `settings.view` or `settings.manage` permissio
 | POST | `/api/v1/clinic-providers/:providerKey/test` | `settings.manage` | Validates readiness and persists last-test status and safe error metadata. |
 | PUT | `/api/v1/clinic-providers/:providerKey/secrets/:secretKey` | `settings.manage` | Encrypts and rotates one provider secret. |
 | DELETE | `/api/v1/clinic-providers/:providerKey/secrets/:secretKey` | `settings.manage` | Revokes one provider secret without deleting tenant history. |
+| GET | `/api/v1/invoices/:invoiceId/provider-payments` | `billing.view` | Returns tenant-scoped external payment history with only `id`, `providerKey`, `status`, `amount`, `reference`, `createdAt`, and `updatedAt`. |
 
 Two namespaced `/api/v1/clinic-provider-configurations` routes remain as internal-compatible aliases for the initial implementation slice.
 
@@ -102,6 +105,7 @@ The following paths now use tenant-scoped runtime credentials when available:
 | SMS notifications and reminders | Passes the notification tenant ID into the Twilio runtime resolver. |
 | Outbound voice and conferences | Uses the tenant ID already carried by the voice route. |
 | Twilio voice status callback | Recovers tenant ID from the stored voice call before validating the callback signature. |
+| External provider payment history | Reads only transactions with a non-null provider key and exposes no encrypted values, credentials, customer contact data, or secret metadata. |
 
 WhatsApp remains on its existing separate Meta provider configuration path because it is not represented by the Twilio provider catalog in this foundation. Vendor-specific ETA invoice submission and true provider network handshakes should be implemented as separate adapters once their exact API contracts, endpoints, certificate requirements, and test environments are supplied.
 
@@ -133,17 +137,17 @@ These guards do not replace RBAC. Existing route permissions remain mandatory: b
 
 The ETA invoicing page now distinguishes an unsupported ETA submission contract from ordinary submission failures and keeps the guidance visible after the toast disappears. The communications test-send page shows Twilio setup guidance when an SMS template cannot be delivered, while email templates retain their existing generic failure behavior. Both flows preserve their existing backend authorization and do not attempt to bypass provider capability guards.
 
-The billing page now exposes separate permission-gated Stripe checkout and Fawry payment-reference actions alongside the existing internal Record Payment action. Stripe receives the tenant-configured clinic currency only when available and otherwise lets the backend resolve it from clinic configuration. Fawry requires an entered patient phone number and reports the backend-created pending reference; the UI does not fabricate a redirect URL or payment link. Provider errors remain actionable through the shared frontend classifier. The voice page currently opens device phone links rather than calling the backend voice endpoints, so it does not claim a provider readiness state it cannot observe.
+The billing page now exposes separate permission-gated Stripe checkout and Fawry payment-reference actions alongside the existing internal Record Payment action. Stripe receives the tenant-configured clinic currency only when available and otherwise lets the backend resolve it from clinic configuration. Fawry requires an entered patient phone number and reports the backend-created pending reference; the UI does not fabricate a redirect URL or payment link. Provider errors remain actionable through the shared frontend classifier. The payment modal loads a provider-payment history section when opened and refreshes it after a successful Fawry reference creation, showing only provider, reference, amount, timestamp, and a localized pending/completed/failed status badge. Internal cash/card recording remains a separate workflow and is not included in this provider history. The voice page currently opens device phone links rather than calling the backend voice endpoints, so it does not claim a provider readiness state it cannot observe.
 
 ## Validation results
 
-The final validation completed successfully. Backend lint passed. Backend tests passed with **33 passed test files, 1 skipped integration file, 244 tests passed, and 3 skipped tests**. Frontend tests passed with **13 test files and 49 tests passed**. Backend and frontend production builds passed, and `git diff --check` passed. Validation was run against implementation commit `fb4d3a8`; the documentation update is committed separately.
+The provider-payment slice was validated successfully. Shared package build passed. Backend and frontend TypeScript checks passed. Backend tests passed with **34 passed test files, 1 skipped integration file, 247 tests passed, and 3 skipped tests**; the increase includes three focused provider-payment safety tests. Frontend tests passed with **13 test files and 49 tests passed**, including Billing provider-action/history assertions. `git diff --check` passed. The implementation is pushed in commit `f2fe3aa`; this documentation update is the next commit.
 
 The backend test run still prints existing non-failing warnings about Redis connection attempts in the isolated test environment and the audit test’s intentionally swallowed database-write failure. These warnings did not fail the suite and were not introduced by the modular settings work.
 
 ## Rollback and deployment notes
 
-Deploy migration 053 before deploying the backend build that exposes the new routes. Because the migration is forward-safe, a rollback of application code does not require deleting the new tables or columns. Keep migration 053 applied. If the application build must be reverted, the existing legacy clinic settings facade, legacy environment provider fallback, and pre-existing workflows remain available.
+Deploy migrations 053 and 054 before the provider-configuration build, and migration 055 before deploying the payment-status build. Migration 055 is forward-safe: it adds a nullable indexed column, backfills only known Fawry/Stripe provider keys, and its `down()` path does not drop the column or delete payment history. A rollback of application code therefore does not require deleting the new column or transactions. If the application build must be reverted, the existing legacy clinic settings facade, legacy environment provider fallback, and pre-existing workflows remain available.
 
 Before production use, set a strong `ENCRYPTION_KEY` and back up the PostgreSQL database. Existing provider secrets should be rotated through Settings after migration if their provenance is uncertain. Use sandbox environments first, validate provider readiness, and then switch the provider environment to production only after the vendor account is ready.
 
