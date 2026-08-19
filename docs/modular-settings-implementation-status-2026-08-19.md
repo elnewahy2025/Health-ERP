@@ -3,7 +3,7 @@
 **Project:** Health-ERP Clinic Management System  
 **Status date:** 19 August 2026  
 **Repository branch:** `main`  
-**Latest implementation commit:** `da5f95a`
+**Latest implementation commit:** `0b2822f`
 
 ## Executive status
 
@@ -39,10 +39,11 @@ Administrators can now complete regional configuration progressively and manage 
 | `7e760b9` | Billing department-scope routing | Ensured billing department grants use the shared department policy instead of assigned-patient filtering. |
 | `fc5364b` | Provider callback hardening | Added Stripe raw-body signature verification, Fawry V2 SHA-256 verification, tenant/provider/reference binding, exact amount reconciliation, atomic invoice updates, idempotent finalization, CSRF callback exemptions, and callback route tests. |
 | `da5f95a` | Fawry callback contract tightening | Requires the documented Fawry V2 payment and order amount fields before signature verification. |
+| `0b2822f` | PostgreSQL integration execution | Added a tsx-backed migration runner for both PostgreSQL integration suites, fixed real-schema integration assertions, and made billing detail authorization use one effective permission scope instead of falling through to narrower scopes. |
 
 ## Database and security model
 
-Migrations `053_modular_clinic_settings.ts`, `054_provider_live_validation_policy.ts`, `055_payment_provider_status.ts`, and `056_payment_callback_hardening.ts` create or extend the following structures with `hasTable` and `hasColumn` guards:
+Migrations `053_modular_clinic_settings.ts`, `054_provider_live_validation_policy.ts`, `055_payment_provider_status.ts`, and `056_payment_callback_hardening.ts` create or extend the following structures with `hasTable` and `hasColumn` guards. PostgreSQL integration tests apply the same TypeScript migrations through the dedicated `tsx` runner before Vitest starts:
 
 | Table or extension | Purpose |
 |---|---|
@@ -113,6 +114,7 @@ The following paths now use tenant-scoped runtime credentials when available:
 | Outbound voice and conferences | Uses the tenant ID already carried by the voice route. |
 | Twilio voice status callback | Recovers tenant ID from the stored voice call before validating the callback signature. |
 | External provider payment history | Reads only transactions with a non-null provider key and exposes no encrypted values, credentials, customer contact data, or secret metadata. |
+| Billing detail authorization | Uses the highest effective grant scope for `billing.view`; a branch grant is not allowed to fall through into assigned-patient lookup. |
 
 WhatsApp remains on its existing separate Meta provider configuration path because it is not represented by the Twilio provider catalog in this foundation. Vendor-specific ETA invoice submission and true provider network handshakes should be implemented as separate adapters once their exact API contracts, endpoints, certificate requirements, and test environments are supplied.
 
@@ -148,7 +150,7 @@ The billing page now exposes separate permission-gated Stripe checkout and Fawry
 
 ## Validation results
 
-The provider-payment, department-scope, and callback-hardening slices were validated successfully. Shared package build passed. Backend and frontend TypeScript checks passed. Backend tests passed with **37 passed test files, 2 skipped integration files, 262 passed tests, and 6 skipped tests**. Frontend tests passed with **13 test files and 49 tests passed**. Callback-specific executable tests cover valid and invalid Fawry signatures, amount mismatch rejection, idempotent repeated Fawry callbacks, invalid Stripe signatures, verified Stripe completion events, and nonsecret provider history. `git diff --check` passed. The implementation is committed in `fc5364b` and `da5f95a`; this documentation update is the next commit.
+The provider-payment, department-scope, callback-hardening, and PostgreSQL integration slices were validated successfully. Shared package build passed. Backend and frontend TypeScript checks passed. Backend unit/full tests passed with **37 passed test files, 264 passed tests, and 6 skipped tests**. Frontend tests passed with **13 test files and 49 tests passed**. The real migration-backed billing integration suite passed with **1 test file and 3 tests**. The real authorization integration suite passed with **1 test file and 3 tests**. Callback-specific executable tests cover valid and invalid Fawry signatures, amount mismatch rejection, idempotent repeated Fawry callbacks, invalid Stripe signatures, verified Stripe completion events, and nonsecret provider history. `git diff --check` passed. The implementation is committed in `0b2822f`; this documentation update is the next commit.
 
 The backend test run still prints existing non-failing warnings about Redis connection attempts in the isolated test environment and the audit test’s intentionally swallowed database-write failure. These warnings did not fail the suite and were not introduced by the modular settings work.
 
@@ -156,11 +158,20 @@ The backend test run still prints existing non-failing warnings about Redis conn
 
 Deploy migrations 053 and 054 before the provider-configuration build, migration 055 before deploying the payment-status build, and migration 056 before enabling signed callback finalization. Migrations 055 and 056 are forward-safe: they add nullable/indexed state, backfill only safe historical values, and their `down()` paths do not drop columns or delete payment history. A rollback of application code therefore does not require deleting the new columns or transactions. If the application build must be reverted, the existing legacy clinic settings facade, legacy environment provider fallback, and pre-existing workflows remain available. Configure Stripe webhook secrets and Fawry secure keys per tenant before enabling provider callback delivery; invalid, unsigned, ambiguous, or amount-mismatched callbacks are rejected without changing invoice state.
 
-Before production use, set a strong `ENCRYPTION_KEY` and back up the PostgreSQL database. Existing provider secrets should be rotated through Settings after migration if their provenance is uncertain. Use sandbox environments first, validate provider readiness, and then switch the provider environment to production only after the vendor account is ready. Run `npm run test:billing-integration -w packages/backend` against a dedicated PostgreSQL test database in CI or staging; the sandbox used for this validation had no PostgreSQL listener, so the migration-backed integration suite was not executed here.
+Before production use, set a strong `ENCRYPTION_KEY` and back up the PostgreSQL database. Existing provider secrets should be rotated through Settings after migration if their provenance is uncertain. Use sandbox environments first, validate provider readiness, and then switch the provider environment to production only after the vendor account is ready. Run `npm run test:billing-integration -w packages/backend` and `npm run test:integration -w packages/backend` against a dedicated PostgreSQL test database. Both commands now apply the repository’s TypeScript migrations through `scripts/run-postgres-integration.ts` before starting Vitest. The production database role must not be granted `BYPASSRLS`; the local disposable test role used for this validation had `BYPASSRLS` only so these suites could isolate application-level tenant predicates from the separate PostgreSQL RLS session-context mechanism.
 
 ## Provider callback references
 
 The callback implementation follows [Stripe webhook signature verification guidance](https://docs.stripe.com/webhooks) and [Stripe payment webhook handling guidance](https://docs.stripe.com/webhooks/handling-payment-events). Fawry callback normalization follows the [Fawry Server-to-Server Notification V2 contract](https://developer.fawrystaging.com/docs/sdks/payment-notifications/server-notification-v2), including its SHA-256 `messageSignature`, documented amount fields, order statuses, and retry behavior for non-200 responses. The older [Fawry Server-to-Server Notification V1 contract](https://developer.fawrystaging.com/docs/payment-notifications/server-notification-v1) is not silently treated as V2; its MD5 GET signature format requires a separate explicit compatibility implementation.
+
+## Integration test commands
+
+| Command | Scope | Required environment |
+|---|---|---|
+| `npm run test:billing-integration -w packages/backend` | Real-schema provider-payment history, cross-tenant 404, branch denial, provider-only response, and soft-delete behavior. | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`. |
+| `npm run test:integration -w packages/backend` | Real-schema membership, branch isolation, forged-membership rejection, wildcard handling, and direct-denial behavior. | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`. |
+
+The integration runner uses a disposable database and applies migrations before the suite. It does not delete unrelated tenant rows; fixtures use unique identifiers and clean up only their own records. The test database should be isolated from development or production data.
 
 ## Next recommended implementation slice
 
