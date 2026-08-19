@@ -50,6 +50,7 @@ import { registerSaasBillingModule } from './modules/saas-billing/index.js';
 import { registerWhiteLabelModule } from './modules/white-label/index.js';
 import { registerComplianceReportsModule } from './modules/compliance-reports/index.js';
 import { registerDrBackupModule } from './modules/dr-backup/index.js';
+import { startBackupWorker, stopBackupWorker } from './services/backup-service.js';
 import { registerRegionsModule } from './modules/regions/index.js';
 import { registerPatientPortalModule } from './modules/patient-portal/index.js';
 import { registerOnlineBookingModule } from './modules/online-booking/index.js';
@@ -375,11 +376,13 @@ async function start() {
     console.log(`✓ API Docs at http://localhost:${env.PORT}/docs`);
     
     startReminderService();
+    startBackupWorker();
 
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       console.log('\n✓ ' + signal + ' received. Shutting down gracefully...');
       try {
+        stopBackupWorker();
         await app.close();
         console.log('✓ Fastify server closed');
         await db.destroy();

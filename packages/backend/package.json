@@ -14,12 +14,14 @@
     "test:rls-integration": "tsx scripts/run-postgres-integration.ts rls",
     "test:lifecycle-integration": "tsx scripts/run-postgres-integration.ts lifecycle",
     "test:pharmacy-integration": "tsx scripts/run-postgres-integration.ts pharmacy",
+    "test:backup-integration": "tsx scripts/run-postgres-integration.ts backup",
     "test:watch": "vitest",
     "migrate": "npx tsx src/core/migrate.ts",
     "migrate:make": "knex migrate:make --knexfile knexfile.ts",
     "seed": "tsx src/core/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1113.0",
     "@fastify/cors": "^10.0.1",
     "@fastify/helmet": "^13.0.0",
     "@fastify/jwt": "^9.0.0",

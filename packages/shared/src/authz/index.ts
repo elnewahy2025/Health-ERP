@@ -22,6 +22,8 @@ export const PERMISSION_ACTIONS = [
   'prescribe',
   'dispense',
   'override',
+  'verify',
+  'restore',
 ] as const;
 
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
@@ -118,7 +120,7 @@ export const PERMISSION_CATALOG: Record<string, readonly PermissionAction[]> = {
   regions: ['view', 'create', 'edit', 'delete', 'manage'],
   saas_billing: ['view', 'export', 'manage'],
   white_label: ['view', 'edit', 'manage'],
-  dr_backup: ['view', 'create', 'manage'],
+  dr_backup: ['view', 'create', 'edit', 'verify', 'restore', 'manage'],
   barcodes: ['view', 'create', 'export', 'manage'],
   data_warehouse: ['view', 'export', 'manage'],
   api_keys: ['view', 'create', 'edit', 'delete', 'manage'],
