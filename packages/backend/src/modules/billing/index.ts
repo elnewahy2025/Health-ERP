@@ -25,8 +25,11 @@ export async function registerBillingModule(app: FastifyInstance) {
     if (hasPermission(principal, 'billing.view', 'branch') || hasPermission(principal, 'billing.view', 'branches')) {
       return { branchIds: principal.branches, scope: principal.branches.length > 1 ? 'branches' : 'branch' };
     }
-    if (hasPermission(principal, 'billing.view', 'assigned_patients') || hasPermission(principal, 'billing.view', 'department')) {
+    if (hasPermission(principal, 'billing.view', 'assigned_patients')) {
       return { patientIds: await assignedPatientIds(principal), scope: 'assigned_patients' };
+    }
+    if (hasPermission(principal, 'billing.view', 'department')) {
+      return { scope: 'department' };
     }
     return { patientIds: [], scope: 'self' };
   }
