@@ -66,9 +66,16 @@ export interface ExportJobRow {
   artifact_deleted_at: Date | null;
 }
 
-interface ArtifactReference {
+export interface ArtifactReference {
   storageLocation: string;
   key: string;
+}
+
+export interface DurableArtifact {
+  storageLocation: string;
+  filePath: string;
+  checksum: string;
+  fileSize: number;
 }
 
 interface GeneratedExport {
@@ -385,6 +392,20 @@ function minioBucket(location: string): string {
   return bucket;
 }
 
+export async function writeEncryptedArtifact(input: { storageLocation: string; tenantId: string; artifactId: string; extension: string; plaintext: Buffer; mimeType: string }): Promise<DurableArtifact> {
+  const reference = parseStorageLocation(input.storageLocation, input.tenantId, input.artifactId, input.extension);
+  const encrypted = encryptExport(input.plaintext);
+  const checksum = crypto.createHash('sha256').update(encrypted).digest('hex');
+  await putArtifact(reference, encrypted, input.mimeType);
+  return { storageLocation: reference.storageLocation, filePath: reference.key, checksum, fileSize: encrypted.length };
+}
+
+export async function readEncryptedArtifact(input: { storageLocation: string; filePath: string; checksum?: string | null }): Promise<Buffer> {
+  const encrypted = await getArtifact(validateArtifactReference(input.storageLocation, input.filePath));
+  if (input.checksum && crypto.createHash('sha256').update(encrypted).digest('hex') !== input.checksum) throw new ConflictError('Artifact checksum verification failed');
+  return decryptExport(encrypted);
+}
+
 async function putArtifact(reference: ArtifactReference, encrypted: Buffer, mimeType: string): Promise<void> {
   if (reference.storageLocation.startsWith('minio://')) {
     await minioClient().send(new PutObjectCommand({ Bucket: minioBucket(reference.storageLocation), Key: reference.key, Body: encrypted, ContentType: 'application/octet-stream', ServerSideEncryption: 'AES256', Metadata: { 'content-type': mimeType } }));
@@ -409,6 +430,10 @@ async function getArtifact(reference: ArtifactReference): Promise<Buffer> {
   return fs.readFile(target);
 }
 
+export async function deleteEncryptedArtifact(storageLocation: string, filePath: string): Promise<void> {
+  await deleteArtifact(artifactReference({ storage_location: storageLocation, file_path: filePath }));
+}
+
 async function deleteArtifact(reference: ArtifactReference): Promise<void> {
   if (reference.storageLocation.startsWith('minio://')) {
     await minioClient().send(new DeleteObjectCommand({ Bucket: minioBucket(reference.storageLocation), Key: reference.key }));
@@ -417,6 +442,10 @@ async function deleteArtifact(reference: ArtifactReference): Promise<void> {
   const target = path.resolve(EXPORT_ROOT, reference.key);
   if (!target.startsWith(`${EXPORT_ROOT}${path.sep}`)) throw new ConflictError('Export path escapes the configured local storage root');
   await fs.rm(target, { force: true });
+}
+
+export function validateArtifactReference(storageLocation: string, filePath: string): ArtifactReference {
+  return artifactReference({ storage_location: storageLocation, file_path: filePath });
 }
 
 function artifactReference(job: Pick<ExportJobRow, 'storage_location' | 'file_path'>): ArtifactReference {
@@ -582,7 +611,6 @@ export function getExportDefinitionInput(body: Record<string, unknown>, ctx: { p
 export async function readExportArtifact(job: ExportJobRow): Promise<{ buffer: Buffer; mimeType: string; fileName: string }> {
   if (job.status !== 'completed' || !job.file_path || job.artifact_deleted_at) throw new ConflictError('Export artifact is not ready');
   if (job.artifact_expires_at && new Date(job.artifact_expires_at).getTime() <= Date.now()) throw new ConflictError('Export artifact has expired');
-  const encrypted = await getArtifact(artifactReference(job));
-  if (job.checksum && crypto.createHash('sha256').update(encrypted).digest('hex') !== job.checksum) throw new ConflictError('Export artifact checksum verification failed');
-  return { buffer: decryptExport(encrypted), mimeType: job.mime_type || 'application/octet-stream', fileName: job.file_name || `export-${job.id}` };
+  const buffer = await readEncryptedArtifact({ storageLocation: String(job.storage_location), filePath: String(job.file_path), checksum: job.checksum });
+  return { buffer, mimeType: job.mime_type || 'application/octet-stream', fileName: job.file_name || `export-${job.id}` };
 }

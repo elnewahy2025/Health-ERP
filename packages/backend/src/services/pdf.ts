@@ -1,4 +1,7 @@
+import { createRequire } from 'node:module';
 import { db } from '../core/database.js';
+
+const require = createRequire(import.meta.url);
 import { listEffectiveClinicConfiguration, type ClinicConfigurationScopeContext } from './clinic-configuration.js';
 import { clinicConfigurationDefinition, formatClinicWorkingHours } from '@healthcare/shared';
 
@@ -98,19 +101,19 @@ export async function loadClinicDocumentContext(
 
 let pdfMake: any = null;
 
-async function getPdfMake(): Promise<any> {
+export async function getPdfMake(): Promise<any> {
   if (pdfMake) return pdfMake;
-  const printerModule = require('pdfmake/build/pdfmake');
+  pdfMake = require('pdfmake/build/pdfmake');
   const vfsFonts = require('pdfmake/build/vfs_fonts');
-  pdfMake = printerModule.createPdfPrinter({
+  if (typeof pdfMake.addVirtualFileSystem === 'function') pdfMake.addVirtualFileSystem(vfsFonts);
+  if (typeof pdfMake.addFonts === 'function') pdfMake.addFonts({
     Roboto: {
       normal: 'Roboto-Regular.ttf',
       bold: 'Roboto-Medium.ttf',
       italics: 'Roboto-Italic.ttf',
-      bolditalics: 'Roboto-MediumItalic.ttf',
+      bolditalics: 'Roboto-Medium.ttf',
     },
   });
-  pdfMake.vfs = pdfMake.vfs || vfsFonts.pdfMake.vfs;
   return pdfMake;
 }
 

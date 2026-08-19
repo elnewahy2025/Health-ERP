@@ -132,6 +132,7 @@ export type {
   ReportColumn,
   ReportSchedule,
   ReportExecution,
+  ReportSource,
   ReportDefinition,
   CreateReportPayload,
   CreateSchedulePayload,

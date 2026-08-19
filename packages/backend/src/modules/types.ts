@@ -1507,14 +1507,28 @@ export interface UserSettingRow {
 export interface ReportExecutionRow {
   id: string;
   tenant_id: string;
-  name: string;
-  type: string;
-  params: unknown;
+  report_id: string;
   status: string;
-  file_url: string | null;
-  format: string | null;
-  generated_by: string | null;
+  format: 'csv' | 'pdf' | 'excel' | 'json';
+  error: string | null;
+  output_path: string | null;
+  row_count: number;
+  trigger: string;
+  created_by: string | null;
+  started_at: Date | null;
+  completed_at: Date | null;
   created_at: Date;
+  params: unknown;
+  scope_context: unknown;
+  storage_location: string | null;
+  checksum: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  file_name: string | null;
+  retention_days: number;
+  artifact_expires_at: Date | null;
+  artifact_deleted_at: Date | null;
+  updated_at: Date | null;
 }
 
 // ── Backup Tables ──

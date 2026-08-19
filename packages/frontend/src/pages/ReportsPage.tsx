@@ -5,6 +5,7 @@ import {
   type ReportDefinition,
   type ReportSchedule,
   type ReportExecution,
+  type ReportSource,
 } from '../lib/api';
 import { escapeHtml, sanitizeString } from '../lib/sanitize';
 import { formatDateTime } from '../lib/format';
@@ -51,6 +52,7 @@ export default function ReportsPage() {
 
   const [tab, setTab] = useState<TabType>('reports');
   const [reports, setReports] = useState<ReportDefinition[]>([]);
+  const [sources, setSources] = useState<ReportSource[]>([]);
   const [schedules, setSchedules] = useState<ReportSchedule[]>([]);
   const [executions, setExecutions] = useState<ReportExecution[]>([]);
   const [selectedReport, setSelectedReport] = useState<ReportDefinition | null>(null);
@@ -66,6 +68,7 @@ export default function ReportsPage() {
     description: '',
     category: 'clinical',
     exportFormats: 'csv,pdf',
+    source: '',
   });
   const [scheduleForm, setScheduleForm] = useState({
     cron: '0 8 * * 1',
@@ -81,8 +84,8 @@ export default function ReportsPage() {
       setLoading(true);
       setError(null);
       try {
-        const data = await reportsApi.list();
-        if (!cancelled) setReports(data);
+        const [data, sourceData] = await Promise.all([reportsApi.list(), reportsApi.sources()]);
+        if (!cancelled) { setReports(data); setSources(sourceData); }
       } catch {
         if (!cancelled) setError(t('reports.loadFailed'));
       } finally {
@@ -113,8 +116,13 @@ export default function ReportsPage() {
     }
   };
 
+  useEffect(() => {
+    if (!reportForm.source && sources.length > 0) setReportForm((prev) => ({ ...prev, source: sources[0].source }));
+  }, [reportForm.source, sources]);
+
   const validateReportForm = (): boolean => {
     const errors: Record<string, string> = {};
+    if (!reportForm.source) errors.source = t('reports.sourceRequired');
     const name = sanitizeString(reportForm.name);
     if (!name) {
       errors.name = t('common.required');
@@ -163,11 +171,12 @@ export default function ReportsPage() {
         name: sanitizeString(reportForm.name),
         description: reportForm.description || undefined,
         category: reportForm.category,
+        queryConfig: { table: reportForm.source },
         exportFormats: formats,
       });
       toast.success(t('common.created'));
       setShowReportModal(false);
-      setReportForm({ name: '', description: '', category: 'clinical', exportFormats: 'csv,pdf' });
+      setReportForm({ name: '', description: '', category: 'clinical', exportFormats: 'csv,pdf', source: sources[0]?.source || '' });
       setFormErrors({});
       const updated = await reportsApi.list();
       setReports(updated);
@@ -195,13 +204,29 @@ export default function ReportsPage() {
     }
   };
 
-  const handleExecuteReport = async (reportId: string) => {
+  const handleExecuteReport = async (report: ReportDefinition) => {
     try {
-      await reportsApi.execute(reportId, { format: 'csv' });
+      await reportsApi.execute(report.id, { format: report.exportFormats?.[0] || 'csv' });
       toast.success(t('reports.run') + ' ✓');
-      void loadExecutions(reportId);
+      await loadExecutions(report.id);
     } catch {
       toast.error(t('common.error'));
+    }
+  };
+
+  const handleDownloadReport = async (execution: ReportExecution) => {
+    try {
+      const blob = await reportsApi.download(execution.id, execution.format);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = execution.fileName || `report-${execution.id}.${execution.format === 'excel' ? 'xls' : execution.format}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error(t('reports.downloadError'));
     }
   };
 
@@ -368,7 +393,7 @@ export default function ReportsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => void handleExecuteReport(r.id)}
+                            onClick={() => void handleExecuteReport(r)}
                           >
                             <Play className="w-3 h-3" />
                           </Button>
@@ -495,10 +520,12 @@ export default function ReportsPage() {
                     </td>
                     <td className="p-3">
                       {e.status === 'completed' ? (
-                        <Can permission="reports.export">
-                          <Button variant="ghost" size="sm">
-                            <Download className="w-3 h-3" />
-                          </Button>
+                        <Can permission="reports.download">
+                          {e.downloadAvailable && (
+                            <Button variant="ghost" size="sm" onClick={() => void handleDownloadReport(e)}>
+                              <Download className="w-3 h-3" />
+                            </Button>
+                          )}
                         </Can>
                       ) : (
                         '-'
@@ -523,7 +550,7 @@ export default function ReportsPage() {
             {selectedReport && (
               <Can permission="reports.manage">
                 <Button
-                  onClick={() => void handleExecuteReport(selectedReport.id)}
+                  onClick={() => void handleExecuteReport(selectedReport)}
                 >
                   <Play className="w-3 h-3 mr-1" /> {t('reports.runNow')}
                 </Button>
@@ -621,6 +648,14 @@ export default function ReportsPage() {
             onChange={(e) =>
               setReportForm((prev) => ({ ...prev, description: e.target.value }))
             }
+          />
+          <Select
+            label={t('reports.source')}
+            required
+            value={reportForm.source}
+            onChange={(e) => setReportForm((prev) => ({ ...prev, source: e.target.value }))}
+            options={sources.map((source) => ({ value: source.source, label: `${source.source} (${source.table})` }))}
+            error={formErrors.source}
           />
           <Select
             label={t('reports.category')}

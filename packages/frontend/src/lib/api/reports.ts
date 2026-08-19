@@ -27,10 +27,22 @@ export interface ReportExecution {
   format: string;
   error?: string;
   rowCount: number;
+  fileSize?: number | null;
+  fileName?: string | null;
+  downloadAvailable?: boolean;
+  artifactExpiresAt?: string | null;
+  artifactDeletedAt?: string | null;
   trigger: string;
   startedAt?: string;
   completedAt?: string;
   createdAt: string;
+}
+
+export interface ReportSource {
+  source: string;
+  table: string;
+  columns: string[];
+  formats: string[];
 }
 
 export interface ReportDefinition {
@@ -86,8 +98,9 @@ export const reportsApi = {
     apiClient.put(`/reports/schedules/${id}`, data).then((r) => r.data.data),
   listExecutions: (reportId: string) =>
     apiClient.get(`/reports/${reportId}/executions`).then((r) => r.data.data as ReportExecution[]),
-  execute: (reportId: string, data?: { format?: string }) =>
+  execute: (reportId: string, data?: { format?: string; params?: Record<string, unknown>; retentionDays?: number }) =>
     apiClient.post(`/reports/${reportId}/execute`, data).then((r) => r.data.data as ReportExecution),
-  export: (executionId: string, format: string) =>
-    apiClient.get(`/reports/export/${executionId}/${format}`).then((r) => r.data.data),
+  sources: () => apiClient.get('/reports/sources').then((r) => r.data.data as ReportSource[]),
+  download: (executionId: string, format: string) =>
+    apiClient.get(`/reports/export/${executionId}/${format}`, { responseType: 'blob' }).then((r) => r.data as Blob),
 };

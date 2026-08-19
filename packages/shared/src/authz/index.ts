@@ -92,7 +92,7 @@ export const PERMISSION_CATALOG: Record<string, readonly PermissionAction[]> = {
   automation: ['view', 'create', 'edit', 'delete', 'export', 'manage'],
   integrations: ['view', 'create', 'edit', 'export', 'manage'],
   bi: ['view', 'export', 'print', 'manage'],
-  reports: ['view', 'export', 'print', 'manage'],
+  reports: ['view', 'export', 'download', 'print', 'manage'],
   financial_reports: ['view', 'export', 'print', 'manage'],
   compliance_reports: ['view', 'export', 'print', 'manage'],
   advanced_reporting: ['view', 'export', 'print', 'manage'],
@@ -318,7 +318,7 @@ export const SEED_ROLES: Record<string, RoleTemplate> = {
       'billing.view': ['tenant'],
       'billing.export': ['tenant'],
       'reports.view': ['tenant'],
-      'reports.export': ['tenant'],
+      'reports.export': ['tenant'], 'reports.download': ['tenant'],
       'financial_reports.view': ['tenant'],
       'financial_reports.export': ['tenant'],
     },
@@ -423,7 +423,7 @@ export const HOSPITAL_ROLE_GRANTS: Record<string, Record<string, readonly Permis
     'patients.view': ['branch'], 'patients.edit': ['branch'], 'appointments.*': ['branch'],
     'queue.*': ['branch'], 'billing.view': ['branch'], 'pharmacy.view': ['branch'],
     'inventory.*': ['branch'], 'hr.view': ['branch'], 'reports.view': ['branch'],
-    'reports.export': ['branch'], 'branches.view': ['branch'], 'branches.manage': ['branch'],
+    'reports.export': ['branch'], 'reports.download': ['branch'], 'branches.view': ['branch'], 'branches.manage': ['branch'],
   },
   department_head: {
     'patients.view': ['department'], 'patients.edit': ['department'], 'appointments.view': ['department'],
@@ -502,7 +502,7 @@ export const HOSPITAL_ROLE_GRANTS: Record<string, Record<string, readonly Permis
     'laboratory.*': ['department'], 'patients.view': ['department'], 'emr.view': ['department'],
     'departments.view': ['department'], 'departments.create': ['department'],
     'departments.edit': ['department'], 'departments.delete': ['department'], 'departments.manage': ['department'],
-    'reports.view': ['department'], 'reports.export': ['department'], 'audit.view': ['department'],
+    'reports.view': ['department'], 'reports.export': ['department'], 'reports.download': ['department'], 'audit.view': ['department'],
   },
   laboratory_technician: {
     'laboratory.view': ['department'], 'laboratory.create': ['department'],
@@ -513,7 +513,7 @@ export const HOSPITAL_ROLE_GRANTS: Record<string, Record<string, readonly Permis
     'radiology.*': ['department'], 'patients.view': ['department'], 'emr.view': ['department'],
     'departments.view': ['department'], 'departments.create': ['department'],
     'departments.edit': ['department'], 'departments.delete': ['department'], 'departments.manage': ['department'],
-    'reports.view': ['department'], 'reports.export': ['department'], 'audit.view': ['department'],
+    'reports.view': ['department'], 'reports.export': ['department'], 'reports.download': ['department'], 'audit.view': ['department'],
   },
   radiologist: {
     'radiology.view': ['department'], 'radiology.create': ['department'], 'radiology.edit': ['department'],
@@ -555,7 +555,7 @@ export const HOSPITAL_ROLE_GRANTS: Record<string, Record<string, readonly Permis
   },
   billing_manager: {
     'billing.*': ['branch'], 'insurance.view': ['branch'], 'patients.view': ['branch'],
-    'reports.view': ['branch'], 'reports.export': ['branch'], 'expenses.*': ['branch'],
+    'reports.view': ['branch'], 'reports.export': ['branch'], 'reports.download': ['branch'], 'expenses.*': ['branch'],
     'eta_invoicing.*': ['branch'], 'audit.view': ['branch'],
   },
   billing_officer: {
@@ -565,12 +565,12 @@ export const HOSPITAL_ROLE_GRANTS: Record<string, Record<string, readonly Permis
   },
   accountant: {
     'billing.view': ['tenant'], 'billing.export': ['tenant'], 'reports.view': ['tenant'],
-    'reports.export': ['tenant'], 'financial_reports.*': ['tenant'], 'expenses.*': ['tenant'],
+    'reports.export': ['tenant'], 'reports.download': ['tenant'], 'financial_reports.*': ['tenant'], 'expenses.*': ['tenant'],
     'eta_invoicing.*': ['tenant'], 'data_export.view': ['tenant'], 'data_export.export': ['tenant'], 'data_export.download': ['tenant'],
   },
   insurance_manager: {
     'insurance.*': ['tenant'], 'insurance_claims.*': ['tenant'], 'billing.view': ['tenant'],
-    'reports.view': ['tenant'], 'reports.export': ['tenant'], 'patients.view': ['tenant'],
+    'reports.view': ['tenant'], 'reports.export': ['tenant'], 'reports.download': ['tenant'], 'patients.view': ['tenant'],
     'compliance.view': ['tenant'], 'documents.view': ['tenant'],
   },
   insurance_claims_officer: {
@@ -580,7 +580,7 @@ export const HOSPITAL_ROLE_GRANTS: Record<string, Record<string, readonly Permis
     'reports.view': ['branch'],
   },
   hr_manager: {
-    'hr.*': ['tenant'], 'reports.view': ['tenant'], 'reports.export': ['tenant'],
+    'hr.*': ['tenant'], 'reports.view': ['tenant'], 'reports.export': ['tenant'], 'reports.download': ['tenant'],
     'analytics_dashboard.view': ['tenant'], 'users.view': ['tenant'], 'compliance.view': ['tenant'],
     'audit.view': ['tenant'], 'documents.view': ['tenant'],
   },
@@ -591,7 +591,7 @@ export const HOSPITAL_ROLE_GRANTS: Record<string, Record<string, readonly Permis
   },
   inventory_manager: {
     'inventory.*': ['branch'], 'branches.view': ['branch'], 'reports.view': ['branch'],
-    'reports.export': ['branch'], 'expenses.view': ['branch'], 'expenses.create': ['branch'],
+    'reports.export': ['branch'], 'reports.download': ['branch'], 'expenses.view': ['branch'], 'expenses.create': ['branch'],
     'barcodes.*': ['branch'], 'audit.view': ['branch'],
   },
   procurement_officer: {
