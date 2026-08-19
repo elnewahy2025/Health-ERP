@@ -18,6 +18,7 @@
     "test:export-integration": "tsx scripts/run-postgres-integration.ts export",
     "test:reports-integration": "tsx scripts/run-postgres-integration.ts reports",
     "test:eta-integration": "tsx scripts/run-postgres-integration.ts eta",
+    "test:instapay-integration": "tsx scripts/run-postgres-integration.ts instapay",
     "test:watch": "vitest",
     "migrate": "npx tsx src/core/migrate.ts",
     "migrate:make": "knex migrate:make --knexfile knexfile.ts",

@@ -42,6 +42,10 @@ const targets: Record<string, { env: string; testFile: string }> = {
     env: 'RUN_ETA_DB_TESTS',
     testFile: 'src/modules/__tests__/eta-invoicing.integration.test.ts',
   },
+  instapay: {
+    env: 'RUN_INSTAPAY_DB_TESTS',
+    testFile: 'src/modules/__tests__/instapay-reconciliation.integration.test.ts',
+  },
 };
 const selected = targets[target];
 if (!selected) throw new Error(`Unknown PostgreSQL integration target: ${target}`);

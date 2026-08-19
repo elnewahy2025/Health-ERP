@@ -858,7 +858,7 @@ export default function SettingsPage() {
                             value={validation.mode}
                             options={[
                               { value: 'structural', label: t('settings.structuralValidation') },
-                              { value: 'live', label: t('settings.liveValidation') },
+                              ...(provider.contract?.supportedTestModes.includes('live') ? [{ value: 'live' as const, label: t('settings.liveValidation') }] : []),
                             ]}
                             onChange={(event) => setProviderValidationDraft((current) => ({
                               ...current,

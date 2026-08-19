@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { billingApi, paymentApi, egyptPaymentApi } from '../lib/api';
 import type { Invoice, InvoiceItem, InvoiceStatus, PaymentMethod } from '@healthcare/shared/types';
 import type { ProviderPaymentTransaction } from '../lib/api/billing';
+import type { ManualInstapayReconciliation } from '../lib/api/payment';
 import { Modal, Input, Select, PatientSearchField, Button, Badge, EmptyState, PageLoader } from '../components/ui';
 import { Plus, Trash2, DollarSign, FileText, TrendingUp, AlertTriangle, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { sanitizeNumber } from '../lib/sanitize';
@@ -185,12 +186,19 @@ export default function BillingPage() {
   const [showPayModal, setShowPayModal] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [saving, setSaving] = useState(false);
-  const [providerAction, setProviderAction] = useState<'stripe' | 'fawry' | null>(null);
+  const [providerAction, setProviderAction] = useState<'stripe' | 'fawry' | 'instapay' | null>(null);
   const [providerNotice, setProviderNotice] = useState<string | null>(null);
   const [fawryPhone, setFawryPhone] = useState('');
   const [fawryEmail, setFawryEmail] = useState('');
   const [providerPayments, setProviderPayments] = useState<ProviderPaymentTransaction[]>([]);
   const [providerPaymentsLoading, setProviderPaymentsLoading] = useState(false);
+  const [manualReconciliations, setManualReconciliations] = useState<ManualInstapayReconciliation[]>([]);
+  const [manualReconciliationsLoading, setManualReconciliationsLoading] = useState(false);
+  const [manualDecisionAction, setManualDecisionAction] = useState<'reconcile' | 'reject' | null>(null);
+  const [manualExternalReference, setManualExternalReference] = useState('');
+  const [manualReceivedAmount, setManualReceivedAmount] = useState(0);
+  const [manualTransferDate, setManualTransferDate] = useState(new Date().toISOString().slice(0, 10));
+  const [manualDecisionNotes, setManualDecisionNotes] = useState('');
 
   const [newInvoice, setNewInvoice] = useState<InvoiceForm>(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
@@ -367,6 +375,93 @@ export default function BillingPage() {
     }
   };
 
+  const refreshManualReconciliations = async (invoiceId: string) => {
+    setManualReconciliationsLoading(true);
+    try {
+      setManualReconciliations(await egyptPaymentApi.instapayHistory(invoiceId));
+    } catch {
+      setManualReconciliations([]);
+    } finally {
+      setManualReconciliationsLoading(false);
+    }
+  };
+
+  const handleManualInstapayRequest = async () => {
+    if (!selectedInvoice) return;
+    setProviderAction('instapay');
+    setProviderNotice(null);
+    try {
+      const result = await egyptPaymentApi.instapay(selectedInvoice.id, selectedInvoice.due);
+      const message = t('billing.instapayManualCreated', { reference: result.localReference });
+      setProviderNotice(message);
+      toast.success(message);
+      await refreshManualReconciliations(selectedInvoice.id);
+    } catch (error: unknown) {
+      const providerError = getProviderErrorInfo(error);
+      const message = providerError?.kind === 'disabled' || providerError?.kind === 'not_ready'
+        ? t('billing.instapayManualSetupRequired')
+        : t('billing.instapayManualFailed');
+      setProviderNotice(message);
+      toast.error(message);
+    } finally {
+      setProviderAction(null);
+    }
+  };
+
+  const handleManualReconcile = async (reconciliation: ManualInstapayReconciliation) => {
+    if (!selectedInvoice) return;
+    if (!manualExternalReference.trim() || !manualDecisionNotes.trim() || manualReceivedAmount <= 0) {
+      const message = t('billing.instapayManualVerificationRequired');
+      setProviderNotice(message);
+      toast.error(message);
+      return;
+    }
+    setManualDecisionAction('reconcile');
+    try {
+      await egyptPaymentApi.reconcileInstapay(reconciliation.id, {
+        externalReference: manualExternalReference.trim(),
+        receivedAmount: manualReceivedAmount,
+        transferDate: manualTransferDate,
+        decisionNotes: manualDecisionNotes.trim(),
+      });
+      const updatedInvoice = await billingApi.get(selectedInvoice.id);
+      setInvoices((current) => current.map((invoice) => invoice.id === updatedInvoice.id ? updatedInvoice : invoice));
+      await refreshManualReconciliations(selectedInvoice.id);
+      setProviderNotice(t('billing.instapayManualReconciled'));
+      setManualExternalReference('');
+      setManualDecisionNotes('');
+      toast.success(t('billing.instapayManualReconciled'));
+    } catch {
+      setProviderNotice(t('billing.instapayManualFailed'));
+      toast.error(t('billing.instapayManualFailed'));
+    } finally {
+      setManualDecisionAction(null);
+    }
+  };
+
+  const handleManualReject = async (reconciliation: ManualInstapayReconciliation) => {
+    if (!selectedInvoice) return;
+    if (!manualDecisionNotes.trim()) {
+      const message = t('billing.instapayManualRejectionRequired');
+      setProviderNotice(message);
+      toast.error(message);
+      return;
+    }
+    setManualDecisionAction('reject');
+    try {
+      await egyptPaymentApi.rejectInstapay(reconciliation.id, manualDecisionNotes.trim());
+      await refreshManualReconciliations(selectedInvoice.id);
+      setManualDecisionNotes('');
+      setProviderNotice(t('billing.instapayManualRejected'));
+      toast.success(t('billing.instapayManualRejected'));
+    } catch {
+      setProviderNotice(t('billing.instapayManualFailed'));
+      toast.error(t('billing.instapayManualFailed'));
+    } finally {
+      setManualDecisionAction(null);
+    }
+  };
+
   const openPayModal = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
     setPaymentForm(INITIAL_PAYMENT);
@@ -374,8 +469,14 @@ export default function BillingPage() {
     setFawryPhone(invoice.patientPhone || '');
     setFawryEmail(invoice.patientEmail || '');
     setProviderPayments([]);
+    setManualReconciliations([]);
+    setManualExternalReference('');
+    setManualReceivedAmount(invoice.due);
+    setManualTransferDate(new Date().toISOString().slice(0, 10));
+    setManualDecisionNotes('');
     setShowPayModal(true);
     void refreshProviderPayments(invoice.id);
+    void refreshManualReconciliations(invoice.id);
   };
 
   const closeNewModal = () => {
@@ -389,11 +490,18 @@ export default function BillingPage() {
     setSelectedInvoice(null);
     setPaymentForm(INITIAL_PAYMENT);
     setProviderAction(null);
+    setManualDecisionAction(null);
     setProviderNotice(null);
     setFawryPhone('');
     setFawryEmail('');
     setProviderPayments([]);
     setProviderPaymentsLoading(false);
+    setManualReconciliations([]);
+    setManualReconciliationsLoading(false);
+    setManualExternalReference('');
+    setManualReceivedAmount(0);
+    setManualTransferDate(new Date().toISOString().slice(0, 10));
+    setManualDecisionNotes('');
   };
 
   const addItem = () => {
@@ -879,6 +987,57 @@ export default function BillingPage() {
                 onChange={(e) => setFawryEmail(e.target.value)}
                 placeholder={t('billing.fawryEmailPlaceholder')}
               />
+            </div>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-3">
+              <div>
+                <p className="font-medium text-amber-900">{t('billing.instapayManualTitle')}</p>
+                <p className="text-xs text-amber-800">{t('billing.instapayManualDescription')}</p>
+              </div>
+              <Can permission="billing.create">
+                <Button variant="secondary" loading={providerAction === 'instapay'} disabled={providerAction !== null} onClick={() => void handleManualInstapayRequest()}>
+                  {t('billing.instapayManualCreate')}
+                </Button>
+              </Can>
+              {manualReconciliationsLoading ? (
+                <p className="text-xs text-amber-800">{t('common.loading')}</p>
+              ) : manualReconciliations.length === 0 ? (
+                <p className="text-xs text-amber-800">{t('billing.instapayManualNoRequests')}</p>
+              ) : (
+                manualReconciliations.map((reconciliation) => {
+                  const statusLabel = reconciliation.status === 'awaiting_transfer'
+                    ? t('billing.instapayManualAwaiting')
+                    : reconciliation.status === 'reconciled'
+                      ? t('billing.instapayManualReconciledStatus')
+                      : t('billing.instapayManualRejectedStatus');
+                  return (
+                    <div key={reconciliation.id} className="rounded-lg border border-amber-200 bg-white p-3 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <span className="font-medium text-[var(--text-primary)]">{reconciliation.localReference}</span>
+                        <Badge variant={reconciliation.status === 'reconciled' ? 'success' : reconciliation.status === 'rejected' ? 'danger' : 'warning'}>{statusLabel}</Badge>
+                      </div>
+                      <p className="text-xs text-[var(--text-secondary)]">{t('billing.instapayManualDestination', { wallet: reconciliation.walletIdentifier, account: reconciliation.accountName, currency: reconciliation.currency })}</p>
+                      <p className="whitespace-pre-wrap text-xs text-[var(--text-secondary)]">{reconciliation.instructions}</p>
+                      <p className="text-sm font-medium text-[var(--text-primary)]">{t('billing.instapayManualAmount', { amount: formatMoney(reconciliation.requestedAmount) })}</p>
+                      {reconciliation.externalReference && <p className="text-xs text-[var(--text-secondary)]">{t('billing.instapayManualExternalReference', { reference: reconciliation.externalReference })}</p>}
+                      {reconciliation.status === 'awaiting_transfer' && (
+                        <Can permission="billing.verify">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-amber-100 pt-3">
+                            <Input label={t('billing.instapayManualExternalReferenceLabel')} value={manualExternalReference} onChange={(event) => setManualExternalReference(event.target.value)} />
+                            <Input type="number" step="0.01" label={t('billing.instapayManualReceivedAmount')} value={manualReceivedAmount} min="0" onChange={(event) => setManualReceivedAmount(sanitizeNumber(event.target.value))} />
+                            <Input type="date" label={t('billing.instapayManualTransferDate')} value={manualTransferDate} onChange={(event) => setManualTransferDate(event.target.value)} />
+                            <Input label={t('billing.instapayManualDecisionNotes')} value={manualDecisionNotes} onChange={(event) => setManualDecisionNotes(event.target.value)} />
+                            <div className="flex flex-wrap gap-2 sm:col-span-2">
+                              <Button size="sm" loading={manualDecisionAction === 'reconcile'} disabled={manualDecisionAction !== null} onClick={() => void handleManualReconcile(reconciliation)}>{t('billing.instapayManualReconcile')}</Button>
+                              <Button size="sm" variant="secondary" loading={manualDecisionAction === 'reject'} disabled={manualDecisionAction !== null} onClick={() => void handleManualReject(reconciliation)}>{t('billing.instapayManualReject')}</Button>
+                            </div>
+                          </div>
+                        </Can>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
 
             <div className="rounded-lg border border-[var(--border)] p-3 space-y-2">

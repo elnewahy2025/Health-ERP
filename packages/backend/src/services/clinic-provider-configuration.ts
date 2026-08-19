@@ -66,6 +66,13 @@ export const CLINIC_PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = [
     requiredSecretKeys: ['account_sid', 'auth_token'],
     secretGroups: [['messaging_service_sid', 'whatsapp_number', 'voice_number']],
   },
+  {
+    providerKey: 'instapay_manual',
+    moduleKey: 'integrations',
+    displayName: 'InstaPay manual transfer instructions',
+    configKeys: ['walletIdentifier', 'accountName', 'referencePrefix', 'instructions'],
+    secretKeys: [],
+  },
 ] as const;
 
 interface RegionalProfileRow {

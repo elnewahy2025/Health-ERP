@@ -18,6 +18,11 @@ describe('billing provider action contracts', () => {
     expect(page).toContain('billingApi.pay(selectedInvoice.id');
     expect(page).toContain('billingApi.providerPayments(invoiceId)');
     expect(page).toContain('billing.providerPaymentHistory');
+    expect(page).toContain('egyptPaymentApi.instapay(selectedInvoice.id, selectedInvoice.due)');
+    expect(page).toContain('egyptPaymentApi.reconcileInstapay');
+    expect(page).toContain('egyptPaymentApi.rejectInstapay');
+    expect(page).toContain('billing.instapayManualTitle');
+    expect(page).toContain('<Can permission="billing.verify">');
     expect(page).toContain('<Can permission="billing.create">');
     expect(page).toContain('<Can permission="billing.approve">');
   });
@@ -27,6 +32,8 @@ describe('billing provider action contracts', () => {
     const api = source('lib/api/payment.ts');
     expect(page).toContain('identity?.currency');
     expect(api).toContain('...(currency ? { currency } : {})');
+    expect(api).toContain("apiClient.post('/payments/instapay', { invoiceId, amount })");
+    expect(api).toContain("/invoices/${invoiceId}/instapay-reconciliations");
     expect(api).not.toContain("currency: 'EGP'");
     expect(api).not.toContain("currency: 'USD'");
   });

@@ -154,6 +154,7 @@ export async function registerBillingModule(app: FastifyInstance) {
     const transactions = await db('payment_transactions')
       .where({ tenant_id: tenantId, invoice_id: invoiceId })
       .whereNotNull('provider_key')
+      .where('provider_key', '!=', 'instapay_manual')
       .select('id', 'provider_key', 'status', 'amount', 'reference', 'provider_reference', 'created_at', 'updated_at')
       .orderBy('created_at', 'desc');
     return sendSuccess(reply, transactions.map((transaction) => ({

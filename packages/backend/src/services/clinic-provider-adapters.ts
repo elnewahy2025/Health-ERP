@@ -132,11 +132,27 @@ const twilioAdapter: ClinicProviderAdapter = {
   },
 };
 
+const instapayManualAdapter: ClinicProviderAdapter = {
+  providerKey: 'instapay_manual',
+  contract: getClinicProviderContract('instapay_manual')!,
+  adapterContract: getProviderAdapterContract('instapay_manual')!,
+  validate: (context) => {
+    const missing = requiredValues(context, ['walletIdentifier', 'accountName', 'referencePrefix', 'instructions'], []);
+    if (missing.length > 0) return missingResult('instapay_manual', missing);
+    const prefix = String(context.config.referencePrefix).trim();
+    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,19}$/.test(prefix)) {
+      return invalidResult('instapay_manual', 'referencePrefix must contain 1-20 letters, numbers, hyphens, or underscores');
+    }
+    return readyResult('instapay_manual');
+  },
+};
+
 export const CLINIC_PROVIDER_ADAPTERS: Readonly<Record<string, ClinicProviderAdapter>> = {
   eta: etaAdapter,
   fawry: fawryAdapter,
   stripe: stripeAdapter,
   twilio: twilioAdapter,
+  instapay_manual: instapayManualAdapter,
 };
 
 export function getClinicProviderAdapter(providerKey: string): ClinicProviderAdapter | null {
@@ -265,5 +281,6 @@ export async function validateClinicProviderAdapter(tenantId: string, providerKe
   const structural = adapter.validate({ tenantId, ...runtime });
   if (structural.status !== 'ready') return structural;
   if (runtime.validationMode !== 'live' || !runtime.liveValidationEnabled) return structural;
+  if (!contract.supportedTestModes.includes('live')) return structural;
   return probeProviderValidationEndpoint({ tenantId, ...runtime });
 }

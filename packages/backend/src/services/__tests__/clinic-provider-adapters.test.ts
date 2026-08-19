@@ -91,6 +91,25 @@ describe('Clinic provider structural adapters', () => {
     expect(JSON.stringify(result)).not.toContain('token');
   });
 
+  it('validates manual InstaPay instructions without requiring secrets or endpoints', () => {
+    const adapter = getClinicProviderAdapter('instapay_manual');
+    expect(adapter).not.toBeNull();
+    const incomplete = adapter!.validate({
+      tenantId: 'tenant-1', providerKey: 'instapay_manual', environment: 'production', status: 'configured',
+      validationMode: 'structural', liveValidationEnabled: false, validationTimeoutMs: 5000,
+      config: { walletIdentifier: 'wallet' }, secrets: {},
+    });
+    expect(incomplete.status).toBe('setup_required');
+    const ready = adapter!.validate({
+      tenantId: 'tenant-1', providerKey: 'instapay_manual', environment: 'production', status: 'configured',
+      validationMode: 'structural', liveValidationEnabled: false, validationTimeoutMs: 5000,
+      config: { walletIdentifier: 'wallet', accountName: 'Clinic', referencePrefix: 'CLINIC', instructions: 'Transfer exact amount' }, secrets: {},
+    });
+    expect(ready.status).toBe('ready');
+    expect(CLINIC_PROVIDER_CONTRACTS.instapay_manual.supportedTestModes).toEqual(['structural']);
+    expect(CLINIC_PROVIDER_CONTRACTS.instapay_manual.runtimeOperationKeys).toEqual([]);
+  });
+
   it('exposes versioned capability states without claiming vendor authentication', () => {
     for (const providerKey of ['eta', 'fawry', 'stripe', 'twilio']) {
       const contract = CLINIC_PROVIDER_CONTRACTS[providerKey];

@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import type { FastifyRequest, FastifyReply, FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db } from '../../core/database.js';
@@ -8,13 +7,14 @@ import { logAudit } from '../../services/audit.js';
 import { loadClinicDocumentContext } from '../../services/pdf.js';
 import { getEnv } from '@healthcare/shared/config';
 import { authenticate } from '../auth-guard.js';
-import { authorize } from '../../services/authorization.js';
+import { assignedPatientIds, authorize, effectivePermissionScope, type Principal } from '../../services/authorization.js';
 import { applyScopePolicy } from '../../services/scope-policy.js';
 import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 import { ForbiddenError } from '@healthcare/shared/errors';
 import { providerRuntimeOrFallback, getTenantProviderRuntime } from '../../services/clinic-provider-runtime.js';
 import { generateEtaDraft, processEtaNotification, refreshEtaInvoiceStatus, resolveEtaNotificationTenant, submitEtaInvoice } from '../../services/eta-invoice-service.js';
 import { requestFawryPayment } from '../../services/fawry-payment-adapter.js';
+import { createManualInstapayRequest, listManualInstapayReconciliations, reconcileManualInstapay, rejectManualInstapay } from '../../services/manual-instapay-reconciliation.js';
 import { assertClinicProviderOperation } from '../../services/clinic-provider-capabilities.js';
 import { mapFawryStatus, moneyToCents, normalizeFawryCallback, verifyFawryV2Signature } from '../../services/payment-callbacks.js';
 
@@ -427,15 +427,8 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     return reply.status(200).send({ status: 'OK' });
   });
 
-  app.post('/api/v1/payments/instapay/callback', async (request, reply) => {
-    const body = request.body as Record<string, unknown>;
-    const instapayRef = body.reference || body.transactionId;
-    if (instapayRef) {
-      await db('payment_transactions')
-        .where({ instapay_reference: instapayRef })
-        .update({ status: 'completed' });
-    }
-    return reply.status(200).send({ status: 'OK' });
+  app.post('/api/v1/payments/instapay/callback', async (_request, reply) => {
+    return sendError(reply, 'InstaPay is configured for manual reconciliation. No external callback is accepted.', 409);
   });
 
 
@@ -528,40 +521,82 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
     }, 'Fawry payment created', 201);
   });
 
-  // ==================== INSTAPAY CREATE ====================
+  // ==================== MANUAL INSTAPAY RECONCILIATION ====================
 
   app.post('/api/v1/payments/instapay', {
     preHandler: [authenticate, authorize('billing.create')],
   }, async (request, reply) => {
-    const tenantId = getTenantId(request);
-    const { userId } = getCtx(request);
-    const { amount } = z.object({
-      amount: z.number().positive(),
+    const { tenantId, userId, principal } = getCtx(request);
+    const body = z.object({ invoiceId: z.string().uuid(), amount: z.number().positive() }).parse(request.body);
+    const invoice = await db('invoices')
+      .join('patients', 'invoices.patient_id', 'patients.id')
+      .where({ 'invoices.id': body.invoiceId, 'invoices.tenant_id': tenantId, 'patients.tenant_id': tenantId })
+      .whereNull('invoices.deleted_at')
+      .select('invoices.id', 'invoices.tenant_id', 'invoices.patient_id', 'patients.branch_id as patient_branch_id')
+      .first();
+    if (!invoice) return sendError(reply, 'Invoice not found', 404);
+    await assertFinancialInvoiceAccess(principal, invoice);
+    const result = await createManualInstapayRequest({ tenantId, userId, invoiceId: body.invoiceId, amount: body.amount });
+    return sendSuccess(reply, result, result.created ? 'Manual InstaPay transfer instructions created' : 'Existing manual InstaPay transfer request returned', result.created ? 201 : 200);
+  });
+
+  app.get('/api/v1/invoices/:invoiceId/instapay-reconciliations', {
+    preHandler: [authenticate, authorize('billing.view')],
+  }, async (request, reply) => {
+    const { tenantId, principal } = getCtx(request);
+    const { invoiceId } = z.object({ invoiceId: z.string().uuid() }).parse(request.params);
+    const invoice = await db('invoices')
+      .join('patients', 'invoices.patient_id', 'patients.id')
+      .where({ 'invoices.id': invoiceId, 'invoices.tenant_id': tenantId, 'patients.tenant_id': tenantId })
+      .whereNull('invoices.deleted_at')
+      .select('invoices.id', 'invoices.tenant_id', 'invoices.patient_id', 'patients.branch_id as patient_branch_id')
+      .first();
+    if (!invoice) return sendError(reply, 'Invoice not found', 404);
+    await assertFinancialInvoiceAccess(principal, invoice);
+    return sendSuccess(reply, await listManualInstapayReconciliations(tenantId, invoiceId));
+  });
+
+  app.post('/api/v1/payments/instapay/:reconciliationId/reconcile', {
+    preHandler: [authenticate, authorize('billing.verify')],
+  }, async (request, reply) => {
+    const { tenantId, userId, principal } = getCtx(request);
+    const { reconciliationId } = z.object({ reconciliationId: z.string().uuid() }).parse(request.params);
+    const reconciliation = await db('manual_instapay_reconciliations')
+      .join('invoices', 'manual_instapay_reconciliations.invoice_id', 'invoices.id')
+      .join('patients', 'invoices.patient_id', 'patients.id')
+      .where({ 'manual_instapay_reconciliations.id': reconciliationId, 'manual_instapay_reconciliations.tenant_id': tenantId })
+      .whereNull('invoices.deleted_at')
+      .select('manual_instapay_reconciliations.id', 'invoices.tenant_id', 'invoices.patient_id', 'patients.branch_id as patient_branch_id')
+      .first();
+    if (!reconciliation) return sendError(reply, 'Manual InstaPay reconciliation not found', 404);
+    await assertFinancialInvoiceAccess(principal, reconciliation, 'billing.verify');
+    const body = z.object({
+      externalReference: z.string().min(1).max(255),
+      receivedAmount: z.number().positive(),
+      transferDate: z.string(),
+      decisionNotes: z.string().min(3).max(2000),
     }).parse(request.body);
+    const result = await reconcileManualInstapay({ tenantId, userId, reconciliationId, ...body });
+    return sendSuccess(reply, result, result.idempotent ? 'Manual InstaPay reconciliation already completed' : 'Manual InstaPay payment reconciled');
+  });
 
-    const walletId = env.INSTAPAY_WALLET;
-    const referenceNumber = `IP-${Date.now()}-${crypto.randomInt(1000, 9999)}`;
-
-    const [paymentTx] = await db('payment_transactions').insert({
-      tenant_id: tenantId,
-      invoice_id: null,
-      amount,
-      method: 'instapay',
-      reference: referenceNumber,
-      status: 'pending',
-      notes: 'InstaPay transfer initiated',
-    }).returning('*');
-
-    try { await logAudit({ tenantId, userId, action: 'payment.instapay_created', entityType: 'payment', entityId: paymentTx.id, metadata: { amount, referenceNumber } }); } catch {}
-
-    return sendSuccess(reply, {
-      paymentTransactionId: paymentTx.id,
-      referenceNumber,
-      walletId: walletId || 'PENDING_CONFIG',
-      amount,
-      status: 'pending',
-      message: 'InstaPay details generated. Customer should transfer to the wallet and include the reference number.',
-    }, 'InstaPay payment created', 201);
+  app.post('/api/v1/payments/instapay/:reconciliationId/reject', {
+    preHandler: [authenticate, authorize('billing.verify')],
+  }, async (request, reply) => {
+    const { tenantId, userId, principal } = getCtx(request);
+    const { reconciliationId } = z.object({ reconciliationId: z.string().uuid() }).parse(request.params);
+    const reconciliation = await db('manual_instapay_reconciliations')
+      .join('invoices', 'manual_instapay_reconciliations.invoice_id', 'invoices.id')
+      .join('patients', 'invoices.patient_id', 'patients.id')
+      .where({ 'manual_instapay_reconciliations.id': reconciliationId, 'manual_instapay_reconciliations.tenant_id': tenantId })
+      .whereNull('invoices.deleted_at')
+      .select('manual_instapay_reconciliations.id', 'invoices.tenant_id', 'invoices.patient_id', 'patients.branch_id as patient_branch_id')
+      .first();
+    if (!reconciliation) return sendError(reply, 'Manual InstaPay reconciliation not found', 404);
+    await assertFinancialInvoiceAccess(principal, reconciliation, 'billing.verify');
+    const body = z.object({ decisionNotes: z.string().min(3).max(2000) }).parse(request.body);
+    const result = await rejectManualInstapay({ tenantId, userId, reconciliationId, decisionNotes: body.decisionNotes });
+    return sendSuccess(reply, result, result.idempotent ? 'Manual InstaPay rejection already recorded' : 'Manual InstaPay request rejected');
   });
 
   // ==================== ETA QR CODE ====================
@@ -628,8 +663,30 @@ export async function registerFinancialDeepeningModule(app: FastifyInstance) {
   // Module loaded
 }
 
-
-
+async function assertFinancialInvoiceAccess(principal: Principal, invoice: { tenant_id: string; patient_id: string; patient_branch_id?: string | null }, permission: 'billing.view' | 'billing.verify' = 'billing.view'): Promise<void> {
+  if (principal.tenantId !== invoice.tenant_id) throw new ForbiddenError('You do not have access to this invoice');
+  const scope = effectivePermissionScope(principal, permission);
+  if (scope === 'tenant' || scope === 'system') return;
+  if ((scope === 'branch' || scope === 'branches') && invoice.patient_branch_id && principal.branches.includes(String(invoice.patient_branch_id))) return;
+  if (scope === 'department' && principal.departmentId) {
+    const departmentAppointment = await db('appointments as appointments')
+      .join('users as doctors', 'appointments.doctor_id', 'doctors.id')
+      .where({
+        'appointments.tenant_id': principal.tenantId,
+        'appointments.patient_id': invoice.patient_id,
+        'doctors.tenant_id': principal.tenantId,
+        'doctors.department_id': principal.departmentId,
+      })
+      .select('appointments.id')
+      .first();
+    if (departmentAppointment) return;
+  }
+  if (scope === 'assigned_patients') {
+    const assigned = await assignedPatientIds(principal);
+    if (assigned.includes(invoice.patient_id)) return;
+  }
+  throw new ForbiddenError('You do not have access to this invoice');
+}
 
 function generateEtaQrTLV(sellerName: string, taxRegNo: string, timestamp: string, total: number, vatTotal: number): string {
   const encodeTLV = (tag: number, value: string): string => {

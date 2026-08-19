@@ -91,6 +91,27 @@ export const CLINIC_PROVIDER_CONTRACTS: Readonly<Record<string, ClinicProviderCo
     },
     runtimeOperationKeys: ['twilio.sms.send', 'twilio.voice.call', 'twilio.voice.callback.verify'],
   },
+  instapay_manual: {
+    providerKey: 'instapay_manual',
+    contractVersion: 1,
+    supportedTestModes: ['structural'],
+    capabilities: {
+      structural_validation: structuralCapability,
+      endpoint_reachability: {
+        status: 'not_applicable',
+        operationKeys: [],
+      },
+      vendor_authentication: {
+        status: 'not_applicable',
+        operationKeys: [],
+      },
+      business_operation: {
+        status: 'not_applicable',
+        operationKeys: [],
+      },
+    },
+    runtimeOperationKeys: [],
+  },
 };
 
 export function getClinicProviderContract(providerKey: string): ClinicProviderContract | null {
