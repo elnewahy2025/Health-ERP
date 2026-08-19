@@ -20,7 +20,7 @@ import { registerEmrModule } from './modules/emr/index.js';
 import { registerBillingModule } from './modules/billing/index.js';
 import { registerCommonModule } from './modules/common/index.js';
 import { errorHandler } from './core/error-handler.js';
-import { db, beginRequestTenantTransaction, enterRequestTenantTransaction, finishRequestTenantTransaction } from './core/database.js';
+import { db, beginRequestTenantTransaction, enterRequestDatabaseContext, enterRequestTenantTransaction, finishRequestTenantTransaction } from './core/database.js';
 import { redis } from './core/redis.js';
 import { loadUserPrincipal, loadUserPrincipalByMembership, uniquePermissionKeys } from './services/authorization.js';
 import { findActiveSessionById } from './modules/auth/auth.repository.js';
@@ -84,9 +84,6 @@ import { registerDepartmentsModule } from './modules/departments/index.js';
 import { registerEmergencyAccessModule } from './modules/emergency-access/index.js';
 import { registerMedicalContentModule } from './modules/medical-content/index.js';
 import { registerMultiBranchModule } from './modules/multi-branch/index.js';
-import { registerChatModule } from './modules/chat/index.js';
-import { registerWhatsAppModule } from './modules/whatsapp/index.js';
-import { registerVoiceModule } from './modules/voice/index.js';
 import { registerClinicSettingsModule } from './modules/clinic-settings/index.js';
 import { startReminderService } from './services/reminder.service.js';
 import { loggerOptions } from "./utils/logger.js";
@@ -98,7 +95,7 @@ import { csrfValidation } from "./modules/auth/index.js";
 const env = getEnv();
 initSentry();
 
-async function buildApp() {
+export async function buildApp() {
   const app = Fastify({
     logger: loggerOptions,
   });
@@ -124,17 +121,20 @@ async function buildApp() {
   app.addHook("onRequest", (request, reply, done) => { httpLogger(request.raw, reply.raw); done(); });
   app.addHook("onRequest", apiVersioningHook);
   app.addHook("onRequest", csrfValidation);
+  app.addHook('onRequest', async () => {
+    enterRequestDatabaseContext();
+  });
   app.addHook('onResponse', async (request) => {
-    const req = request as FastifyRequest & { __tenantTransactionActive?: boolean };
+    const req = request as FastifyRequest & { __tenantTransactionActive?: boolean; __tenantTransaction?: Awaited<ReturnType<typeof beginRequestTenantTransaction>> };
     if (!req.__tenantTransactionActive) return;
     req.__tenantTransactionActive = false;
-    await finishRequestTenantTransaction(true);
+    await finishRequestTenantTransaction(true, req.__tenantTransaction);
   });
   app.addHook('onError', async (request) => {
-    const req = request as FastifyRequest & { __tenantTransactionActive?: boolean };
+    const req = request as FastifyRequest & { __tenantTransactionActive?: boolean; __tenantTransaction?: Awaited<ReturnType<typeof beginRequestTenantTransaction>> };
     if (!req.__tenantTransactionActive) return;
     req.__tenantTransactionActive = false;
-    await finishRequestTenantTransaction(false);
+    await finishRequestTenantTransaction(false, req.__tenantTransaction);
   });
   await app.register(helmet, {
   contentSecurityPolicy: {
@@ -162,13 +162,14 @@ async function buildApp() {
 
   // Decorate app with authenticate middleware
   app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const req = request as any;
+    if (req.__authenticatedPrincipal) return;
     try {
       await request.jwtVerify();
     } catch {
       reply.status(401).send({ success: false, error: "Unauthorized" });
       return;
     }
-    const req = request as any;
     const token = request.user as any;
     const userId = String(token.user_id || token.userId || '');
     const membershipId = token.active_membership_id ? String(token.active_membership_id) : undefined;
@@ -193,11 +194,13 @@ async function buildApp() {
     try {
       const requestTransaction = await beginRequestTenantTransaction(tenantId);
       enterRequestTenantTransaction(requestTransaction);
+      req.__tenantTransaction = requestTransaction;
       req.__tenantTransactionActive = true;
     } catch {
       reply.status(503).send({ success: false, error: 'Database tenant context unavailable' });
       return;
     }
+    req.__authenticatedPrincipal = principal;
     req.tenantId = tenantId;
     req.ctx = {
       tenantId,
@@ -214,6 +217,13 @@ async function buildApp() {
       requestId: request.id,
       principal,
     };
+  });
+
+  app.addHook('preHandler', async (request, reply) => {
+    const authorization = request.headers.authorization;
+    if (authorization?.toLowerCase().startsWith('bearer ')) {
+      await (app as any).authenticate(request, reply);
+    }
   });
 
   await app.register(swagger, {
@@ -314,9 +324,6 @@ await registerDashboardWidgetsModule(app);
   await registerEmergencyAccessModule(app);
   await registerMedicalContentModule(app);
   await registerMultiBranchModule(app);
-  await registerChatModule(app);
-  await registerWhatsAppModule(app);
-  await registerVoiceModule(app);
   await registerClinicSettingsModule(app);
   return app;
 }
@@ -394,4 +401,4 @@ async function start() {
   }
 }
 
-start();
+if (process.env.RUN_FASTIFY_LIFECYCLE_TESTS !== 'true') start();

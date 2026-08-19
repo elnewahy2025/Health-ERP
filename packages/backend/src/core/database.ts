@@ -3,7 +3,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { getEnv } from '@healthcare/shared/config';
 
 const env = getEnv();
-const requestTransactionStorage = new AsyncLocalStorage<Knex.Transaction | null>();
+type RequestDatabaseContext = { transaction: Knex.Transaction | null };
+const requestTransactionStorage = new AsyncLocalStorage<RequestDatabaseContext | null>();
 
 const baseDb = knex({
   client: 'pg',
@@ -23,7 +24,7 @@ const baseDb = knex({
 });
 
 function scopedDatabase(): Knex.Transaction | null {
-  return requestTransactionStorage.getStore() || null;
+  return requestTransactionStorage.getStore()?.transaction || null;
 }
 
 /**
@@ -47,6 +48,12 @@ export const db = new Proxy(baseDb, {
   },
 }) as Knex;
 
+export function enterRequestDatabaseContext(): RequestDatabaseContext {
+  const context: RequestDatabaseContext = { transaction: null };
+  requestTransactionStorage.enterWith(context);
+  return context;
+}
+
 export async function beginRequestTenantTransaction(tenantId: string): Promise<Knex.Transaction> {
   const trx = await baseDb.transaction();
   try {
@@ -59,16 +66,23 @@ export async function beginRequestTenantTransaction(tenantId: string): Promise<K
 }
 
 export function enterRequestTenantTransaction(trx: Knex.Transaction): void {
-  requestTransactionStorage.enterWith(trx);
+  const context = requestTransactionStorage.getStore();
+  if (context) {
+    context.transaction = trx;
+  } else {
+    requestTransactionStorage.enterWith({ transaction: trx });
+  }
 }
 
 export function clearRequestTenantTransaction(): void {
-  requestTransactionStorage.enterWith(null);
+  const context = requestTransactionStorage.getStore();
+  if (context) context.transaction = null;
 }
 
-export async function finishRequestTenantTransaction(commit: boolean): Promise<void> {
-  const trx = scopedDatabase();
-  requestTransactionStorage.enterWith(null);
+export async function finishRequestTenantTransaction(commit: boolean, requestTransaction?: Knex.Transaction): Promise<void> {
+  const context = requestTransactionStorage.getStore();
+  const trx = requestTransaction || context?.transaction || null;
+  if (context) context.transaction = null;
   if (!trx) return;
   if (commit) await trx.commit();
   else await trx.rollback();
@@ -82,6 +96,6 @@ export async function withTenant<T>(
   if (existing) return fn(existing);
   return baseDb.transaction(async (trx) => {
     await trx.raw("SELECT set_config('app.current_tenant', ?, true)", [tenantId]);
-    return requestTransactionStorage.run(trx, () => fn(trx));
+    return requestTransactionStorage.run({ transaction: trx }, () => fn(trx));
   });
 }
