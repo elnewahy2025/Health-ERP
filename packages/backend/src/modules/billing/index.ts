@@ -13,6 +13,7 @@ import { authorize, hasPermission, effectivePermissionScope, assignedPatientIds,
 import { applyScopePolicy } from '../../services/scope-policy.js';
 import type { PermissionScope } from '@healthcare/shared/authz';
 import { logAudit } from '../../services/audit.js';
+import { publishAutomationEvent } from '../../services/automation-service.js';
 import { listEffectiveClinicConfiguration } from '../../services/clinic-configuration.js';
 import type { InvoiceRow } from '../types.js';
 import { assertClinicProviderOperation } from '../../services/clinic-provider-capabilities.js';
@@ -249,6 +250,25 @@ export async function registerBillingModule(app: FastifyInstance) {
 
     try { await logAudit({ tenantId, userId, action: 'invoice.created', entityType: 'invoice', entityId: invoice.id,
       metadata: { total, patientId: body.patientId } }); } catch {}
+    try {
+      await publishAutomationEvent({
+        tenantId,
+        eventType: 'billing.invoice_created',
+        referenceType: 'invoice',
+        referenceId: invoice.id,
+        idempotencyKey: `billing.invoice_created:${invoice.id}`,
+        payload: {
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.invoice_number,
+          patientId: body.patientId,
+          patient: { email: patient.email || null, phone: patient.phone || null, firstName: patient.first_name || '', lastName: patient.last_name || '' },
+          total: Number(total),
+          due: Number(total),
+        },
+      });
+    } catch (error) {
+      try { await logAudit({ tenantId, userId, action: 'automation.event_publish_failed', entityType: 'invoice', entityId: invoice.id, metadata: { eventType: 'billing.invoice_created', error: error instanceof Error ? error.message : 'Event publication failed' }, result: 'failed' }); } catch {}
+    }
 
     return sendSuccess(reply, mapInvoice(invoice), 'Invoice created', 201);
   });
@@ -309,6 +329,29 @@ export async function registerBillingModule(app: FastifyInstance) {
     const { userId } = getCtx(request);
     try { await logAudit({ tenantId, userId, action: 'invoice.payment', entityType: 'invoice', entityId: invoiceId,
       metadata: { amount: body.amount, method: body.method } }); } catch {}
+    if (newStatus === 'paid') {
+      const paidPatient = await db('patients').where({ id: updated.patient_id, tenant_id: tenantId }).select('email', 'phone', 'first_name', 'last_name').first();
+      try {
+        await publishAutomationEvent({
+          tenantId,
+          eventType: 'billing.invoice_paid',
+          referenceType: 'invoice',
+          referenceId: invoiceId,
+          idempotencyKey: `billing.invoice_paid:${invoiceId}:${newPaid.toFixed(2)}`,
+          payload: {
+            invoiceId,
+            invoiceNumber: updated.invoice_number,
+            patientId: updated.patient_id,
+            patient: { email: paidPatient?.email || null, phone: paidPatient?.phone || null, firstName: paidPatient?.first_name || '', lastName: paidPatient?.last_name || '' },
+            amount: body.amount,
+            totalPaid: newPaid,
+            method: body.method,
+          },
+        });
+      } catch (error) {
+        try { await logAudit({ tenantId, userId, action: 'automation.event_publish_failed', entityType: 'invoice', entityId: invoiceId, metadata: { eventType: 'billing.invoice_paid', error: error instanceof Error ? error.message : 'Event publication failed' }, result: 'failed' }); } catch {}
+      }
+    }
 
     return sendSuccess(reply, mapInvoice(updated), 'Payment recorded');
   });

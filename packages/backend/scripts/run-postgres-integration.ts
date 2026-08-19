@@ -46,6 +46,10 @@ const targets: Record<string, { env: string; testFile: string }> = {
     env: 'RUN_INSTAPAY_DB_TESTS',
     testFile: 'src/modules/__tests__/instapay-reconciliation.integration.test.ts',
   },
+  automation: {
+    env: 'RUN_AUTOMATION_DB_TESTS',
+    testFile: 'src/modules/__tests__/automation.integration.test.ts',
+  },
 };
 const selected = targets[target];
 if (!selected) throw new Error(`Unknown PostgreSQL integration target: ${target}`);

@@ -16,6 +16,7 @@ import { mapAppointment, calculateEndTime, generateTelemedicineLink } from './ap
 import { sendAppointmentConfirmation } from '../../services/reminder.service.js';
 import { loadClinicNotificationContext } from '../../services/notification.js';
 import { logAudit } from '../../services/audit.js';
+import { publishAutomationEvent } from '../../services/automation-service.js';
 import {
   hasPermission,
   assignedPatientIds,
@@ -257,6 +258,28 @@ export async function createAppointment(request: FastifyRequest, reply: FastifyR
     });
   } catch {
     // Audit failure should not block appointment creation
+  }
+  try {
+    await publishAutomationEvent({
+      tenantId,
+      eventType: 'appointment.created',
+      referenceType: 'appointment',
+      referenceId: appointment.id,
+      idempotencyKey: `appointment.created:${appointment.id}`,
+      payload: {
+        appointmentId: appointment.id,
+        patientId: body.patientId,
+        patient: { email: patient.email || null, phone: patient.phone || null, firstName: patient.first_name || '', lastName: patient.last_name || '' },
+        doctorId: body.doctorId,
+        branchId: body.branchId,
+        appointmentDate: body.appointmentDate,
+        startTime: body.startTime,
+        type: body.type,
+        reason: body.reason || '',
+      },
+    });
+  } catch (error) {
+    try { await logAudit({ tenantId, userId, action: 'automation.event_publish_failed', entityType: 'appointment', entityId: appointment.id, metadata: { eventType: 'appointment.created', error: error instanceof Error ? error.message : 'Event publication failed' }, result: 'failed' }); } catch {}
   }
 
   return sendSuccess(reply, mapAppointment(appointment), 'Appointment created successfully', 201);

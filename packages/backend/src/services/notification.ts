@@ -88,10 +88,17 @@ interface NotificationData {
   templateKey: string;
   variables: Record<string, string>;
   locale?: string;
+  idempotencyKey?: string;
 }
 
 export async function sendNotification(data: NotificationData): Promise<boolean> {
+  let existingNotification: { id: string; status?: string } | undefined;
   try {
+    if (data.idempotencyKey) {
+      existingNotification = await db('notification_logs').where({ tenant_id: data.tenantId, idempotency_key: data.idempotencyKey }).first() as typeof existingNotification;
+      if (existingNotification?.status === 'sent') return true;
+      if (existingNotification?.status === 'pending') return false;
+    }
     // Get template. The table stores templates by `code` (one row per language);
     // tenant-specific overrides take precedence over system (tenant_id null).
     const template = await db('notification_templates')
@@ -123,8 +130,8 @@ export async function sendNotification(data: NotificationData): Promise<boolean>
       sent = await sendSms({ tenantId: data.tenantId, to: data.recipient, message: body });
     }
 
-    // Log
-    await db('notification_logs').insert({
+    // Log. A failed idempotent attempt may be retried; an already-sent attempt returned above.
+    const notificationRow = {
       tenant_id: data.tenantId,
       user_id: data.userId || null,
       channel: data.channel,
@@ -135,14 +142,17 @@ export async function sendNotification(data: NotificationData): Promise<boolean>
       status: sent ? 'sent' : 'failed',
       error_message: sent ? null : 'Send failed',
       sent_at: sent ? new Date() : null,
-    });
+      ...(data.idempotencyKey ? { idempotency_key: data.idempotencyKey } : {}),
+    };
+    if (existingNotification?.id) await db('notification_logs').where({ id: existingNotification.id, tenant_id: data.tenantId }).update(notificationRow);
+    else await db('notification_logs').insert(notificationRow);
 
     return sent;
   } catch (error: any) {
     console.error('✗ Notification failed:', error.message);
     
-    // Log failure
-    await db('notification_logs').insert({
+    // Log failure; keep the same idempotency row when retrying a previous failure.
+    const failedRow = {
       tenant_id: data.tenantId,
       user_id: data.userId || null,
       channel: data.channel,
@@ -150,7 +160,10 @@ export async function sendNotification(data: NotificationData): Promise<boolean>
       template_key: data.templateKey,
       status: 'failed',
       error_message: error.message,
-    });
+      ...(data.idempotencyKey ? { idempotency_key: data.idempotencyKey } : {}),
+    };
+    if (existingNotification?.id) await db('notification_logs').where({ id: existingNotification.id, tenant_id: data.tenantId }).update(failedRow);
+    else await db('notification_logs').insert(failedRow);
     
     return false;
   }

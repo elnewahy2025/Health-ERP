@@ -6,6 +6,10 @@ import { findTenantRow } from '../../utils/tenant-scope.js';
 import { authenticate } from '../auth-guard.js';
 import { authorize } from '../../services/authorization.js';
 import { logAudit } from '../../services/audit.js';
+import { enqueueAutomationExecution, getAutomationActionDefinitions, validateAutomationAction, validateAutomationConditions, validateAutomationTriggerConfig } from '../../services/automation-service.js';
+import { ValidationError } from '@healthcare/shared/errors';
+import { z } from 'zod';
+import crypto from 'node:crypto';
 
 interface AutomationRuleRow {
   id: string;
@@ -23,6 +27,8 @@ interface AutomationRuleRow {
   max_executions: number;
   cooldown_minutes: number;
   last_triggered_at: Date | null;
+  next_run_at: Date | null;
+  last_scheduled_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -61,6 +67,8 @@ export async function registerAutomationModule(app: FastifyInstance) {
       priority: r.priority, maxExecutions: r.max_executions,
       cooldownMinutes: r.cooldown_minutes,
       lastTriggeredAt: r.last_triggered_at,
+      nextRunAt: r.next_run_at,
+      lastScheduledAt: r.last_scheduled_at,
       createdAt: r.created_at, updatedAt: r.updated_at,
     })));
   });
@@ -77,6 +85,8 @@ export async function registerAutomationModule(app: FastifyInstance) {
       triggerConfig: rule.trigger_config, isActive: rule.is_active,
       maxExecutions: rule.max_executions, cooldownMinutes: rule.cooldown_minutes,
       lastTriggeredAt: rule.last_triggered_at,
+      nextRunAt: rule.next_run_at,
+      lastScheduledAt: rule.last_scheduled_at,
       createdAt: rule.created_at, updatedAt: rule.updated_at,
       actions: actions.map((a: AutomationRuleActionRow) => ({
         id: a.id, stepOrder: a.step_order, actionType: a.action_type,
@@ -86,23 +96,40 @@ export async function registerAutomationModule(app: FastifyInstance) {
     });
   });
 
-  app.post('/api/v1/automation/rules', { preHandler: [authenticate, authorize('automation.view')] }, async (request, reply) => {
+  app.post('/api/v1/automation/rules', { preHandler: [authenticate, authorize('automation.create')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
-    const body = request.body as Record<string, unknown>;
-    const slug = String(body.slug || (body.name as string).toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''));
+    const body = z.object({
+      name: z.string().trim().min(1).max(200),
+      slug: z.string().trim().min(1).max(200).regex(/^[a-z0-9][a-z0-9_-]*$/).optional(),
+      category: z.string().trim().min(1).max(50).default('general'),
+      triggerType: z.enum(['manual', 'event', 'schedule']).default('manual'),
+      triggerEvent: z.string().trim().max(120).nullable().optional(),
+      triggerConfig: z.record(z.unknown()).default({}),
+      conditions: z.array(z.unknown()).default([]),
+      description: z.string().trim().max(5000).nullable().optional(),
+      isActive: z.boolean().default(false),
+      priority: z.number().int().min(-1000).max(1000).default(0),
+      maxExecutions: z.number().int().min(0).max(1_000_000).default(0),
+      cooldownMinutes: z.number().int().min(0).max(525600).default(0),
+    }).parse(request.body);
+    if (body.isActive) throw new ValidationError('Create the rule inactive, add at least one action, then activate it');
+    const triggerConfig = validateAutomationTriggerConfig(body.triggerType, body.triggerEvent, body.triggerConfig);
+    const conditions = validateAutomationConditions(body.conditions);
+    const slug = body.slug || body.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
     const [rule] = await db('automation_rules').insert({
       tenant_id: tenantId, name: body.name, slug,
-      category: body.category || 'general',
-      trigger_type: body.triggerType || 'manual',
+      category: body.category,
+      trigger_type: body.triggerType,
       trigger_event: body.triggerEvent || null,
-      trigger_config: JSON.stringify(body.triggerConfig || {}),
-      conditions: JSON.stringify(body.conditions || []),
+      trigger_config: JSON.stringify(triggerConfig),
+      conditions: JSON.stringify(conditions),
       description: body.description || null,
-      is_active: body.isActive !== false,
-      priority: body.priority || 0,
-      max_executions: body.maxExecutions || 0,
-      cooldown_minutes: body.cooldownMinutes || 0,
+      is_active: body.isActive,
+      priority: body.priority,
+      max_executions: body.maxExecutions,
+      cooldown_minutes: body.cooldownMinutes,
+      next_run_at: body.triggerType === 'schedule' ? new Date(String(triggerConfig.nextRunAt)) : null,
       created_by: ctx.userId,
     }).returning('*');
 
@@ -120,23 +147,39 @@ export async function registerAutomationModule(app: FastifyInstance) {
     return sendSuccess(reply, { id: rule.id, name: rule.name, slug: rule.slug }, 'Rule created', 201);
   });
 
-  app.put('/api/v1/automation/rules/:id', { preHandler: [authenticate, authorize('automation.view')] }, async (request, reply) => {
+  app.put('/api/v1/automation/rules/:id', { preHandler: [authenticate, authorize('automation.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
+    const existing = await db('automation_rules').where({ id, tenant_id: tenantId }).first();
+    if (!existing) return reply.status(404).send({ success: false, error: 'Rule not found' });
     const body = request.body as Record<string, unknown>;
     const update: Record<string, unknown> = { updated_at: new Date() };
-    if (body.name) update.name = body.name;
-    if (body.category) update.category = body.category;
-    if (body.triggerType) update.trigger_type = body.triggerType;
-    if (body.triggerEvent !== undefined) update.trigger_event = body.triggerEvent;
-    if (body.triggerConfig) update.trigger_config = JSON.stringify(body.triggerConfig);
-    if (body.conditions) update.conditions = JSON.stringify(body.conditions);
-    if (body.description !== undefined) update.description = body.description;
-    if (body.isActive !== undefined) update.is_active = body.isActive;
-    if (body.priority !== undefined) update.priority = body.priority;
-    if (body.maxExecutions !== undefined) update.max_executions = body.maxExecutions;
-    if (body.cooldownMinutes !== undefined) update.cooldown_minutes = body.cooldownMinutes;
+    if (body.name !== undefined) update.name = z.string().trim().min(1).max(200).parse(body.name);
+    if (body.category !== undefined) update.category = z.string().trim().min(1).max(50).parse(body.category);
+    const nextTriggerType = body.triggerType !== undefined ? z.enum(['manual', 'event', 'schedule']).parse(body.triggerType) : existing.trigger_type;
+    const nextTriggerEvent = body.triggerEvent !== undefined ? body.triggerEvent : existing.trigger_event;
+    const nextTriggerConfig = body.triggerConfig !== undefined ? body.triggerConfig : (typeof existing.trigger_config === 'string' ? JSON.parse(existing.trigger_config) : existing.trigger_config);
+    if (body.triggerType !== undefined || body.triggerEvent !== undefined || body.triggerConfig !== undefined) {
+      const validatedTriggerConfig = validateAutomationTriggerConfig(nextTriggerType, nextTriggerEvent, nextTriggerConfig);
+      update.trigger_type = nextTriggerType;
+      update.trigger_event = nextTriggerEvent || null;
+      update.trigger_config = JSON.stringify(validatedTriggerConfig);
+      update.next_run_at = nextTriggerType === 'schedule' ? new Date(String(validatedTriggerConfig.nextRunAt)) : null;
+    }
+    if (body.conditions !== undefined) update.conditions = JSON.stringify(validateAutomationConditions(body.conditions));
+    if (body.description !== undefined) update.description = z.string().trim().max(5000).nullable().parse(body.description);
+    if (body.isActive !== undefined) {
+      const nextActive = z.boolean().parse(body.isActive);
+      if (nextActive) {
+        const actionCount = await db('automation_rule_actions').where({ rule_id: id, is_active: true }).count('id as count').first();
+        if (Number((actionCount as Record<string, unknown> | undefined)?.count || 0) === 0) throw new ValidationError('Add at least one active action before activating this rule');
+      }
+      update.is_active = nextActive;
+    }
+    if (body.priority !== undefined) update.priority = z.number().int().min(-1000).max(1000).parse(body.priority);
+    if (body.maxExecutions !== undefined) update.max_executions = z.number().int().min(0).max(1_000_000).parse(body.maxExecutions);
+    if (body.cooldownMinutes !== undefined) update.cooldown_minutes = z.number().int().min(0).max(525600).parse(body.cooldownMinutes);
     await db('automation_rules').where({ id, tenant_id: tenantId }).update(update);
 
     await logAudit({
@@ -153,7 +196,7 @@ export async function registerAutomationModule(app: FastifyInstance) {
     return sendSuccess(reply, null, 'Rule updated');
   });
 
-  app.delete('/api/v1/automation/rules/:id', { preHandler: [authenticate, authorize('automation.view')] }, async (request, reply) => {
+  app.delete('/api/v1/automation/rules/:id', { preHandler: [authenticate, authorize('automation.delete')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
@@ -190,21 +233,30 @@ export async function registerAutomationModule(app: FastifyInstance) {
     })));
   });
 
-  app.post('/api/v1/automation/rules/:ruleId/actions', { preHandler: [authenticate, authorize('automation.view')] }, async (request, reply) => {
+  app.post('/api/v1/automation/rules/:ruleId/actions', { preHandler: [authenticate, authorize('automation.edit')] }, async (request, reply) => {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { ruleId } = request.params as { ruleId: string };
     const rule = await db('automation_rules').where({ id: ruleId, tenant_id: tenantId }).first();
     if (!rule) return reply.status(404).send({ success: false, error: 'Rule not found' });
 
-    const body = request.body as Record<string, unknown>;
+    const body = z.object({
+      stepOrder: z.number().int().min(0).max(100).optional(),
+      actionType: z.string().min(1).max(100),
+      actionName: z.string().trim().max(200).nullable().optional(),
+      actionConfig: z.record(z.unknown()).default({}),
+      conditionOverride: z.array(z.unknown()).default([]),
+      isActive: z.boolean().default(true),
+    }).parse(request.body);
+    const validatedConfig = validateAutomationAction(body.actionType, body.actionConfig);
+    const validatedConditionOverride = validateAutomationConditions(body.conditionOverride);
     const maxStep = await db('automation_rule_actions').where({ rule_id: ruleId }).max('step_order as max').first();
     const [action] = await db('automation_rule_actions').insert({
       rule_id: ruleId, step_order: body.stepOrder ?? ((maxStep as Record<string, unknown>)?.max as number ?? -1) + 1,
       action_type: body.actionType, action_name: body.actionName || null,
-      action_config: JSON.stringify(body.actionConfig || {}),
-      condition_override: JSON.stringify(body.conditionOverride || {}),
-      is_active: body.isActive !== false,
+      action_config: JSON.stringify(validatedConfig),
+      condition_override: JSON.stringify(validatedConditionOverride),
+      is_active: body.isActive,
     }).returning('*');
 
     await logAudit({
@@ -228,15 +280,22 @@ export async function registerAutomationModule(app: FastifyInstance) {
     const rule = await db('automation_rules').where({ id: ruleId, tenant_id: tenantId }).first();
     if (!rule) return reply.status(404).send({ success: false, error: 'Rule not found' });
 
+    const existingAction = await db('automation_rule_actions').where({ id, rule_id: ruleId }).first();
+    if (!existingAction) return reply.status(404).send({ success: false, error: 'Action not found' });
     const body = request.body as Record<string, unknown>;
     const update: Record<string, unknown> = {};
-    if (body.stepOrder !== undefined) update.step_order = body.stepOrder;
-    if (body.actionType) update.action_type = body.actionType;
-    if (body.actionName !== undefined) update.action_name = body.actionName;
-    if (body.actionConfig) update.action_config = JSON.stringify(body.actionConfig);
-    if (body.conditionOverride) update.condition_override = JSON.stringify(body.conditionOverride);
-    if (body.isActive !== undefined) update.is_active = body.isActive;
-    await db('automation_rule_actions').where({ id, rule_id: ruleId }).update(update);
+    if (body.stepOrder !== undefined) update.step_order = z.number().int().min(0).max(100).parse(body.stepOrder);
+    const nextActionType = body.actionType !== undefined ? z.string().min(1).max(100).parse(body.actionType) : existingAction.action_type;
+    const currentConfig = typeof existingAction.action_config === 'string' ? JSON.parse(existingAction.action_config) : existingAction.action_config;
+    if (body.actionType !== undefined || body.actionConfig !== undefined) {
+      update.action_type = nextActionType;
+      update.action_config = JSON.stringify(validateAutomationAction(nextActionType, body.actionConfig !== undefined ? body.actionConfig : currentConfig));
+    }
+    if (body.actionName !== undefined) update.action_name = z.string().trim().max(200).nullable().parse(body.actionName);
+    if (body.conditionOverride !== undefined) update.condition_override = JSON.stringify(validateAutomationConditions(body.conditionOverride));
+    if (body.isActive !== undefined) update.is_active = z.boolean().parse(body.isActive);
+    if (Object.keys(update).length > 0) await db('automation_rule_actions').where({ id, rule_id: ruleId }).update(update);
+
 
     await logAudit({
       tenantId,
@@ -280,71 +339,22 @@ export async function registerAutomationModule(app: FastifyInstance) {
     const tenantId = getTenantId(request);
     const ctx = getCtx(request);
     const { id } = request.params as { id: string };
-    const { referenceType, referenceId, inputData } = request.body as Record<string, unknown>;
-
-    const rule = await db('automation_rules').where({ tenant_id: tenantId, id, is_active: true }).first();
-    if (!rule) return reply.status(404).send({ success: false, error: 'Active rule not found' });
-
-    if (rule.max_executions > 0) {
-      const count = await db('automation_execution_logs').where({ rule_id: id }).count('id as c').first();
-      if (Number(count?.c || 0) >= rule.max_executions) {
-        return reply.status(400).send({ success: false, error: 'Max executions reached for this rule' });
-      }
-    }
-
-    if (rule.cooldown_minutes > 0 && rule.last_triggered_at) {
-      const cooldownEnd = new Date(new Date(rule.last_triggered_at).getTime() + rule.cooldown_minutes * 60000);
-      if (cooldownEnd > new Date()) {
-        return reply.status(400).send({ success: false, error: 'Rule is in cooldown period' });
-      }
-    }
-
-    const actions = await db('automation_rule_actions').where({ rule_id: id, is_active: true }).orderBy('step_order');
-    const [log] = await db('automation_execution_logs').insert({
-      tenant_id: tenantId, rule_id: id,
-      trigger_type: rule.trigger_type,
-      reference_type: referenceType || null,
-      reference_id: referenceId || null,
-      status: 'running', input_data: JSON.stringify(inputData || {}),
-      started_at: new Date(), created_by: ctx.userId,
-    }).returning('*');
-
-    const results: Array<Record<string, unknown>> = [];
-    let hasError = false;
-    for (const action of actions) {
-      try {
-        const actionConfig = typeof action.action_config === 'string' ? JSON.parse(action.action_config) : action.action_config;
-        results.push({ stepOrder: action.step_order, actionType: action.action_type, status: 'completed', config: actionConfig });
-      } catch (err: unknown) {
-        results.push({ stepOrder: action.step_order, actionType: action.action_type, status: 'failed', error: getErrorMessage(err) });
-        hasError = true;
-      }
-    }
-
-    const endTime = Date.now();
-    const duration = endTime - new Date(log.started_at).getTime();
-
-    await db('automation_execution_logs').where({ id: log.id }).update({
-      status: hasError ? 'completed_with_errors' : 'completed',
-      output_data: JSON.stringify(results),
-      duration_ms: duration,
-      completed_at: new Date(),
+    const body = z.object({
+      referenceType: z.string().trim().max(100).nullable().optional(),
+      referenceId: z.string().uuid().nullable().optional(),
+      inputData: z.record(z.unknown()).default({}),
+      idempotencyKey: z.string().trim().min(1).max(255).optional(),
+    }).parse(request.body || {});
+    const rule = await db('automation_rules').where({ tenant_id: tenantId, id }).first();
+    if (!rule || !rule.is_active) return reply.status(404).send({ success: false, error: 'Active rule not found' });
+    if (rule.trigger_type !== 'manual') throw new ValidationError('Only manual automation rules can be triggered from this endpoint');
+    const result = await enqueueAutomationExecution({
+      tenantId, ruleId: id, triggerType: 'manual', referenceType: body.referenceType, referenceId: body.referenceId,
+      inputData: body.inputData, createdBy: ctx.userId,
+      idempotencyKey: body.idempotencyKey || `manual:${id}:${crypto.randomUUID()}`,
     });
-
-    await db('automation_rules').where({ id, tenant_id: tenantId }).update({ last_triggered_at: new Date(), updated_at: new Date() });
-
-    await logAudit({
-      tenantId,
-      userId: ctx.userId,
-      action: 'automation.rule_triggered',
-      entityType: 'automation_rule',
-      entityId: id,
-      metadata: { status: hasError ? 'completed_with_errors' : 'completed', actionCount: actions.length },
-      ipAddress: request.ip,
-      userAgent: request.headers['user-agent'] as string,
-    });
-
-    return sendSuccess(reply, { logId: log.id, results, status: hasError ? 'completed_with_errors' : 'completed' }, 'Rule triggered');
+    await logAudit({ tenantId, userId: ctx.userId, action: 'automation.rule_queued', entityType: 'automation_rule', entityId: id, metadata: { executionId: result.execution.id, decision: result.decision }, ipAddress: request.ip, userAgent: request.headers['user-agent'] as string });
+    return sendSuccess(reply, { executionId: result.execution.id, status: result.decision, created: result.created }, 'Rule queued', result.created ? 202 : 200);
   });
 
   // ── Execution Logs ──
@@ -361,6 +371,22 @@ export async function registerAutomationModule(app: FastifyInstance) {
       .orderBy('created_at', 'desc')
       .limit(Number(limit) || 50)
       .offset(Number(offset) || 0);
+    const executionIds = logs.map((log: Record<string, unknown>) => String(log.id));
+    const steps = executionIds.length > 0
+      ? await db('automation_execution_steps').where('tenant_id', tenantId).whereIn('execution_id', executionIds).orderBy('step_order')
+      : [];
+    const stepsByExecution = new Map<string, Record<string, unknown>[]>();
+    for (const step of steps as Array<Record<string, unknown>>) {
+      const key = String(step.execution_id);
+      const list = stepsByExecution.get(key) || [];
+      list.push({
+        id: step.id, stepOrder: step.step_order, actionType: step.action_type, actionName: step.action_name,
+        status: step.status, attemptCount: step.attempt_count, maxAttempts: step.max_attempts,
+        availableAt: step.available_at, startedAt: step.started_at, completedAt: step.completed_at,
+        outputData: step.output_data, errorCode: step.error_code, errorMessage: step.error_message,
+      });
+      stepsByExecution.set(key, list);
+    }
     return sendSuccess(reply, {
       logs: logs.map((l: Record<string, unknown>) => ({
         id: l.id, ruleId: l.rule_id, ruleName: l.rule_name,
@@ -369,6 +395,10 @@ export async function registerAutomationModule(app: FastifyInstance) {
         inputData: l.input_data, outputData: l.output_data,
         errorMessage: l.error_message, durationMs: l.duration_ms,
         startedAt: l.started_at, completedAt: l.completed_at,
+        attemptCount: l.attempt_count, maxAttempts: l.max_attempts,
+        nextAttemptAt: l.next_attempt_at, leaseExpiresAt: l.lease_expires_at,
+        eventId: l.event_id, idempotencyKey: l.idempotency_key,
+        steps: stepsByExecution.get(String(l.id)) || [],
         createdAt: l.created_at,
       })),
       total: Number((total as Record<string, unknown>)?.c || 0),
@@ -379,40 +409,14 @@ export async function registerAutomationModule(app: FastifyInstance) {
   app.get('/api/v1/automation/trigger-events', { preHandler: [authenticate, authorize('automation.view')] }, async (_request, reply) => {
     const events = [
       { id: 'appointment.created', label: 'Appointment Created', category: 'appointment' },
-      { id: 'appointment.completed', label: 'Appointment Completed', category: 'appointment' },
-      { id: 'appointment.cancelled', label: 'Appointment Cancelled', category: 'appointment' },
-      { id: 'appointment.no_show', label: 'Appointment No-Show', category: 'appointment' },
-      { id: 'patient.registered', label: 'Patient Registered', category: 'patient' },
-      { id: 'patient.updated', label: 'Patient Updated', category: 'patient' },
-      { id: 'lab.order_created', label: 'Lab Order Created', category: 'laboratory' },
-      { id: 'lab.result_ready', label: 'Lab Results Ready', category: 'laboratory' },
-      { id: 'radiology.order_created', label: 'Radiology Order Created', category: 'radiology' },
-      { id: 'radiology.report_ready', label: 'Radiology Report Ready', category: 'radiology' },
-      { id: 'pharmacy.prescription_created', label: 'Prescription Created', category: 'pharmacy' },
-      { id: 'pharmacy.dispensed', label: 'Prescription Dispensed', category: 'pharmacy' },
       { id: 'billing.invoice_created', label: 'Invoice Created', category: 'billing' },
       { id: 'billing.invoice_paid', label: 'Invoice Paid', category: 'billing' },
-      { id: 'billing.invoice_overdue', label: 'Invoice Overdue', category: 'billing' },
-      { id: 'inventory.low_stock', label: 'Low Stock Alert', category: 'inventory' },
-      { id: 'inventory.expiry_soon', label: 'Expiry Soon Alert', category: 'inventory' },
     ];
     return sendSuccess(reply, events);
   });
 
   // ── Get available action types ──
   app.get('/api/v1/automation/action-types', { preHandler: [authenticate, authorize('automation.view')] }, async (_request, reply) => {
-    const actions = [
-      { id: 'send_notification', label: 'Send Notification', category: 'communication', fields: ['template', 'recipient', 'channel'] },
-      { id: 'send_email', label: 'Send Email', category: 'communication', fields: ['to', 'subject', 'template'] },
-      { id: 'send_sms', label: 'Send SMS', category: 'communication', fields: ['phone', 'message'] },
-      { id: 'update_record', label: 'Update Record', category: 'data', fields: ['table', 'record_id', 'field', 'value'] },
-      { id: 'create_record', label: 'Create Record', category: 'data', fields: ['table', 'data'] },
-      { id: 'api_call', label: 'API Call (Webhook)', category: 'integration', fields: ['url', 'method', 'headers', 'body'] },
-      { id: 'generate_report', label: 'Generate Report', category: 'analytics', fields: ['report_type', 'format', 'recipients'] },
-      { id: 'assign_task', label: 'Assign Task', category: 'workflow', fields: ['assignee', 'title', 'description', 'due'] },
-      { id: 'update_inventory', label: 'Update Inventory', category: 'inventory', fields: ['item_id', 'quantity', 'reason'] },
-      { id: 'create_invoice', label: 'Create Invoice', category: 'billing', fields: ['patient_id', 'items', 'due_date'] },
-    ];
-    return sendSuccess(reply, actions);
+    return sendSuccess(reply, getAutomationActionDefinitions());
   });
 }
