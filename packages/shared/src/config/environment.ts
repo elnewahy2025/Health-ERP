@@ -61,7 +61,6 @@ export interface Environment {
   STRIPE_WEBHOOK_SECRET?: string;
   FAWRY_MERCHANT_CODE?: string;
   FAWRY_SECURITY_KEY?: string;
-  INSTAPAY_WALLET?: string;
 
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_AUTH_TOKEN?: string;
@@ -141,7 +140,6 @@ export function getEnv(): Environment {
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     FAWRY_MERCHANT_CODE: process.env.FAWRY_MERCHANT_CODE,
     FAWRY_SECURITY_KEY: process.env.FAWRY_SECURITY_KEY,
-    INSTAPAY_WALLET: process.env.INSTAPAY_WALLET,
     TWILIO_ACCOUNT_SID: process.env.TWILIO_ACCOUNT_SID,
     TWILIO_AUTH_TOKEN: process.env.TWILIO_AUTH_TOKEN,
     TWILIO_PHONE_NUMBER: process.env.TWILIO_PHONE_NUMBER,
