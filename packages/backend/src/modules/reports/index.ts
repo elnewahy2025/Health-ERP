@@ -12,6 +12,7 @@ import { logAudit } from '../../services/audit.js';
 import {
   getReportSources,
   readReportArtifact,
+  assertReportExecutionPermission,
   validateReportDefinitionForExecution,
   type ReportDefinitionRecord,
   type ReportExecutionRecord,
@@ -176,6 +177,7 @@ export async function registerReportsModule(app: FastifyInstance) {
     const tenantId = getTenantId(request); const { id, format } = request.params as { id: string; format: string }; const principal = getCtx(request).principal;
     const execution = await applyScopePolicy('reports', db('report_executions').join('report_definitions', 'report_executions.report_id', 'report_definitions.id').where({ 'report_executions.id': id, 'report_executions.tenant_id': tenantId }), principal, resolveReportScope(principal, 'reports.download')).select('report_executions.*').first() as ReportExecutionRecord | undefined;
     if (!execution) throw new NotFoundError('Report execution', id);
+    assertReportExecutionPermission(execution, getCtx(request).principal);
     if (execution.format !== format) throw new ValidationError('Requested report format does not match the execution format');
     const artifact = await readReportArtifact(execution);
     await logAudit({ tenantId, userId: getCtx(request).userId, action: 'report.downloaded', entityType: 'report_execution', entityId: id, metadata: { format, fileSize: artifact.buffer.length }, ipAddress: request.ip, userAgent: request.headers['user-agent'] as string });

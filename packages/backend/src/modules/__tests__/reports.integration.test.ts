@@ -140,6 +140,9 @@ describeDatabase('reports PostgreSQL integration suite', () => {
     currentTenant = IDS.tenantB; currentUser = IDS.userB; currentBranches = []; currentGrants = allGrants;
     const foreign = await app.inject({ method: 'GET', url: `/api/v1/reports/export/${pdfExecutionId}/pdf` });
     expect(foreign.statusCode).toBe(404);
+    currentTenant = IDS.tenantA; currentUser = IDS.userA; currentBranches = [IDS.branchB]; currentGrants = allGrants;
+    const wrongBranch = await app.inject({ method: 'GET', url: `/api/v1/reports/export/${pdfExecutionId}/pdf` });
+    expect(wrongBranch.statusCode).toBe(403);
     currentTenant = IDS.tenantA; currentUser = IDS.userA; currentBranches = [IDS.branchA];
   });
 

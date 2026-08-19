@@ -1,9 +1,9 @@
 import type { Knex } from 'knex';
 import { ConflictError, ForbiddenError, ValidationError } from '@healthcare/shared/errors';
-import type { PermissionScope } from '@healthcare/shared/authz';
+import { permissionKeyMatches, type PermissionScope } from '@healthcare/shared/authz';
 import { db } from '../core/database.js';
 import { applyScopePolicy } from './scope-policy.js';
-import type { Principal } from './authorization.js';
+import { scopeCovers, type Principal } from './authorization.js';
 import { logAudit } from './audit.js';
 import { formatDocumentDate, getPdfMake, loadClinicDocumentContext } from './pdf.js';
 import {
@@ -467,6 +467,21 @@ export function stopReportWorker(): void {
   if (!workerInterval) return;
   clearInterval(workerInterval);
   workerInterval = null;
+}
+
+export function canAccessReportExecution(execution: ReportExecutionRecord, principal: Principal, currentScope: PermissionScope): boolean {
+  const snapshot = scopeSnapshot(execution.scope_context, execution.created_by || '');
+  if (!scopeCovers(currentScope, snapshot.scope)) return false;
+  if (currentScope === 'system' || currentScope === 'tenant') return true;
+  if (snapshot.scope === 'branch' || snapshot.scope === 'branches') return snapshot.branches.length > 0 && principal.branches.some((branch) => snapshot.branches.includes(branch));
+  if (snapshot.scope === 'department') return Boolean(snapshot.departmentId && principal.departmentId === snapshot.departmentId);
+  if (snapshot.scope === 'assigned_patients' || snapshot.scope === 'self') return principal.id === snapshot.userId;
+  return false;
+}
+
+export function assertReportExecutionPermission(execution: ReportExecutionRecord, principal: Principal, permission = 'reports.download'): void {
+  const currentScope = principal.grants.find((grant) => grant.permission === '*' || permissionKeyMatches(grant.permission, permission))?.scope || 'self';
+  if (!canAccessReportExecution(execution, principal, currentScope)) throw new ForbiddenError('Report artifact is outside your authorized execution scope');
 }
 
 export async function readReportArtifact(execution: ReportExecutionRecord): Promise<{ buffer: Buffer; mimeType: string; fileName: string }> {
