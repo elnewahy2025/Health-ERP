@@ -1,149 +1,132 @@
-# Deployment — Vision Healthcare ERP
+# Deployment — Health-ERP Clinic Management System
 
-**Version:** 1.0 | **Status:** Approved
+**Version:** 2.0 | **Status:** Engineering runbook synchronized with Function 11 Workstreams A–E
+**Governance boundary:** The repository release state remains **Development only** until the release decision log, named owners, clinical acceptance, recovery evidence, and applicable privacy/security approvals are complete.
 
----
+## 1. Supported deployment targets
 
-## 1. Deployment Targets
-
-| Target | Mechanism | Use case |
+| Target | Mechanism | Operational use |
 |---|---|---|
-| Local dev | Docker Compose (`docker-compose.yml`) | infra only (postgres, redis, minio) + `npm run dev` |
-| Self-hosted prod | `docker-compose.prod.yml` | full stack incl. nginx + backup |
-| Railway | Nixpacks (`railway.json`) | managed backend (API) |
-| **Vercel (production frontend)** | `vercel.json` + CI workflow | managed SPA hosting + API proxy — **live at https://vision-healthcare-erp.vercel.app** |
+| Local development | `docker-compose.yml` for infrastructure plus `npm run dev` | Disposable development and integration work only. |
+| Self-hosted production | `docker-compose.prod.yml` with TLS reverse proxy | Full clinic stack, including PostgreSQL, Redis, object storage, API, frontend, Nginx, and backup service. |
+| Railway backend | `railway.json` | Managed Fastify API and backend worker host. The start command runs the TypeScript migration runner before `node dist/index.js`. |
+| Vercel frontend | `vercel.json` and the guarded CI workflow | Managed SPA hosting and `/api/*` proxy to the configured backend. |
 
-**Production topology:** backend API runs on Railway (`railway.json`, `node dist/index.js`);
-the frontend SPA runs on Vercel and proxies `/api/*` to the backend through `vercel.json`
-rewrites (same-origin, no CORS changes required).
+The current reference topology is a Railway backend, a Vercel frontend, managed PostgreSQL/Redis/object storage, and tenant/provider configuration stored through the application’s supported Settings boundaries. Self-hosted Compose is a separate complete-stack target. Do not combine partial local infrastructure with production data.
 
-## 2. Build Pipeline
+## 2. Release authority and promotion gate
 
-```text
-npm install
-  └─ prepare → npm run build -w packages/shared   (dist for workspace consumers)
+A deployment is promoted only from an immutable commit that passed the CI `release-gate`. The gate requires shared/backend/frontend build, unit suites, migration readiness, PostgreSQL integration, managed Playwright E2E, Docker smoke, security/configuration checks, and container vulnerability scans. Configured Vercel deployment jobs depend on that gate and the production post-deploy smoke.
+
+A green CI run is evidence for its exact commit. The release owner must verify the artifact SHA, deployment environment, migration state, backup evidence, clinic settings acceptance, and rollback compatibility before approving production traffic. The repository’s governance decision log remains authoritative for whether a release may be labelled production-ready.
+
+## 3. Build and test commands
+
+From a clean checkout, use:
+
+```bash
+npm ci
+npm run lint
 npm run build
-  ├─ shared  → tsc          (emits dist/)
-  ├─ backend → tsc          (emits dist/)
-  └─ frontend→ tsc && vite build (emits dist/)
+npm run test -w packages/backend
+npm run test -w packages/frontend
+npm run migration:check
+npm run security:config-gate
+npm run test:e2e:release
 ```
 
-- **CI:** `.github/workflows/ci.yml` — on push/PR to `main`: checkout → node 20 → `npm ci` →
-  build shared → build backend → build frontend → `npm test` (with postgres/redis services).
-- **Gate:** any failure blocks merge; deploy job runs after test on `main` pushes.
+The migration and E2E commands require a controlled disposable or staging target. Do not aim them at production unless the release owner and database operator have explicitly approved the read-only/preflight action. Do not run `npm run seed` against production. The repository’s seed command is not part of the production release path.
 
-## 3. Container Images
+For a disposable Docker validation, use `npm run test:docker-smoke`. For a deployed environment, use `npm run test:post-deploy-smoke` with protected `SMOKE_BASE_URL`, `SMOKE_EXPECTED_COMMIT_SHA`, `SMOKE_ACCESS_TOKEN`, and `SMOKE_TENANT_SLUG` values. The smoke script checks liveness, readiness, version identity, API-version behavior, security headers, request correlation, and one authenticated non-destructive principal response without logging tokens or clinic data.
 
-| Image | Base | Notes |
+## 4. Production configuration
+
+Production must use secrets from the hosting platform or Docker secrets, never values copied from templates. Required controls include strong and distinct `JWT_SECRET` and `JWT_REFRESH_SECRET`, strong `CSRF_SECRET` and `ENCRYPTION_KEY`, `COOKIE_SECURE=true`, HTTPS `APP_URL` and `CORS_ORIGIN`, required Redis/object storage/worker flags, and an immutable `APP_COMMIT_SHA`/`APP_VERSION`.
+
+The production runtime database role is configured through `DB_USER` and `DB_PASSWORD` and must be a dedicated `NOSUPERUSER`/`NOBYPASSRLS` role. Migrations use `DB_MIGRATION_USER` and `DB_MIGRATION_PASSWORD`. The migration runner grants the runtime role the required schema/table/sequence privileges after a migration when the roles are different. The production security gate verifies the live runtime role; CI’s RLS and lifecycle integration targets exercise the non-BYPASSRLS behavior.
+
+Clinic identity, timezone, currency, branches, departments, enabled modules, provider environments, and provider-specific configuration belong to the tenant Settings and provider-management boundaries. Deployment variables must not become a second source of clinic configuration.
+
+## 5. Railway backend procedure
+
+Before triggering a Railway deployment, confirm the service secrets and role split, the intended `APP_COMMIT_SHA`, the configured worker and dependency flags, and the backup evidence. Railway executes `npm install --include=dev --no-audit --no-fund`, builds shared/backend packages, then starts the backend through `npm run migrate && node dist/index.js`.
+
+After the deployment reports healthy, verify the public contract and run the authenticated smoke:
+
+```bash
+curl --fail-with-body --silent --show-error -i https://<backend-host>/health
+curl --fail-with-body --silent --show-error -i -H 'X-API-Version: v1' https://<backend-host>/api/v1/health/live
+curl --fail-with-body --silent --show-error -i -H 'X-API-Version: v1' https://<backend-host>/api/v1/health/ready
+npm run test:post-deploy-smoke
+```
+
+A readiness failure, version mismatch, security-header failure, or authenticated principal failure stops promotion. Do not accept a successful liveness response as proof that dependencies and durable workers are ready.
+
+## 6. Self-hosted Compose procedure
+
+Prepare a protected `.env` using `.env.docker.example` as a template. Production Compose requires explicit runtime and migration database credentials and fails interpolation when those values are absent. Validate the rendered configuration without storing it as an artifact:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env config >/tmp/health-erp-compose-config.txt
+```
+
+Review the rendered output for accidental defaults and secret exposure. Then build, start, and inspect the stack:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env build
+docker compose -f docker-compose.prod.yml --env-file .env up -d
+docker compose -f docker-compose.prod.yml --env-file .env ps
+```
+
+The backend depends on healthy PostgreSQL, Redis, and MinIO services and exposes readiness through `/api/v1/health/ready`. Restore external traffic only after backend readiness, Nginx health, TLS, frontend asset loading, API proxying, and post-deploy smoke have passed. `docker compose down -v` is destructive to local volumes and is not a production rollback command.
+
+## 7. Vercel frontend procedure
+
+Vercel preview and production jobs run only after the guarded CI release gate and configured deployment secrets. The rewrite target in `vercel.json` must point to the intended backend. Keep `VITE_API_URL` unset for the same-origin proxy unless a reviewed architecture requires another value. The frontend bundle must not contain backend secrets, provider secrets, JWTs, or database credentials.
+
+A Vercel deployment is accepted only after asset loading, SPA fallback, security headers, API proxy behavior, and the corresponding authenticated post-deploy smoke pass. Vercel rollback restores a frontend build; it does not roll back database schema, backend state, provider actions, or tenant data.
+
+## 8. Migration and rollback rules
+
+The current chain ends at migration `071_branch_contract_compatibility.ts`. The migration gate applies the complete TypeScript chain, verifies idempotent re-run, and reports pending migrations. Production migrations are forward-only and must be rehearsed against a representative disposable or staging database.
+
+A migration failure stops deployment. Do not delete `knex_migrations` rows, mark a migration complete manually, edit production schema ad hoc, or restore over the live database as an application rollback. Correct an environmental lock/configuration problem or prepare a reviewed forward-fix migration.
+
+Application rollback is allowed only when the previous immutable application build is compatible with the forward-migrated database. The release owner must verify liveness, readiness, API-version behavior, security headers, commit identity, and authenticated read-only access after rollback. If compatibility is unproven, stop and use the separately approved disaster-recovery process rather than deleting schema changes.
+
+## 9. Health, readiness, correlation, and monitoring
+
+`GET /health` remains the compatibility liveness response. Versioned `/api/v1/health/live` and `/api/v1/health/ready` expose explicit liveness/readiness contracts. Readiness reports safe component state for the database, required Redis/object storage, and durable workers; it must return a non-success response when a required dependency is unavailable. Responses contain safe status/version/timestamp/correlation information and no credentials, tenant identifiers, clinical payloads, raw provider responses, or connection strings.
+
+Every smoke or incident record should retain the `X-Request-ID`, commit identity, UTC timestamp, safe status/error code, and deployment environment. Do not copy authorization headers, cookies, request bodies, provider payloads, AI prompts, or patient data into tickets or CI artifacts.
+
+## 10. Backup and disaster recovery
+
+The production Compose backup service writes to the `backup_data` volume at `/backups`, runs `pg_dump`, records a SHA-256 checksum, optionally encrypts with the configured backup encryption key, optionally uploads to S3-compatible storage, and removes artifacts older than `BACKUP_RETENTION_DAYS`. These artifacts do not constitute restore evidence until a representative isolated restore succeeds.
+
+Before migrations or high-risk changes, confirm the latest artifact, checksum, encryption/upload status, and retention. Run restore drills only into a new isolated database, verify the checksum and migration state, provision a non-BYPASSRLS runtime role, test representative read-only behavior and encrypted fields, and destroy temporary decrypted files after evidence capture. Record the drill result and owner in the release/recovery record. The current governance state remains Development only until the designated owners sign off the recovery evidence.
+
+## 11. Troubleshooting and escalation
+
+| Symptom | First safe action | Do not do |
 |---|---|---|
-| `Dockerfile.backend` | node:20-alpine | multi-stage; non-root `appuser:1001`; `node dist/index.js` |
-| `Dockerfile.frontend` | node → nginx | Vite build served by nginx; `VITE_API_URL` build arg |
-| `Dockerfile.backup` | — | S3 backup job |
+| Readiness is 503 | Compare liveness/readiness, inspect redacted component status and dependency logs, stop promotion | Do not bypass readiness or claim workers are ready. |
+| Migration failed | Stop replicas, preserve migration evidence, run check-only against a controlled target | Do not delete migration records or restore over production. |
+| Worker failed | Preserve job/lease/request identifiers and restart through the platform procedure | Do not mark durable work completed manually or replay non-idempotent actions. |
+| Provider outage | Pause affected tenant/provider operation and keep state pending/failed truthfully | Do not fabricate payment, tax, message, voice, AI, or verification success. |
+| Suspected cross-tenant access | Stop the affected operation, preserve request/audit evidence, revoke sessions if needed | Do not probe live clinical data, broaden grants, or delete tenant rows. |
+| Frontend/API mismatch | Check Vercel rewrite, backend commit identity, API-version headers, and post-deploy smoke | Do not ship a frontend that points to an unverified backend. |
 
-## 4. Production Compose Stack (`docker-compose.prod.yml`)
+Use `docs/engineering/OPERATIONS-RUNBOOKS.md` for the detailed step-by-step procedures and `docs/security/INCIDENT_RESPONSE.md` for the broader security incident process. Formal release decisions belong in `docs/governance/release-decision-log.md`.
 
-Services: `postgres` (15-alpine), `redis` (7-alpine), `minio`, `backend`, `frontend` (nginx :80),
-`nginx` reverse proxy (if separate), `backup`. All have healthchecks; backend depends on
-postgres/redis/minio healthy; frontend depends on backend healthy.
+## References
 
-```powershell
-# Windows PowerShell
-git clone https://github.com/elnewahy2025/vision-healthcare-erp.git; cd vision-healthcare-erp; Copy-Item .env.example .env; docker compose -f docker-compose.prod.yml --env-file .env up -d --build
-```
-
-```bash
-# Linux/macOS
-git clone https://github.com/elnewahy2025/vision-healthcare-erp.git && cd vision-healthcare-erp && cp .env.example .env && docker compose -f docker-compose.prod.yml --env-file .env up -d --build
-```
-
-## 5. Configuration Management
-
-- `.env` (app) and `.env.docker` (containers); secrets via env or Docker secrets `_FILE` convention.
-- Backend validates environment on boot (`validateProductionEnvironment` / `validateDevelopmentEnvironment`).
-- Never commit `.env*` (`.gitignore`); use `.env.example` as the template.
-
-## 5b. Vercel Production (Frontend)
-
-### Configuration (`vercel.json` at repo root)
-- `framework: "vite"`, `outputDirectory: "packages/frontend/dist"`
-- `installCommand: "npm install"` (installs workspaces, runs `prepare` → builds shared)
-- `buildCommand: "npm run build -w packages/shared && npm run build -w packages/frontend"`
-- Rewrites:
-  - `/api/(.*)` → `https://<BACKEND_URL>/api/$1` (backend host set in `vercel.json`)
-  - `/queue/display/:branchId*` → backend `/api/v1/queue/display/$branchId`
-  - SPA fallback → `/index.html`
-- Headers: immutable caching for `/assets/*`; security headers (HSTS, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy).
-
-### One-time setup
-1. Create a Vercel project and link it:
-   ```bash
-   vercel login
-   vercel link   # selects repo root (monorepo)
-   ```
-2. Backend URL: set in `vercel.json` rewrites — currently `https://vision-healthcare-erp-production.up.railway.app`.
-3. GitHub Actions secrets (auto-deploy, `.github/workflows/vercel.yml`):
-   - `VERCEL_TOKEN` — create in Vercel → Account Settings → Tokens
-   - `VERCEL_ORG_ID` — `vercel teams ls` (or dashboard → settings → ID)
-   - `VERCEL_PROJECT_ID` — `vercel projects ls` / project settings
-4. Deploy manually once: `vercel --prod`
-
-### Automatic deploys
-- Push to `main` → production deploy (job `Deploy Frontend to Vercel`).
-- Pull requests → preview deploy with a unique URL.
-- Workflow is skipped until `VERCEL_TOKEN` secret exists.
-
-### Known limitations on Vercel
-- WebSocket proxying to an external backend is not supported by Vercel rewrites.
-  Real-time features that depend on WS (chat, telemedicine waiting room, voice,
-  live queue push) fall back to polling or require a WS-capable host for those
-  channels; the queue display page has a built-in polling fallback.
-- Long-running jobs (BullMQ workers) stay on the backend (Railway/Docker), never Vercel.
-
-### Rollback
-`vercel rollback <deployment-url>` or redeploy a previous deployment from the Vercel dashboard.
-
-## 6. Migrations in Deploy
-
-```bash
-npm run migrate        # knex migrate:latest (applies 001–029)
-```
-
-Run migrations before starting new backend replicas; CI applies on a staging DB first.
-
-## 7. Health Checks & Monitoring
-
-- `GET /health` on backend; container healthchecks (`wget --spider`).
-- Logs: pino JSON; `LOG_LEVEL` configurable.
-- Sentry optional; system monitor module exposes in-app metrics/alerts.
-
-## 8. Rollback Strategy
-
-1. Keep previous image tag / Railway deployment pinned.
-2. Backend rollback = redeploy previous build (stateless; migrations forward-compatible).
-3. Schema changes: forward-fix migrations only; never destructive on deploy.
-4. Frontend rollback = redeploy previous static build (nginx).
-
-## 9. Scaling Strategy
-
-- Backend: stateless → scale replicas behind nginx/Railway; Redis for sessions/rate limits/queues.
-- Frontend: static assets CDN-cacheable.
-- DB: read replicas for reporting; `dw_*` aggregates offload analytics.
-- Queues: BullMQ workers can run as separate processes.
-
-## 10. Disaster Recovery
-
-- Encrypted S3 backups daily; retention configurable; restore runbook in `docs/security/INCIDENT_RESPONSE.md`.
-- RTO ≤ 4 h, RPO ≤ 24 h (default); test restore quarterly.
-
-## 11. Troubleshooting (common)
-
-| Symptom | Fix |
-|---|---|
-| `TS2307: Cannot find module '@healthcare/shared/...'` | Delete `tsconfig.tsbuildinfo` files, `npm run build` |
-| `TS2305: ... no exported member 'screen'` | `npm install` (missing `@testing-library/dom`) |
-| Containers unhealthy | `docker compose ps`, check env, `docker compose logs backend` |
-| Port conflicts | 3000/5173/5432/6379/9000/9001 must be free |
-
----
-
-*Related: [Environment](ENVIRONMENT.md) · [Configuration](CONFIGURATION.md) · [Release plan](../project-management/RELEASE-PLAN.md)*
+- [Operations runbooks](OPERATIONS-RUNBOOKS.md)
+- [Environment guide](ENVIRONMENT.md)
+- [Configuration reference](CONFIGURATION.md)
+- [Release plan](../project-management/RELEASE-PLAN.md)
+- [Incident response plan](../security/INCIDENT_RESPONSE.md)
+- [Release decision log](../governance/release-decision-log.md)
+- [Function 11 Workstream A evidence](../function11-workstream-a-health-readiness-2026-08-20.md)
+- [Function 11 Workstream C evidence](../function11-workstream-c-ci-deployment-2026-08-20.md)
+- [Function 11 Workstream D evidence](../function11-workstream-d-security-configuration-2026-08-20.md)

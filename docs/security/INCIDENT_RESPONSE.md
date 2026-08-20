@@ -1,4 +1,8 @@
-# Vision Healthcare ERP — Incident Response Plan
+# Health-ERP — Incident Response Plan
+
+**Status:** Engineering incident procedure; not a legal notification plan or production approval.
+
+This document provides the broad security-incident process. The implementation-specific procedures for readiness, migration, provider outage, worker recovery, backup/restore, rollback, and tenant isolation are in [OPERATIONS-RUNBOOKS.md](../engineering/OPERATIONS-RUNBOOKS.md). Formal owners remain subject to the release decision log and governance process.
 
 ## 1. Severity Levels
 
@@ -37,8 +41,8 @@
 
 3. **Notify** (1-4 hours)
    - Internal: CTO, legal, compliance
-   - External (if PHI exposed): affected tenants within 72 hours (PDPL requirement)
-   - External (if required): NTRA, data protection authority
+   - External: consult the clinic’s approved jurisdiction-specific privacy and regulatory plan; do not infer a deadline from this document.
+   - Notify affected tenants and authorities only through the approved compliance/legal process after facts, scope, and applicable obligations are confirmed.
 
 4. **Remediate** (4-48 hours)
    - Deploy hotfix
@@ -104,13 +108,11 @@ security measures to prevent future incidents.
 For questions, contact: security@visionhealthcare.com
 ```
 
-## 5. Regulatory Requirements
+## 5. Regulatory and privacy coordination
 
-| Regulation | Notification Deadline | Authority |
-|-----------|----------------------|-----------|
-| Egyptian PDPL | 72 hours | Data Protection Center |
-| HIPAA | 60 days | HHS OCR |
-| GDPR | 72 hours | Supervisory Authority |
+This repository does not select a jurisdiction, controller/processor model, legal basis, or notification deadline for a clinic. The privacy/compliance owner must identify the applicable jurisdiction and use the approved legal/regulatory plan to determine whether notification is required, to whom, and by when. The incident record must preserve the factual timeline, affected tenant/data categories, containment actions, and evidence used for that decision.
+
+Do not make a legal notification commitment from this document alone. The release decision log records the current Development-only boundary and the requirement for named owners and approved evidence.
 
 ## 6. Post-Incident Review Checklist
 
@@ -121,3 +123,5 @@ For questions, contact: security@visionhealthcare.com
 - [ ] Preventive measures implemented
 - [ ] This document updated
 - [ ] Team debriefed
+- [ ] Operations runbook updated when the incident exposed a deployment, readiness, migration, worker, provider, backup/restore, rollback, or tenant-isolation gap
+- [ ] Release decision log or risk register updated when the incident changes release status
