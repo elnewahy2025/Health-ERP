@@ -19,7 +19,7 @@ type TenantFixture = {
   branches: Array<{ id: string; name: string; code: string }>;
   departments: Array<{ id: string; name: string; code: string }>;
   users: UserFixture[];
-  patients: Array<{ id: string; firstName: string; lastName: string }>;
+  patients: Array<{ id: string; firstName: string; lastName: string; branchId: string }>;
   appointmentId: string;
   invoiceId: string;
   inventoryId: string;
@@ -44,6 +44,7 @@ type Auth = {
 const manifestPath = process.env.ACCEPTANCE_MANIFEST_PATH
   || path.resolve(process.cwd(), 'e2e/.auth/acceptance-fixtures.json');
 let testLoginSequence = 0;
+const testLoginPrefix = `acceptance-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 async function loadManifest(): Promise<AcceptanceManifest> {
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as AcceptanceManifest;
@@ -56,7 +57,7 @@ async function loadManifest(): Promise<AcceptanceManifest> {
 
 async function login(client: APIRequestContext, tenant: TenantFixture, email: string, password: string): Promise<Auth> {
   const response = await client.post('/api/v1/auth/login', {
-    headers: { 'x-forwarded-for': `198.51.100.${(testLoginSequence++ % 240) + 1}` },
+    headers: { 'x-forwarded-for': `${testLoginPrefix}-${testLoginSequence++}` },
     data: { email, password, tenantSlug: tenant.slug },
   });
   expect(response.ok()).toBeTruthy();
@@ -159,6 +160,11 @@ test.describe('test-only seeded acceptance', () => {
       const adminAuth = await login(client, tenant, tenant.admin.email, tenant.admin.password);
       const receptionistAuth = await login(client, tenant, receptionist.email, receptionist.password);
       const pharmacistAuth = await login(client, tenant, pharmacist.email, pharmacist.password);
+
+      const ownedPatient = await jsonData<{ id: string; branchId: string | null }>(await client.get(`/api/v1/patients/${tenant.patients[0].id}`, { headers: headers(pharmacistAuth) }));
+      expect(ownedPatient.branchId).toBe(tenant.patients[0].branchId);
+      const outOfBranchPatient = await client.get(`/api/v1/patients/${tenant.patients[1].id}`, { headers: headers(pharmacistAuth) });
+      expect([403, 404]).toContain(outOfBranchPatient.status());
 
       const appointment = await jsonData<{ id: string }>(await client.get(`/api/v1/appointments/${tenant.appointmentId}`, { headers: headers(receptionistAuth) }));
       expect(appointment.id).toBe(tenant.appointmentId);

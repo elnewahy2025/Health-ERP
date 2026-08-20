@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { renderWithProviders } from './test-utils';
 import PatientsPage from '../pages/PatientsPage';
-import { patientsApi } from '../lib/api';
+import { patientsApi, branchesApi } from '../lib/api';
 
 vi.mock('../lib/api', () => ({
   patientsApi: {
@@ -14,6 +14,9 @@ vi.mock('../lib/api', () => ({
     update: vi.fn(),
     delete: vi.fn(),
     search: vi.fn(),
+  },
+  branchesApi: {
+    list: vi.fn(),
   },
 }));
 
@@ -65,6 +68,7 @@ describe('PatientsPage', () => {
       data: mockPatients,
       pagination: { total: 2, totalPages: 1 },
     });
+    vi.mocked(branchesApi.list).mockResolvedValue([]);
   });
 
 

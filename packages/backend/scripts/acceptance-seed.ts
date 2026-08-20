@@ -30,7 +30,7 @@ type TenantFixture = {
   branches: Array<{ id: string; name: string; code: string }>;
   departments: Array<{ id: string; name: string; code: string }>;
   users: UserFixture[];
-  patients: Array<{ id: string; firstName: string; lastName: string }>;
+  patients: Array<{ id: string; firstName: string; lastName: string; branchId: string }>;
   appointmentId: string;
   invoiceId: string;
   inventoryId: string;
@@ -295,17 +295,20 @@ async function createTenant(index: number): Promise<TenantFixture> {
     users.push({ id: userId, role: spec.role, employeeType: spec.employeeType, email, password, branchIds: [...spec.branchIds], departmentId: spec.departmentId });
   }
 
+  const tenantAdministrator = users.find((user) => user.role === 'tenant_administrator');
   const physician = users.find((user) => user.role === 'physician');
   const pharmacist = users.find((user) => user.role === 'pharmacist');
   const billingOfficer = users.find((user) => user.role === 'billing_officer');
   const receptionist = users.find((user) => user.role === 'receptionist');
-  if (!physician || !pharmacist || !billingOfficer || !receptionist) throw new Error('Acceptance role fixtures were not created.');
+  if (!tenantAdministrator || !physician || !pharmacist || !billingOfficer || !receptionist) throw new Error('Acceptance role fixtures were not created.');
+  const tenantAdministratorAuth = await login(tenantAdministrator.email, tenantAdministrator.password, tenantSlug);
 
   const patients: TenantFixture['patients'] = [];
   for (const patientKey of ['alpha', 'beta']) {
+    const patientBranchId = patientKey === 'alpha' ? branches[0].id : branches[1].id;
     const firstName = `${namespace} ${patientKey}`;
     const lastName = `patient ${index}`;
-    const patient = await api<JsonObject>('POST', '/api/v1/patients', auth, {
+    const patient = await api<JsonObject>('POST', '/api/v1/patients', tenantAdministratorAuth, {
       firstName,
       lastName,
       dateOfBirth: '1990-01-01',
@@ -315,8 +318,9 @@ async function createTenant(index: number): Promise<TenantFixture> {
       email: `${safeSlug(namespace)}-${index}-${patientKey}@example.test`,
       nationality: 'Acceptance Test',
       address: { street: `${namespace} synthetic street`, city: 'Acceptance City', country: 'Acceptance Test' },
+      branchId: patientBranchId,
     });
-    patients.push({ id: idOf(patient, `${patientKey} patient id`), firstName, lastName });
+    patients.push({ id: idOf(patient, `${patientKey} patient id`), firstName, lastName, branchId: patientBranchId });
   }
 
   const receptionistAuth = await login(receptionist.email, receptionist.password, tenantSlug);

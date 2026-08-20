@@ -1,5 +1,6 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getCtx, getTenantId } from '../../utils/route-helper.js';
+import { db } from '../../core/database.js';
 import { sendSuccess, sendPaginated } from '../../utils/response.js';
 import { createPatientSchema, updatePatientSchema, paginationSchema } from '../../utils/validation.js';
 import { PatientNotFoundError, ForbiddenError } from '@healthcare/shared/errors';
@@ -41,6 +42,33 @@ async function assertPatientAccess(principal: Principal, patient: { id: string; 
   if (!(await canAccessPatient(principal, patient))) {
     throw new ForbiddenError('You do not have access to this patient');
   }
+}
+
+async function resolvePatientBranch(
+  principal: Principal,
+  tenantId: string,
+  requestedBranchId: string | undefined,
+  permission: 'patients.create' | 'patients.manage',
+): Promise<string | null> {
+  const tenantScoped = hasPermission(principal, permission, 'system') || hasPermission(principal, permission, 'tenant');
+  const branchScoped = hasPermission(principal, permission, 'branch') || hasPermission(principal, permission, 'branches');
+  const activeBranchId = principal.membership?.branchId;
+  const candidate = requestedBranchId || (activeBranchId && principal.branches.includes(activeBranchId) ? activeBranchId : undefined)
+    || (principal.branches.length === 1 ? principal.branches[0] : undefined);
+
+  if (!candidate) {
+    if (branchScoped && !tenantScoped) {
+      throw new ForbiddenError('Select an active assigned branch before registering a patient');
+    }
+    return null;
+  }
+
+  const branch = await db('branches').where({ id: candidate, tenant_id: tenantId }).first();
+  if (!branch) throw new ForbiddenError('Branch does not belong to the active tenant');
+  if (branchScoped && !principal.branches.includes(candidate)) {
+    throw new ForbiddenError('You can only register patients in your assigned branches');
+  }
+  return String(candidate);
 }
 
 export async function listPatients(request: FastifyRequest, reply: FastifyReply) {
@@ -87,7 +115,9 @@ export async function getPatient(request: FastifyRequest, reply: FastifyReply) {
 export async function createPatient(request: FastifyRequest, reply: FastifyReply) {
   const body = createPatientSchema.parse(request.body);
   const tenantId = getTenantId(request);
-  const { userId, locale } = getCtx(request);
+  const { userId, locale, principal } = getCtx(request);
+  const requestedBranchId = (body as { branchId?: string }).branchId;
+  const branchId = await resolvePatientBranch(principal, tenantId, requestedBranchId, 'patients.create');
   const mrn = generateMedicalRecordNumber();
 
   const patient = await repo.insertPatient({
@@ -99,7 +129,7 @@ export async function createPatient(request: FastifyRequest, reply: FastifyReply
     nationality: body.nationality || null, bloodType: body.bloodType || null,
     address: body.address ? JSON.stringify(body.address) : null,
     emergencyContact: body.emergencyContact ? JSON.stringify(body.emergencyContact) : null,
-    locale: locale || 'en', userId,
+    locale: locale || 'en', userId, branchId,
   });
 
   await logAudit({ tenantId, userId, action: 'patient.create', entityType: 'patients', entityId: patient.id });
@@ -252,9 +282,10 @@ export async function bulkImport(request: FastifyRequest, reply: FastifyReply) {
     nationalId?: string;
     nationality?: string;
     bloodType?: string;
-  }> };
+  }>; branchId?: string };
   const tenantId = getTenantId(request);
-  const { userId } = getCtx(request);
+  const { userId, principal } = getCtx(request);
+  const branchId = await resolvePatientBranch(principal, tenantId, body.branchId, 'patients.manage');
 
   if (!body.patients || body.patients.length === 0) {
     return reply.status(400).send({ success: false, error: 'No patients provided' });
@@ -264,7 +295,7 @@ export async function bulkImport(request: FastifyRequest, reply: FastifyReply) {
     return reply.status(400).send({ success: false, error: 'Maximum 1000 patients per import' });
   }
 
-  const result = await repo.bulkInsertPatients(tenantId, body.patients, userId);
+  const result = await repo.bulkInsertPatients(tenantId, body.patients, userId, branchId);
 
   await logAudit({
     tenantId, userId,

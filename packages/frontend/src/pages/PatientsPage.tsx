@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { patientsApi } from '../lib/api';
+import { patientsApi, branchesApi } from '../lib/api';
 import { isValidPhone, isValidNationalId, isValidEmail, isValidName } from '../lib/validators';
 import { Modal, Input, Select, PatientSearchField } from '../components/ui';
 import { confirmDialog } from '../components/ui';
@@ -9,6 +9,7 @@ import { Plus, Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatDate } from '../lib/format';
 import { Can } from '../components/auth/Authorization';
+import { useAuth } from '../stores/authStore';
 
 interface PatientFormData {
   firstName: string;
@@ -20,18 +21,22 @@ interface PatientFormData {
   bloodType: string;
   nationality: string;
   nationalId: string;
+  branchId: string;
 }
 
 const INITIAL_FORM: PatientFormData = {
   firstName: '', lastName: '', dateOfBirth: '', gender: 'male',
-  phone: '', email: '', bloodType: '', nationality: '', nationalId: '',
+  phone: '', email: '', bloodType: '', nationality: '', nationalId: '', branchId: '',
 };
 
 export default function PatientsPage() {
   const { t, i18n } = useTranslation();
+  const { user, activeMembership } = useAuth();
   const navigate = useNavigate();
   interface PatientListItem { id: string; firstName: string; lastName: string; phone: string; status: string; medicalRecordNumber?: string; dateOfBirth?: string; gender?: string; bloodType?: string; createdAt?: string; }
+  interface BranchOption { id: string; name: string; code: string; }
   const [patients, setPatients] = useState<PatientListItem[]>([]);
+  const [branches, setBranches] = useState<BranchOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -41,6 +46,23 @@ export default function PatientsPage() {
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof PatientFormData, string>>>({});
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({});
   const [newPatient, setNewPatient] = useState<PatientFormData>(INITIAL_FORM);
+
+  useEffect(() => {
+    let cancelled = false;
+    branchesApi.list()
+      .then((data: BranchOption[]) => {
+        if (cancelled) return;
+        const assignedBranchIds = new Set(user?.branches || []);
+        const visible = data.filter((branch) => assignedBranchIds.size === 0 || assignedBranchIds.has(branch.id));
+        setBranches(visible);
+        const defaultBranchId = activeMembership?.branchId || (visible.length === 1 ? visible[0].id : '');
+        setNewPatient((current) => current.branchId ? current : { ...current, branchId: defaultBranchId });
+      })
+      .catch(() => {
+        if (!cancelled) setBranches([]);
+      });
+    return () => { cancelled = true; };
+  }, [activeMembership?.branchId, user?.branches]);
 
   const loadPatients = async () => {
     setLoading(true);
@@ -107,8 +129,10 @@ export default function PatientsPage() {
       const error = validateField('nationalId', newPatient.nationalId);
       if (error) errors.nationalId = error;
     }
+    const requiresBranch = branches.length > 1 && !activeMembership?.branchId;
+    if (requiresBranch && !newPatient.branchId) errors.branchId = t('patient.branch', { defaultValue: 'Branch' }) + ' is required';
     setFormErrors(errors);
-    setTouchedFields({ firstName: true, lastName: true, dateOfBirth: true, gender: true, phone: true, email: true, nationalId: true });
+    setTouchedFields({ firstName: true, lastName: true, dateOfBirth: true, gender: true, phone: true, email: true, nationalId: true, branchId: true });
     return Object.keys(errors).length === 0;
   };
 
@@ -141,7 +165,8 @@ export default function PatientsPage() {
     if (!validateAll()) return;
     setSaving(true);
     try {
-      await patientsApi.create(newPatient);
+      const payload = { ...newPatient, branchId: newPatient.branchId || undefined };
+      await patientsApi.create(payload);
       toast.success('Patient created successfully');
       setShowNewModal(false);
       setNewPatient(INITIAL_FORM);
@@ -308,6 +333,10 @@ export default function PatientsPage() {
               error={getFieldError('email')} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {branches.length > 0 && <Select label={t('patient.branch', { defaultValue: 'Branch' })} value={newPatient.branchId}
+              onChange={e => handleFieldChange('branchId', e.target.value)}
+              error={getFieldError('branchId')}
+              options={branches.map(branch => ({ value: branch.id, label: `${branch.name} (${branch.code})` }))} />}
             <Select label={t('patient.bloodType')} value={newPatient.bloodType}
               onChange={e => handleFieldChange('bloodType', e.target.value)}
               placeholder={t('common.filter')}

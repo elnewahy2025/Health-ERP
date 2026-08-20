@@ -47,10 +47,11 @@ export const createPatientSchema = z.object({
     relation: z.string(),
     phone: z.string(),
   }).optional(),
+  branchId: z.string().uuid().optional(),
   notes: z.string().optional(),
 }).passthrough();
 
-export const updatePatientSchema = createPatientSchema.partial();
+export const updatePatientSchema = createPatientSchema.omit({ branchId: true }).partial();
 
 export const createAppointmentSchema = z.object({
   patientId: z.string().uuid(),

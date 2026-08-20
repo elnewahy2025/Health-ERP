@@ -103,7 +103,7 @@ export type { WorkflowDefinition, WorkflowInstance, CreateWorkflowDefinitionPayl
 export { crmApi } from './crm';
 export type { CrmCampaign, PatientFeedback, CreateCampaignPayload } from './crm';
 export { hrApi } from './hr';
-export { departmentsApi } from './users';
+export { branchesApi, departmentsApi } from './users';
 export type { Employee, LeaveRequest, PayrollEntry, PayrollRun, CreateEmployeePayload, CreateLeavePayload } from './hr';
 export { inventoryApi } from './inventory';
 export type {

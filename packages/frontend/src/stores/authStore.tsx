@@ -15,6 +15,7 @@ export interface User {
   roles: string[];
   permissions: string[];
   grants?: UserGrant[];
+  branches: string[];
   locale: 'ar' | 'en';
   status: string;
   mfaEnabled: boolean;

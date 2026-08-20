@@ -24,6 +24,7 @@ export function mapPatient(p: PatientRow): PatientResponse {
   return {
     id: p.id,
     tenantId: p.tenant_id,
+    branchId: p.branch_id,
     medicalRecordNumber: p.medical_record_number,
     firstName: p.first_name,
     lastName: p.last_name,

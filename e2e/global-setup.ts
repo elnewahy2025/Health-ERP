@@ -45,6 +45,7 @@ async function createTenant(
   browserUserAgent: string,
 ): Promise<TenantFixture> {
   const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const loginIp = `198.51.100.${Math.floor(Math.random() * 240) + 1}`;
   const slug = `e2e-${suffix}-${nonce}`.slice(0, 30);
   const email = `e2e-${suffix}-${nonce}@example.test`;
   const password = process.env.E2E_ADMIN_PASSWORD || 'E2e-Clinic-Admin!2026';
@@ -65,12 +66,13 @@ async function createTenant(
   const tenant = dataOf(registrationBody).tenant;
 
   const login = await client.post('/api/v1/auth/login', {
+    headers: { 'x-forwarded-for': loginIp },
     data: { email, password, tenantSlug: slug },
   });
   await expectOk(login);
   const loginBody = await login.json() as ApiResponse<{ accessToken: string; csrfToken: string; tenant: { id: string } }>;
   const loginData = dataOf(loginBody);
-  const authHeaders = {
+  let authHeaders = {
     Authorization: `Bearer ${loginData.accessToken}`,
     'x-csrf-token': loginData.csrfToken,
     'X-API-Version': 'v1',
@@ -114,6 +116,26 @@ async function createTenant(
   await expectOk(branchResponse);
   const branch = dataOf(await branchResponse.json() as ApiResponse<{ id: string }>);
 
+  const meResponse = await client.get('/api/v1/auth/me', { headers: authHeaders });
+  await expectOk(meResponse);
+  const meData = dataOf(await meResponse.json() as ApiResponse<{ user: { id: string } }>);
+  const branchAssignmentResponse = await client.put(`/api/v1/users/${meData.user.id}`, {
+    headers: authHeaders,
+    data: { branchIds: [branch.id] },
+  });
+  await expectOk(branchAssignmentResponse);
+  const refreshedLogin = await client.post('/api/v1/auth/login', {
+    headers: { 'x-forwarded-for': `${loginIp}-refresh` },
+    data: { email, password, tenantSlug: slug },
+  });
+  await expectOk(refreshedLogin);
+  const refreshedLoginData = dataOf(await refreshedLogin.json() as ApiResponse<{ accessToken: string; csrfToken: string }>);
+  authHeaders = {
+    ...authHeaders,
+    Authorization: `Bearer ${refreshedLoginData.accessToken}`,
+    'x-csrf-token': refreshedLoginData.csrfToken,
+  };
+
   const patientResponse = await client.post('/api/v1/patients', {
     headers: authHeaders,
     data: {
@@ -124,6 +146,7 @@ async function createTenant(
       nationalId: `E2E-${suffix.toUpperCase()}-${nonce}`,
       phone: '+10000000000',
       email: `patient-${suffix}-${nonce}@example.test`,
+      branchId: branch.id,
       nationality: 'Testland',
       address: { street: '1 Test Street', city: 'E2E Test City', country: 'Testland' },
     },
@@ -151,6 +174,7 @@ async function createTenant(
     userAgent: browserUserAgent,
   });
   const stateLogin = await stateClient.post('/api/v1/auth/login', {
+    headers: { 'x-forwarded-for': `${loginIp}-state` },
     data: { email, password, tenantSlug: slug },
   });
   await expectOk(stateLogin);

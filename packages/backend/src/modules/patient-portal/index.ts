@@ -289,6 +289,7 @@ export async function registerPatientPortalModule(app: FastifyInstance) {
         emergencyContact: null,
         locale: 'en',
         userId,
+        branchId: null,
       });
       patientId = patient.id;
     }

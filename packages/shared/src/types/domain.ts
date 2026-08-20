@@ -41,6 +41,7 @@ export type PatientStatus = 'active' | 'inactive' | 'deceased' | 'transferred';
 export interface Patient {
   id: string;
   tenantId: string;
+  branchId: string | null;
   medicalRecordNumber: string;
   firstName: string;
   lastName: string;

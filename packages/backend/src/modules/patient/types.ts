@@ -1,6 +1,7 @@
 export interface PatientRow {
   id: string;
   tenant_id: string;
+  branch_id: string | null;
   medical_record_number: string;
   first_name: string;
   last_name: string;
@@ -26,6 +27,7 @@ export interface PatientRow {
 export interface PatientResponse {
   id: string;
   tenantId: string;
+  branchId: string | null;
   medicalRecordNumber: string;
   firstName: string;
   lastName: string;

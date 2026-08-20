@@ -133,12 +133,14 @@ export async function insertPatient(data: {
   emergencyContact: string | null;
   locale: string;
   userId: string;
+  branchId: string | null;
 }): Promise<PatientRow> {
   const encryptedNationalId = data.nationalId ? encryptField(data.nationalId) : null;
   const dateOfBirth = toDateOnly(data.dateOfBirth);
 
   const [patient] = await db('patients').insert({
     tenant_id: data.tenantId,
+    branch_id: data.branchId,
     medical_record_number: data.medicalRecordNumber,
     first_name: data.firstName,
     last_name: data.lastName,
@@ -347,6 +349,7 @@ export async function bulkInsertPatients(
     bloodType?: string;
   }>,
   userId: string,
+  branchId: string | null,
 ): Promise<{ inserted: number; errors: Array<{ index: number; error: string }> }> {
   const errors: Array<{ index: number; error: string }> = [];
   let inserted = 0;
@@ -360,6 +363,7 @@ export async function bulkInsertPatients(
       try {
         return {
           tenant_id: tenantId,
+          branch_id: branchId,
           medical_record_number: `MRN-${tenantId.substring(0, 8).toUpperCase()}-${Date.now().toString(36).toUpperCase()}-${String(idx).padStart(4, '0')}`,
           first_name: p.firstName,
           last_name: p.lastName,
