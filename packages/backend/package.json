@@ -28,7 +28,9 @@
     "migration:check": "tsx scripts/migration-gate.ts --check",
     "security:config-gate": "tsx scripts/security-config-gate.ts",
     "migrate:make": "knex migrate:make --knexfile knexfile.ts",
-    "seed": "tsx src/core/seed.ts"
+    "seed": "tsx src/core/seed.ts",
+    "acceptance:seed": "tsx scripts/acceptance-seed.ts",
+    "acceptance:teardown": "tsx scripts/acceptance-seed.ts --teardown"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1113.0",

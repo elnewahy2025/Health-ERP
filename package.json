@@ -26,6 +26,8 @@
     "test:docker-smoke": "bash scripts/test-docker-smoke.sh",
     "test:post-deploy-smoke": "bash scripts/post-deploy-smoke.sh",
     "seed": "npm run seed -w packages/backend",
+    "acceptance:seed": "npm run acceptance:seed -w packages/backend",
+    "acceptance:teardown": "npm run acceptance:teardown -w packages/backend",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "setup": "npm install && npm run build"
