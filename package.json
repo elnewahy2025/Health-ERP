@@ -22,6 +22,7 @@
     "migrate": "npm run migrate -w packages/backend",
     "migration:gate": "npm run migration:gate -w packages/backend",
     "migration:check": "npm run migration:check -w packages/backend",
+    "security:config-gate": "npm run security:config-gate -w packages/backend",
     "test:docker-smoke": "bash scripts/test-docker-smoke.sh",
     "test:post-deploy-smoke": "bash scripts/post-deploy-smoke.sh",
     "seed": "npm run seed -w packages/backend",
@@ -52,5 +53,8 @@
   "engines": {
     "node": ">=20.19.0",
     "npm": ">=10"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.9"
   }
 }

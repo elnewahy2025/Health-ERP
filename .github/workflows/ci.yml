@@ -425,11 +425,80 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  security-config:
+    name: Security and production-configuration gate
+    runs-on: ubuntu-latest
+    needs: [quality, migration, postgres-integration]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend bundle for secret scan
+        run: npm run build
+
+      - name: Run fail-closed security/configuration gate
+        run: npm run security:config-gate -w packages/backend -- --static-production
+        env:
+          NODE_ENV: test
+          JWT_SECRET: ci-production-jwt-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          JWT_REFRESH_SECRET: ci-production-refresh-secret-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+          CSRF_SECRET: ci-production-csrf-secret-cccccccccccccccccccccccccccccccc
+          ENCRYPTION_KEY: ci-production-encryption-key-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+          DB_PASSWORD: ci-production-db-password-eeeeeeeeeeee
+          COOKIE_SECURE: true
+          CORS_ORIGIN: https://clinic.example.test
+          APP_URL: https://clinic.example.test
+          REDIS_REQUIRED: true
+          OBJECT_STORAGE_REQUIRED: true
+          WORKERS_REQUIRED: true
+          FRONTEND_BUNDLE_DIR: packages/frontend/dist
+
+  container-security:
+    name: Container vulnerability gate
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend security image
+        run: docker build --file Dockerfile.backend --tag health-erp-backend:security-${{ github.sha }} .
+
+      - name: Build frontend security image
+        run: docker build --file Dockerfile.frontend --tag health-erp-frontend:security-${{ github.sha }} .
+
+      - name: Scan backend image for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: health-erp-backend:security-${{ github.sha }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: false
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+      - name: Scan frontend image for high and critical vulnerabilities
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: health-erp-frontend:security-${{ github.sha }}
+          format: table
+          exit-code: '1'
+          ignore-unfixed: false
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
   release-gate:
     name: Release promotion gate
     runs-on: ubuntu-latest
-    needs: [quality, migration, postgres-integration, playwright, docker-smoke]
-    if: ${{ always() && needs.quality.result == 'success' && needs.migration.result == 'success' && needs.postgres-integration.result == 'success' && needs.playwright.result == 'success' && needs.docker-smoke.result == 'success' }}
+    needs: [quality, migration, postgres-integration, playwright, docker-smoke, security-config, container-security]
+    if: ${{ always() && needs.quality.result == 'success' && needs.migration.result == 'success' && needs.postgres-integration.result == 'success' && needs.playwright.result == 'success' && needs.docker-smoke.result == 'success' && needs.security-config.result == 'success' && needs.container-security.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
       - name: Record release gate evidence

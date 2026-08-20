@@ -94,8 +94,12 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-vision_erp}
-      DB_USER: ${POSTGRES_USER:-postgres}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      # The runtime role must be a dedicated NOSUPERUSER/NOBYPASSRLS role.
+      # Migrations use a separate operator role below.
+      DB_USER: ${DB_USER:?DB_USER is required and must be a dedicated non-BYPASSRLS role}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DB_MIGRATION_USER: ${DB_MIGRATION_USER:?DB_MIGRATION_USER is required}
+      DB_MIGRATION_PASSWORD: ${DB_MIGRATION_PASSWORD:?DB_MIGRATION_PASSWORD is required}
       DB_SSL: ${DB_SSL:-false}
       REDIS_HOST: redis
       REDIS_PORT: 6379

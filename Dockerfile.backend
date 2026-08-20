@@ -15,6 +15,9 @@ RUN npm run build -w packages/shared
 RUN cd packages/backend && npx tsc --noEmit
 RUN npm run build -w packages/backend
 
+FROM builder AS production-deps
+RUN npm prune --omit=dev
+
 FROM node:20-alpine AS runner
 WORKDIR /app
 
@@ -27,7 +30,7 @@ RUN addgroup -g 1001 -S appgroup && \
 
 COPY --from=builder /app/packages/backend/dist ./dist
 COPY --from=builder /app/packages/backend/package.json ./
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=production-deps /app/node_modules ./node_modules
 COPY --from=builder /app/packages/shared/dist ./node_modules/@healthcare/shared/dist
 COPY --from=builder /app/packages/shared/package.json ./node_modules/@healthcare/shared/package.json
 
