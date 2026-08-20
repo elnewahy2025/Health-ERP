@@ -82,6 +82,15 @@ const migrationDb = knex({
 try {
   const [batch, migrations] = await migrationDb.migrate.latest();
   console.log(`PostgreSQL integration migrations ready (batch ${batch}, applied ${migrations.length})`);
+
+  const appRole = process.env.DB_APP_ROLE;
+  if (appRole) {
+    const quotedRole = `"${appRole.replaceAll('"', '""')}"`;
+    await migrationDb.raw(`GRANT USAGE ON SCHEMA public TO ${quotedRole}`);
+    await migrationDb.raw(`GRANT SELECT, INSERT, UPDATE, DELETE, REFERENCES, TRIGGER ON ALL TABLES IN SCHEMA public TO ${quotedRole}`);
+    await migrationDb.raw(`GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO ${quotedRole}`);
+    console.log(`PostgreSQL integration application role privileges granted to ${appRole}`);
+  }
 } finally {
   await migrationDb.destroy();
 }

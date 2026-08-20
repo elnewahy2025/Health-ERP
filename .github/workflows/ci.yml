@@ -6,8 +6,19 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20.19.0'
+
 jobs:
-  test:
+  quality:
+    name: Build, lint, and unit tests
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -18,7 +29,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
         ports: ['5432:5432']
         options: >-
-          --health-cmd="pg_isready -U postgres"
+          --health-cmd="pg_isready -U postgres -d healthcare"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -30,30 +41,26 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
-
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build shared
-        run: npm run build -w packages/shared
+      - name: Lint and type-check all workspaces
+        run: npm run lint
 
-      - name: Build backend
-        run: npm run build -w packages/backend
+      - name: Build all workspaces
+        run: npm run build
 
-      - name: Build frontend
-        run: npm run build -w packages/frontend
-
-      - name: Run tests
-        run: npm test
+      - name: Backend unit suite
+        run: npm run test -w packages/backend
         env:
           DB_HOST: localhost
           DB_PORT: 5432
@@ -64,13 +71,488 @@ jobs:
           REDIS_PORT: 6379
           JWT_SECRET: test-secret-key-for-ci-32-chars-min
           JWT_REFRESH_SECRET: test-refresh-secret-for-ci-32-chars
+          CSRF_SECRET: test-csrf-secret-for-ci-32-chars-min
           NODE_ENV: test
 
-  deploy:
-    needs: test
+      - name: Frontend unit suite
+        run: npm run test -w packages/frontend
+
+      - name: Whitespace validation
+        run: git diff --check
+
+  migration:
+    name: Fresh and idempotent migration gate
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: healthcare_migration
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d healthcare_migration"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
     steps:
       - uses: actions/checkout@v4
-      - name: Deploy notification
-        run: echo "Deployment triggered for commit ${{ github.sha }}"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply full migration chain and verify idempotency
+        run: npm run migration:gate
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: healthcare_migration
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_MIGRATION_USER: postgres
+          DB_MIGRATION_PASSWORD: postgres
+          NODE_ENV: test
+
+      - name: Verify no pending migrations remain
+        run: npm run migration:check
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: healthcare_migration
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_MIGRATION_USER: postgres
+          DB_MIGRATION_PASSWORD: postgres
+          NODE_ENV: test
+
+  postgres-integration:
+    name: PostgreSQL integration (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: authorization
+            script: test:integration
+          - target: billing
+            script: test:billing-integration
+          - target: rls
+            script: test:rls-integration
+          - target: lifecycle
+            script: test:lifecycle-integration
+          - target: pharmacy
+            script: test:pharmacy-integration
+          - target: backup
+            script: test:backup-integration
+          - target: export
+            script: test:export-integration
+          - target: reports
+            script: test:reports-integration
+          - target: eta
+            script: test:eta-integration
+          - target: instapay
+            script: test:instapay-integration
+          - target: automation
+            script: test:automation-integration
+          - target: provider-verification
+            script: test:provider-verification-integration
+          - target: ai-chat
+            script: test:ai-chat-integration
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: healthcare
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d healthcare"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: ci-minio-user
+          MINIO_ROOT_PASSWORD: ci-minio-password-2026
+        ports: ['9000:9000', '9001:9001']
+        options: >-
+          --health-cmd="curl -fsS http://localhost:9000/minio/health/live"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+        command: server /data --console-address ":9001"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create non-BYPASSRLS application role and restore database
+        shell: bash
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'health_erp_ci_app') THEN
+              CREATE ROLE health_erp_ci_app LOGIN PASSWORD 'health_erp_ci_app_password';
+            END IF;
+          END
+          $$;
+          ALTER ROLE health_erp_ci_app NOSUPERUSER NOBYPASSRLS;
+          GRANT CONNECT ON DATABASE healthcare TO health_erp_ci_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO health_erp_ci_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO health_erp_ci_app;
+          SQL
+          createdb -h localhost -U postgres -O postgres healthcare_restore
+
+      - name: Set default integration database role
+        run: |
+          echo 'DB_USER=postgres' >> "$GITHUB_ENV"
+          echo 'DB_PASSWORD=postgres' >> "$GITHUB_ENV"
+          echo 'DB_APP_ROLE=' >> "$GITHUB_ENV"
+
+      - name: Select integration database role
+        if: matrix.target == 'rls' || matrix.target == 'lifecycle'
+        run: |
+          echo 'DB_USER=health_erp_ci_app' >> "$GITHUB_ENV"
+          echo 'DB_PASSWORD=health_erp_ci_app_password' >> "$GITHUB_ENV"
+          echo 'DB_APP_ROLE=health_erp_ci_app' >> "$GITHUB_ENV"
+
+      - name: Apply migrations and run ${{ matrix.target }} integration suite
+        run: npm run ${{ matrix.script }} -w packages/backend
+        env:
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: healthcare
+          DB_MIGRATION_USER: postgres
+          DB_MIGRATION_PASSWORD: postgres
+          DB_SSL: false
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          REDIS_PASSWORD: ''
+          MINIO_ENDPOINT: localhost
+          MINIO_PORT: 9000
+          MINIO_USE_SSL: false
+          MINIO_ACCESS_KEY: ci-minio-user
+          MINIO_SECRET_KEY: ci-minio-password-2026
+          ENCRYPTION_KEY: ci-encryption-key-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          BACKUP_VERIFY_DB_NAME: healthcare_restore
+          BACKUP_VERIFY_DB_USER: postgres
+          BACKUP_VERIFY_DB_PASSWORD: postgres
+
+  playwright:
+    name: Authenticated and unauthenticated Playwright release E2E
+    runs-on: ubuntu-latest
+    needs: [quality, migration]
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: health_erp_e2e
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d health_erp_e2e"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Run migration gate for E2E database
+        run: npm run migration:gate
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: health_erp_e2e
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_MIGRATION_USER: postgres
+          DB_MIGRATION_PASSWORD: postgres
+          NODE_ENV: test
+
+      - name: Run authenticated critical journeys
+        run: npx playwright test e2e/tests/api-health.spec.ts e2e/tests/authenticated-critical.spec.ts
+        env:
+          CI: true
+          E2E_ENABLE_AUTHENTICATED: 'true'
+          E2E_DATABASE_NAME: health_erp_e2e
+          E2E_API_URL: http://127.0.0.1:3000
+          E2E_BASE_URL: http://127.0.0.1:5173
+          E2E_START_SERVERS: 'true'
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: health_erp_e2e
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_MIGRATION_USER: postgres
+          DB_MIGRATION_PASSWORD: postgres
+          JWT_SECRET: e2e-jwt-secret-aaaaaaaaaaaaaaaa
+          JWT_REFRESH_SECRET: e2e-refresh-secret-bbbbbbbb
+          CSRF_SECRET: e2e-csrf-secret-cccccccccccccccccccccccc
+          ENCRYPTION_KEY: e2e-encryption-key-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+          COOKIE_SECURE: false
+          CORS_ORIGIN: http://127.0.0.1:5173
+          APP_URL: http://127.0.0.1:5173
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          REDIS_REQUIRED: false
+          OBJECT_STORAGE_REQUIRED: false
+          WORKERS_REQUIRED: false
+          SKIP_AUTO_MIGRATE: true
+          APP_VERSION: ci-e2e
+          APP_COMMIT_SHA: ${{ github.sha }}
+
+      - name: Run unauthenticated smoke journeys
+        run: npx playwright test e2e/tests/auth.spec.ts e2e/tests/patients.spec.ts
+        env:
+          CI: true
+          E2E_ENABLE_AUTHENTICATED: 'false'
+          E2E_DATABASE_NAME: health_erp_e2e
+          E2E_API_URL: http://127.0.0.1:3000
+          E2E_BASE_URL: http://127.0.0.1:5173
+          E2E_START_SERVERS: 'true'
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: health_erp_e2e
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_MIGRATION_USER: postgres
+          DB_MIGRATION_PASSWORD: postgres
+          JWT_SECRET: e2e-jwt-secret-aaaaaaaaaaaaaaaa
+          JWT_REFRESH_SECRET: e2e-refresh-secret-bbbbbbbb
+          CSRF_SECRET: e2e-csrf-secret-cccccccccccccccccccccccc
+          ENCRYPTION_KEY: e2e-encryption-key-dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+          COOKIE_SECURE: false
+          CORS_ORIGIN: http://127.0.0.1:5173
+          APP_URL: http://127.0.0.1:5173
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          REDIS_REQUIRED: false
+          OBJECT_STORAGE_REQUIRED: false
+          WORKERS_REQUIRED: false
+          SKIP_AUTO_MIGRATE: true
+          APP_VERSION: ci-e2e
+          APP_COMMIT_SHA: ${{ github.sha }}
+
+      - name: Upload Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-release-evidence-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  docker-smoke:
+    name: Docker build and readiness smoke
+    runs-on: ubuntu-latest
+    needs: [quality, migration]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run disposable Docker smoke gate
+        run: npm run test:docker-smoke
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+
+      - name: Upload Docker smoke logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-smoke-evidence-${{ github.run_id }}
+          path: /tmp/health-erp-docker-smoke-*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  release-gate:
+    name: Release promotion gate
+    runs-on: ubuntu-latest
+    needs: [quality, migration, postgres-integration, playwright, docker-smoke]
+    if: ${{ always() && needs.quality.result == 'success' && needs.migration.result == 'success' && needs.postgres-integration.result == 'success' && needs.playwright.result == 'success' && needs.docker-smoke.result == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Record release gate evidence
+        run: |
+          cat > release-gate-summary.txt <<EOF
+          commit=${GITHUB_SHA}
+          workflow=${GITHUB_WORKFLOW}
+          run_id=${GITHUB_RUN_ID}
+          result=passed
+          promotion=eligible-for-platform-controlled-deploy
+          EOF
+          cat release-gate-summary.txt
+      - name: Upload release gate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-evidence-${{ github.run_id }}
+          path: release-gate-summary.txt
+          retention-days: 30
+
+  vercel-preview:
+    name: Guarded Vercel preview deployment
+    runs-on: ubuntu-latest
+    needs: release-gate
+    if: ${{ needs.release-gate.result == 'success' && github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Vercel deployment configuration
+        id: config
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [[ -n "$VERCEL_TOKEN" && -n "$VERCEL_ORG_ID" && -n "$VERCEL_PROJECT_ID" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Vercel preview deployment is skipped because VERCEL_TOKEN, VERCEL_ORG_ID, or VERCEL_PROJECT_ID is not configured."
+          fi
+
+      - name: Setup Node.js
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Vercel CLI
+        if: steps.config.outputs.configured == 'true'
+        run: npm install --global vercel@latest
+
+      - name: Build and deploy preview
+        if: steps.config.outputs.configured == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel pull --yes --environment=preview --token="$VERCEL_TOKEN"
+          vercel build --token="$VERCEL_TOKEN"
+          vercel deploy --prebuilt --token="$VERCEL_TOKEN"
+
+  vercel-production:
+    name: Guarded Vercel production deployment
+    runs-on: ubuntu-latest
+    needs: release-gate
+    if: ${{ needs.release-gate.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Vercel deployment configuration
+        id: config
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [[ -n "$VERCEL_TOKEN" && -n "$VERCEL_ORG_ID" && -n "$VERCEL_PROJECT_ID" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Vercel production deployment is skipped because deployment secrets are not configured."
+          fi
+
+      - name: Setup Node.js
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Vercel CLI
+        if: steps.config.outputs.configured == 'true'
+        run: npm install --global vercel@latest
+
+      - name: Build and deploy production
+        if: steps.config.outputs.configured == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          vercel build --prod --token="$VERCEL_TOKEN"
+          vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+      - name: Require post-deploy smoke configuration
+        if: steps.config.outputs.configured == 'true'
+        env:
+          SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL }}
+          SMOKE_ACCESS_TOKEN: ${{ secrets.SMOKE_ACCESS_TOKEN }}
+          SMOKE_TENANT_SLUG: ${{ secrets.SMOKE_TENANT_SLUG }}
+        run: |
+          test -n "$SMOKE_BASE_URL" || { echo "SMOKE_BASE_URL is required when production deployment is enabled." >&2; exit 1; }
+          test -n "$SMOKE_ACCESS_TOKEN" || { echo "SMOKE_ACCESS_TOKEN is required when production deployment is enabled." >&2; exit 1; }
+          test -n "$SMOKE_TENANT_SLUG" || { echo "SMOKE_TENANT_SLUG is required when production deployment is enabled." >&2; exit 1; }
+
+      - name: Run authenticated post-deploy smoke
+        if: steps.config.outputs.configured == 'true'
+        env:
+          SMOKE_BASE_URL: ${{ secrets.SMOKE_BASE_URL }}
+          SMOKE_EXPECTED_COMMIT_SHA: ${{ github.sha }}
+          SMOKE_ACCESS_TOKEN: ${{ secrets.SMOKE_ACCESS_TOKEN }}
+          SMOKE_TENANT_SLUG: ${{ secrets.SMOKE_TENANT_SLUG }}
+        run: bash scripts/post-deploy-smoke.sh

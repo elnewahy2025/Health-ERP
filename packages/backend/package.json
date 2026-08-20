@@ -24,6 +24,8 @@
     "test:ai-chat-integration": "tsx scripts/run-postgres-integration.ts aiChat",
     "test:watch": "vitest",
     "migrate": "npx tsx src/core/migrate.ts",
+    "migration:gate": "tsx scripts/migration-gate.ts",
+    "migration:check": "tsx scripts/migration-gate.ts --check",
     "migrate:make": "knex migrate:make --knexfile knexfile.ts",
     "seed": "tsx src/core/seed.ts"
   },
