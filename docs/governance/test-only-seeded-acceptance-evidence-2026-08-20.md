@@ -1,7 +1,8 @@
 # Test-Only Seeded Acceptance Evidence
 
 **Assessment date:** 20 August 2026  
-**Implementation commit:** `427c185` — `test: add guarded seeded acceptance harness`  
+**Acceptance harness commit:** `427c185` — `test: add guarded seeded acceptance harness`
+**Branch-aware patient commit:** `98606ed` — `feat: enforce patient branch ownership`
 **Purpose:** Controlled engineering acceptance only  
 **Production status:** Unchanged — **Development only**
 
@@ -15,7 +16,7 @@ The harness materializes canonical hospital role templates through the supported
 
 ## 2. Acceptance execution
 
-The harness ran against the disposable `health_erp_e2e_gate` database and produced two tenants with unique namespaces. The following manifest-backed Playwright suite completed successfully:
+The harness ran against the disposable `health_erp_patient_branch_e2e_gate` database and produced two tenants with unique namespaces. The run used the new patient branch migration and assigned the two synthetic patients to different tenant branches. The following manifest-backed Playwright suite completed successfully:
 
 | Acceptance specification | Result |
 |---|---:|
@@ -24,7 +25,7 @@ The harness ran against the disposable `health_erp_e2e_gate` database and produc
 | Appointment, billing, inventory, and prescription fixture workflows | Passed |
 | **Total** | **3/3 passed** |
 
-The role assertion verified distinct grants for tenant administration, physician, receptionist, billing officer, pharmacist, registered nurse, and pharmacy technician. It explicitly verified that pharmacist and pharmacy-technician permissions differ and that billing-officer and receptionist permissions differ. The isolation assertion verified tenant-specific Settings identity values, cross-tenant denial for patient and invoice reads, and branch list isolation. The workflow assertion verified an appointment through a receptionist-scoped session, an invoice through the tenant-scoped administrative context, pharmacy inventory through a pharmacist-scoped session, and the prescription through the tenant-scoped administrative context.
+The role assertion verified distinct grants for tenant administration, physician, receptionist, billing officer, pharmacist, registered nurse, and pharmacy technician. It explicitly verified that pharmacist and pharmacy-technician permissions differ and that billing-officer and receptionist permissions differ. The isolation assertion verified tenant-specific Settings identity values, cross-tenant denial for patient and invoice reads, branch list isolation, and same-tenant branch denial: the pharmacist could read the patient assigned to its branch but could not read the patient assigned to the other branch. The workflow assertion verified an appointment through a receptionist-scoped session, an invoice through the tenant-scoped administrative context, pharmacy inventory through a pharmacist-scoped session, and the prescription through the tenant-scoped administrative context.
 
 The existing authenticated critical suite was also previously run successfully with **4/4 tests passed**, covering browser session restoration, tenant-scoped branch/patient/invoice/principal reads, cross-tenant denial, and unauthenticated protection. That suite remains separate from the new multi-role seeded suite.
 
@@ -32,7 +33,7 @@ The existing authenticated critical suite was also previously run successfully w
 
 The new `acceptance:teardown` command reads only its own protected manifest and uses only manifest-owned identifiers. It cancels the synthetic appointment idempotently, soft-deletes the synthetic patients, deactivates the synthetic staff users, and deactivates the synthetic branches and departments through their public APIs. Immutable invoice, audit, prescription, and inventory rows remain isolated in the disposable tenant/database during API teardown; this is intentional because the current public API does not expose destructive deletion for those records.
 
-The final run then stopped the backend, confirmed that ports `3000` and `5173` were not listening, dropped the disposable `health_erp_e2e_gate` database, and removed the protected `e2e/.auth` manifest. No synthetic credentials, access tokens, cookies, patient payloads, or fixture metadata remain in the working tree.
+The final run then stopped the backend, confirmed that ports `3000` and `5173` were not listening, dropped the disposable `health_erp_patient_branch_e2e_gate` database, and removed the protected `e2e/.auth` manifest. No synthetic credentials, access tokens, cookies, patient payloads, or fixture metadata remain in the working tree.
 
 ## 4. Repository quality gates
 
@@ -48,9 +49,9 @@ The implementation passed the repository quality gates after the seeded run:
 | Acceptance specifications | **3/3 passed** |
 | Guard refusal without explicit disposable settings | Passed |
 
-## 5. Known engineering limitation recorded honestly
+## 5. Branch-aware patient contract now covered
 
-The current patient registration API does not accept or persist a branch identifier in its public create contract. Consequently, the harness does not claim that a branch-scoped billing officer or pharmacist can read the invoice or prescription created from those patients; it verifies those records with the tenant administrator while verifying branch-scoped appointment and inventory access separately. This is a real implementation boundary, not hidden by test data or bypassed with direct database writes. A future, separately approved change may add an explicit active-branch patient-registration contract and corresponding migration/API/UI tests.
+The patient branch limitation identified by the first seeded run has been resolved in this follow-on slice. Migration `072_patient_branch_contract.ts` adds a nullable, tenant-linked `patients.branch_id` with a supporting index. Authenticated single-patient creation and bulk import now validate the requested branch against the active tenant and assigned branches; branch-scoped actors are refused when no unambiguous assigned branch exists. The patient response contract, frontend registration form, and guarded authenticated E2E fixture now carry the branch identifier. The public patient-portal approval path passes `branchId: null` explicitly because it has no authenticated branch context and must be assigned later by an authorized staff workflow.
 
 ## 6. Governance boundary
 
@@ -61,5 +62,6 @@ This evidence proves controlled engineering behavior only. Synthetic acceptance 
 - [Acceptance seed and teardown script](../../packages/backend/scripts/acceptance-seed.ts)
 - [Seeded acceptance specifications](../../e2e/tests/acceptance/seeded-acceptance.spec.ts)
 - [Authenticated critical journeys](../../e2e/tests/authenticated-critical.spec.ts)
+- [Patient branch migration](../../packages/backend/migrations/072_patient_branch_contract.ts)
 - [Pre-production acceptance plan](preproduction-acceptance-plan-2026-08-20.md)
 - [Phase 1 gate](phase-1-gate.md)

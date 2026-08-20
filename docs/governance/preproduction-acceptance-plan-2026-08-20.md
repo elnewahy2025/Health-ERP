@@ -105,7 +105,7 @@ Each artifact must state its environment, test data classification, commit/build
 
 ## 8. Seeded engineering acceptance result
 
-The guarded multi-role seeded harness passed **3/3 acceptance specifications**: role-grant distinction, Tenant Settings and cross-tenant isolation, and appointment/billing/inventory/prescription fixture workflows. The existing authenticated critical suite separately passed **4/4 journeys**. The new harness used a disposable `health_erp_e2e_gate` database, two unique synthetic tenants, supported clinic Settings/RBAC/module APIs, and no provider side effects. Its manifest-scoped teardown completed before the database and protected manifest were removed. This strengthens engineering evidence only; it does not change any governance gate.
+The guarded multi-role seeded harness passed **3/3 acceptance specifications**: role-grant distinction, Tenant Settings and cross-tenant isolation, including same-tenant branch denial, and appointment/billing/inventory/prescription fixture workflows. The existing authenticated critical suite separately passed **4/4 journeys**, and the unauthenticated E2E subset passed **13/13**. The branch-aware patient contract was migrated and exercised through public APIs, including distinct patient ownership across two branches. The new harness used the disposable `health_erp_patient_branch_e2e_gate` database, two unique synthetic tenants, supported clinic Settings/RBAC/module APIs, and no provider side effects. Its manifest-scoped teardown completed before the database and protected manifest were removed. This strengthens engineering evidence only; it does not change any governance gate.
 
 ## 9. Current decision
 
