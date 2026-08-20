@@ -49,3 +49,4 @@ Until all blocking inputs are supplied and approved, Phase 1 is **BLOCKED**. Pha
 | Reassessment | Date | Result | Approver | Evidence |
 |---|---|---|---|---|
 | Initial G0 assessment | 2026-08-18 | BLOCKED | Unassigned | This document and linked governance documents |
+| Function 11 engineering reassessment | 2026-08-20 | BLOCKED — unchanged | Unassigned | `preproduction-acceptance-plan-2026-08-20.md`; Function 11 A–E evidence; no hospital/jurisdiction/owner inputs supplied |
